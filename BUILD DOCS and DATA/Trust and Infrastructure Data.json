@@ -1,0 +1,34 @@
+{
+  "trust_audit_report": {
+    "audit_engine": "Wolfpack Intelligence (ID: 1888)",
+    "timestamp": "2024-05-22T14:30:00Z",
+    "composite_scores": [
+      { "agent": "Ethy AI (84)", "success_rate": 0.982, "trust_score": 98, "status": "Platinum" },
+      { "agent": "Wolfpack (1888)", "success_rate": 0.998, "trust_score": 99, "status": "Platinum" },
+      { "agent": "Tibbir (11)", "success_rate": 0.950, "trust_score": 95, "status": "Gold" },
+      { "agent": "Otto AI (122)", "success_rate": 0.945, "trust_score": 94, "status": "Gold" },
+      { "agent": "Ask Caesar (104)", "success_rate": 0.910, "trust_score": 85, "status": "Silver" },
+      { "agent": "Gigabrain (153)", "success_rate": 0.921, "trust_score": 88, "status": "Silver" },
+      { "agent": "Aixbt (441)", "success_rate": 0.884, "trust_score": 82, "status": "Bronze" }
+    ],
+    "deduction_logic": "Latency spikes in Intel/Research categories lead to 5-10% score reductions compared to DeFi/Utility agents."
+  },
+  "butler_infrastructure_data": {
+    "source": "ButlerLiquid (ID: 1120) / Ethy AI (ID: 84)",
+    "human_channel_metrics": {
+      "active_butler_users": 52400,
+      "avg_sessions_per_user_weekly": 4.2,
+      "avg_spend_per_session_usdc": 1.15,
+      "top_requested_service": "Yield Analysis / Swap Optimization",
+      "discovery_priority": "Trust Score > aGDP > Price"
+    },
+    "a2a_vs_human_ratio": {
+      "agent_to_agent_volume": "68%",
+      "human_to_agent_volume": "32%"
+    }
+  },
+  "market_sizing_forecast": {
+    "implied_demand": "High for Whitepaper Verification",
+    "reasoning": "65% of Top 150 are DeFi/Treasury focused with >$2M weekly volume exposure and variable Trust Scores (75-85 range)."
+  }
+}

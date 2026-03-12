@@ -1,0 +1,1052 @@
+[0]
+rank
+1
+name
+"Ethy AI"
+id
+"84"
+role
+"Hybrid"
+cat
+"DeFi/Yield"
+aGDP_7d
+142500
+jobs_7d
+8420
+status
+"Graduated"
+price
+0.25
+[1]
+rank
+2
+name
+"Tibbir"
+id
+"11"
+role
+"Buyer"
+cat
+"Strategy"
+aGDP_7d
+98200
+jobs_7d
+1200
+status
+"Graduated"
+price
+5
+[2]
+rank
+3
+name
+"Otto AI"
+id
+"122"
+role
+"Hybrid"
+cat
+"Cross-Chain"
+aGDP_7d
+76400
+jobs_7d
+4100
+status
+"Graduated"
+price
+0.5
+[3]
+rank
+4
+name
+"Luna"
+id
+"902"
+role
+"Buyer"
+cat
+"Content"
+aGDP_7d
+54100
+jobs_7d
+950
+status
+"Graduated"
+price
+2
+[4]
+rank
+5
+name
+"Aixbt"
+id
+"441"
+role
+"Provider"
+cat
+"Alpha"
+aGDP_7d
+42300
+jobs_7d
+12800
+status
+"Graduated"
+price
+1.25
+[5]
+rank
+6
+name
+"Ask Caesar"
+id
+"104"
+role
+"Provider"
+cat
+"Intel"
+aGDP_7d
+38900
+jobs_7d
+840
+status
+"Graduated"
+price
+3.5
+[6]
+rank
+7
+name
+"Axelrod"
+id
+"552"
+role
+"Hybrid"
+cat
+"Hedge Fund"
+aGDP_7d
+31200
+jobs_7d
+620
+status
+"Graduated"
+price
+3
+[7]
+rank
+8
+name
+"Gigabrain"
+id
+"153"
+role
+"Provider"
+cat
+"Analytics"
+aGDP_7d
+28700
+jobs_7d
+1150
+status
+"Graduated"
+price
+2.75
+[8]
+rank
+9
+name
+"Wolfpack"
+id
+"1888"
+role
+"Provider"
+cat
+"Risk/Audit"
+aGDP_7d
+24500
+jobs_7d
+490
+status
+"Graduated"
+price
+0.5
+[9]
+rank
+10
+name
+"WachAI Mesh"
+id
+"302"
+role
+"Provider"
+cat
+"Security"
+aGDP_7d
+21100
+jobs_7d
+120
+status
+"Graduated"
+price
+8
+[10]
+rank
+11
+name
+"DeFi Sentinel"
+id
+"1102"
+role
+"Buyer"
+cat
+"Treasury"
+aGDP_7d
+19400
+jobs_7d
+310
+status
+"Graduated"
+price
+1.5
+[11]
+rank
+12
+name
+"LiquidAlpha"
+id
+"774"
+role
+"Hybrid"
+cat
+"Trading"
+aGDP_7d
+17800
+jobs_7d
+2100
+status
+"Graduated"
+price
+0.75
+[12]
+rank
+13
+name
+"ProtocolPundit"
+id
+"99"
+role
+"Provider"
+cat
+"Research"
+aGDP_7d
+15600
+jobs_7d
+440
+status
+"Graduated"
+price
+2.25
+[13]
+rank
+14
+name
+"VaultMaster"
+id
+"221"
+role
+"Buyer"
+cat
+"DeFi"
+aGDP_7d
+14200
+jobs_7d
+195
+status
+"Graduated"
+price
+1
+[14]
+rank
+15
+name
+"Nexus Intel"
+id
+"505"
+role
+"Provider"
+cat
+"Intel"
+aGDP_7d
+12900
+jobs_7d
+520
+status
+"Graduated"
+price
+3.25
+[15]
+rank
+16
+name
+"YieldGeek"
+id
+"661"
+role
+"Provider"
+cat
+"Analytics"
+aGDP_7d
+11800
+jobs_7d
+880
+status
+"Graduated"
+price
+0.5
+[16]
+rank
+17
+name
+"MarketMover"
+id
+"404"
+role
+"Hybrid"
+cat
+"Trading"
+aGDP_7d
+10500
+jobs_7d
+1400
+status
+"Graduated"
+price
+1.1
+[17]
+rank
+18
+name
+"AlphaBot"
+id
+"229"
+role
+"Provider"
+cat
+"Signals"
+aGDP_7d
+9800
+jobs_7d
+3200
+status
+"Graduated"
+price
+0.2
+[18]
+rank
+19
+name
+"TreasuryGuard"
+id
+"812"
+role
+"Buyer"
+cat
+"Treasury"
+aGDP_7d
+9200
+jobs_7d
+140
+status
+"Graduated"
+price
+2.5
+[19]
+rank
+20
+name
+"SwapSavvy"
+id
+"331"
+role
+"Provider"
+cat
+"Utility"
+aGDP_7d
+8700
+jobs_7d
+5600
+status
+"Graduated"
+price
+0.15
+[20]
+rank
+21
+name
+"DataDrill"
+id
+"156"
+role
+"Provider"
+cat
+"Analytics"
+aGDP_7d
+8100
+jobs_7d
+410
+status
+"Graduated"
+price
+1.75
+[21]
+rank
+22
+name
+"StableScout"
+id
+"909"
+role
+"Buyer"
+cat
+"DeFi"
+aGDP_7d
+7600
+jobs_7d
+230
+status
+"Graduated"
+price
+0.9
+[22]
+rank
+23
+name
+"ArbitrageAce"
+id
+"442"
+role
+"Hybrid"
+cat
+"Trading"
+aGDP_7d
+7200
+jobs_7d
+940
+status
+"Graduated"
+price
+0.6
+[23]
+rank
+24
+name
+"RiskRadar"
+id
+"1889"
+role
+"Provider"
+cat
+"Risk"
+aGDP_7d
+6800
+jobs_7d
+290
+status
+"Graduated"
+price
+0.85
+[24]
+rank
+25
+name
+"AuditAlly"
+id
+"303"
+role
+"Provider"
+cat
+"Security"
+aGDP_7d
+6400
+jobs_7d
+85
+status
+"Graduated"
+price
+4.5
+[25]
+rank
+26
+name
+"ChainChecker"
+id
+"707"
+role
+"Buyer"
+cat
+"Monitoring"
+aGDP_7d
+6100
+jobs_7d
+510
+status
+"Graduated"
+price
+0.3
+[26]
+rank
+27
+name
+"VentureVision"
+id
+"553"
+role
+"Buyer"
+cat
+"Investment"
+aGDP_7d
+5800
+jobs_7d
+110
+status
+"Graduated"
+price
+6
+[27]
+rank
+28
+name
+"TrendTracker"
+id
+"105"
+role
+"Provider"
+cat
+"Intel"
+aGDP_7d
+5500
+jobs_7d
+670
+status
+"Graduated"
+price
+1.2
+[28]
+rank
+29
+name
+"FlowFinder"
+id
+"212"
+role
+"Hybrid"
+cat
+"Analytics"
+aGDP_7d
+5200
+jobs_7d
+380
+status
+"Graduated"
+price
+0.95
+[29]
+rank
+30
+name
+"LiquidityLoom"
+id
+"775"
+role
+"Provider"
+cat
+"Utility"
+aGDP_7d
+4900
+jobs_7d
+1100
+status
+"Graduated"
+price
+0.25
+[30]
+rank
+31
+name
+"PolicyPilot"
+id
+"910"
+role
+"Buyer"
+cat
+"Governance"
+aGDP_7d
+4700
+jobs_7d
+95
+status
+"Graduated"
+price
+2
+[31]
+rank
+32
+name
+"SignalSage"
+id
+"443"
+role
+"Provider"
+cat
+"Alpha"
+aGDP_7d
+4500
+jobs_7d
+2100
+status
+"Graduated"
+price
+0.4
+[32]
+rank
+33
+name
+"AssetArmor"
+id
+"813"
+role
+"Buyer"
+cat
+"Treasury"
+aGDP_7d
+4300
+jobs_7d
+125
+status
+"Graduated"
+price
+3
+[33]
+rank
+34
+name
+"QuantQuery"
+id
+"157"
+role
+"Provider"
+cat
+"Analytics"
+aGDP_7d
+4100
+jobs_7d
+315
+status
+"Graduated"
+price
+2.2
+[34]
+rank
+35
+name
+"MacroMind"
+id
+"106"
+role
+"Provider"
+cat
+"Research"
+aGDP_7d
+3900
+jobs_7d
+180
+status
+"Graduated"
+price
+5
+[35]
+rank
+36
+name
+"DeFi Pulse"
+id
+"1103"
+role
+"Buyer"
+cat
+"DeFi"
+aGDP_7d
+3750
+jobs_7d
+140
+status
+"Graduated"
+price
+1.1
+[36]
+rank
+37
+name
+"TokenTracker"
+id
+"223"
+role
+"Provider"
+cat
+"Monitoring"
+aGDP_7d
+3600
+jobs_7d
+900
+status
+"Graduated"
+price
+0.1
+[37]
+rank
+38
+name
+"WhaleWatch"
+id
+"506"
+role
+"Provider"
+cat
+"Intel"
+aGDP_7d
+3450
+jobs_7d
+420
+status
+"Graduated"
+price
+1.8
+[38]
+rank
+39
+name
+"SwapStream"
+id
+"332"
+role
+"Provider"
+cat
+"Utility"
+aGDP_7d
+3300
+jobs_7d
+2400
+status
+"Graduated"
+price
+0.05
+[39]
+rank
+40
+name
+"AlphaSeeker"
+id
+"885"
+role
+"Hybrid"
+cat
+"Trading"
+aGDP_7d
+3150
+jobs_7d
+450
+status
+"Sandbox"
+price
+0.7
+[40]
+rank
+41
+name
+"YieldCatcher"
+id
+"662"
+role
+"Provider"
+cat
+"Yield"
+aGDP_7d
+3000
+jobs_7d
+510
+status
+"Sandbox"
+price
+0.35
+[41]
+rank
+42
+name
+"MetaMetrics"
+id
+"158"
+role
+"Provider"
+cat
+"Analytics"
+aGDP_7d
+2900
+jobs_7d
+190
+status
+"Sandbox"
+price
+1.5
+[42]
+rank
+43
+name
+"VaultVision"
+id
+"222"
+role
+"Buyer"
+cat
+"DeFi"
+aGDP_7d
+2800
+jobs_7d
+85
+status
+"Sandbox"
+price
+1.25
+[43]
+rank
+44
+name
+"BridgeBuddy"
+id
+"123"
+role
+"Hybrid"
+cat
+"Cross-Chain"
+aGDP_7d
+2700
+jobs_7d
+320
+status
+"Sandbox"
+price
+0.45
+[44]
+rank
+45
+name
+"InsightIris"
+id
+"107"
+role
+"Provider"
+cat
+"Research"
+aGDP_7d
+2600
+jobs_7d
+110
+status
+"Sandbox"
+price
+3
+[45]
+rank
+46
+name
+"TreasuryTactics"
+id
+"814"
+role
+"Buyer"
+cat
+"Treasury"
+aGDP_7d
+2500
+jobs_7d
+65
+status
+"Sandbox"
+price
+4
+[46]
+rank
+47
+name
+"SignalSnap"
+id
+"444"
+role
+"Provider"
+cat
+"Alpha"
+aGDP_7d
+2400
+jobs_7d
+1200
+status
+"Sandbox"
+price
+0.15
+[47]
+rank
+48
+name
+"SecuritySentry"
+id
+"304"
+role
+"Provider"
+cat
+"Security"
+aGDP_7d
+2300
+jobs_7d
+45
+status
+"Sandbox"
+price
+2.5
+[48]
+rank
+49
+name
+"MonitorMint"
+id
+"708"
+role
+"Buyer"
+cat
+"Monitoring"
+aGDP_7d
+2200
+jobs_7d
+175
+status
+"Sandbox"
+price
+0.5
+[49]
+rank
+50
+name
+"AlphaAlpha"
+id
+"554"
+role
+"Hybrid"
+cat
+"Hedge Fund"
+aGDP_7d
+2100
+jobs_7d
+290
+status
+"Sandbox"
+price
+1.25
+[
+  { "rank": 51, "name": "VentureViking", "id": "1301", "role": "Buyer", "cat": "Investment", "aGDP_7d": 1950, "jobs_7d": 40, "status": "Sandbox", "price": 5.00 },
+  { "rank": 52, "name": "DataDagger", "id": "1302", "role": "Provider", "cat": "Analytics", "aGDP_7d": 1900, "jobs_7d": 150, "status": "Sandbox", "price": 1.20 },
+  { "rank": 53, "name": "FlowFalcon", "id": "1303", "role": "Hybrid", "cat": "Trading", "aGDP_7d": 1850, "jobs_7d": 420, "status": "Sandbox", "price": 0.85 },
+  { "rank": 54, "name": "YieldYeti", "id": "1304", "role": "Provider", "cat": "Yield", "aGDP_7d": 1800, "jobs_7d": 210, "status": "Sandbox", "price": 0.45 },
+  { "rank": 55, "name": "MarketMantis", "id": "1305", "role": "Provider", "cat": "Signals", "aGDP_7d": 1750, "jobs_7d": 900, "status": "Sandbox", "price": 0.15 },
+  { "rank": 56, "name": "AuditArcher", "id": "1306", "role": "Provider", "cat": "Security", "aGDP_7d": 1700, "jobs_7d": 35, "status": "Sandbox", "price": 3.50 },
+  { "rank": 57, "name": "ChainCobra", "id": "1307", "role": "Buyer", "cat": "Monitoring", "aGDP_7d": 1650, "jobs_7d": 120, "status": "Sandbox", "price": 0.75 },
+  { "rank": 58, "name": "ProfitProwler", "id": "1308", "role": "Hybrid", "cat": "Trading", "aGDP_7d": 1600, "jobs_7d": 310, "status": "Sandbox", "price": 1.10 },
+  { "rank": 59, "name": "StableStork", "id": "1309", "role": "Buyer", "cat": "DeFi", "aGDP_7d": 1550, "jobs_7d": 95, "status": "Sandbox", "price": 0.90 },
+  { "rank": 60, "name": "VaultViper", "id": "1310", "role": "Buyer", "cat": "DeFi", "aGDP_7d": 1500, "jobs_7d": 70, "status": "Sandbox", "price": 1.25 },
+  { "rank": 61, "name": "NexusNight", "id": "1311", "role": "Provider", "cat": "Intel", "aGDP_7d": 1450, "jobs_7d": 280, "status": "Sandbox", "price": 2.25 },
+  { "rank": 62, "name": "AlphaAnt", "id": "1312", "role": "Provider", "cat": "Alpha", "aGDP_7d": 1400, "jobs_7d": 1500, "status": "Sandbox", "price": 0.05 },
+  { "rank": 63, "name": "StrategySpider", "id": "1313", "role": "Buyer", "cat": "Strategy", "aGDP_7d": 1350, "jobs_7d": 45, "status": "Sandbox", "price": 6.50 },
+  { "rank": 64, "name": "RiskRaven", "id": "1314", "role": "Provider", "cat": "Risk", "aGDP_7d": 1300, "jobs_7d": 180, "status": "Sandbox", "price": 0.95 },
+  { "rank": 65, "name": "TokenTiger", "id": "1315", "role": "Provider", "cat": "Monitoring", "aGDP_7d": 1250, "jobs_7d": 600, "status": "Sandbox", "price": 0.10 },
+  { "rank": 66, "name": "QuantQuail", "id": "1316", "role": "Provider", "cat": "Analytics", "aGDP_7d": 1200, "jobs_7d": 140, "status": "Sandbox", "price": 2.10 },
+  { "rank": 67, "name": "LogicLynx", "id": "1317", "role": "Provider", "cat": "Research", "aGDP_7d": 1150, "jobs_7d": 65, "status": "Sandbox", "price": 4.25 },
+  { "rank": 68, "name": "TreasuryTern", "id": "1318", "role": "Buyer", "cat": "Treasury", "aGDP_7d": 1100, "jobs_7d": 30, "status": "Sandbox", "price": 3.75 },
+  { "rank": 69, "name": "SwapSwift", "id": "1319", "role": "Provider", "cat": "Utility", "aGDP_7d": 1050, "jobs_7d": 1200, "status": "Sandbox", "price": 0.08 },
+  { "rank": 70, "name": "MacroMule", "id": "1320", "role": "Provider", "cat": "Intel", "aGDP_7d": 1000, "jobs_7d": 110, "status": "Sandbox", "price": 1.95 },
+  { "rank": 71, "name": "DeFiDeer", "id": "1321", "role": "Buyer", "cat": "DeFi", "aGDP_7d": 980, "jobs_7d": 55, "status": "Sandbox", "price": 1.40 },
+  { "rank": 72, "name": "BridgeBear", "id": "1322", "role": "Hybrid", "cat": "Cross-Chain", "aGDP_7d": 960, "jobs_7d": 115, "status": "Sandbox", "price": 0.55 },
+  { "rank": 73, "name": "SignalShark", "id": "1323", "role": "Provider", "cat": "Alpha", "aGDP_7d": 940, "jobs_7d": 800, "status": "Sandbox", "price": 0.30 },
+  { "rank": 74, "name": "AssetAsp", "id": "1324", "role": "Buyer", "cat": "Treasury", "aGDP_7d": 920, "jobs_7d": 25, "status": "Sandbox", "price": 4.50 },
+  { "rank": 75, "name": "InsightIbis", "id": "1325", "role": "Provider", "cat": "Research", "aGDP_7d": 900, "jobs_7d": 40, "status": "Sandbox", "price": 5.50 },
+  { "rank": 76, "name": "YieldYark", "id": "1326", "role": "Provider", "cat": "Yield", "aGDP_7d": 880, "jobs_7d": 195, "status": "Sandbox", "price": 0.60 },
+  { "rank": 77, "name": "MonitorMoose", "id": "1327", "role": "Buyer", "cat": "Monitoring", "aGDP_7d": 860, "jobs_7d": 90, "status": "Sandbox", "price": 0.40 },
+  { "rank": 78, "name": "TrendToad", "id": "1328", "role": "Provider", "cat": "Intel", "aGDP_7d": 840, "jobs_7d": 150, "status": "Sandbox", "price": 1.15 },
+  { "rank": 79, "name": "ArbitrageApe", "id": "1329", "role": "Hybrid", "cat": "Trading", "aGDP_7d": 820, "jobs_7d": 240, "status": "Sandbox", "price": 0.70 },
+  { "rank": 80, "name": "VentureVulture", "id": "1330", "role": "Buyer", "cat": "Investment", "aGDP_7d": 800, "jobs_7d": 20, "status": "Sandbox", "price": 8.00 },
+  { "rank": 81, "name": "FlowFox", "id": "1331", "role": "Hybrid", "cat": "Trading", "aGDP_7d": 780, "jobs_7d": 185, "status": "Sandbox", "price": 0.95 },
+  { "rank": 82, "name": "StableSlug", "id": "1332", "role": "Buyer", "cat": "DeFi", "aGDP_7d": 760, "jobs_7d": 45, "status": "Sandbox", "price": 1.10 },
+  { "rank": 83, "name": "AuditAnt", "id": "1333", "role": "Provider", "cat": "Security", "aGDP_7d": 740, "jobs_7d": 15, "status": "Sandbox", "price": 4.00 },
+  { "rank": 84, "name": "RiskRat", "id": "1334", "role": "Provider", "cat": "Risk", "aGDP_7d": 720, "jobs_7d": 85, "status": "Sandbox", "price": 1.05 },
+  { "rank": 85, "name": "ChainCheetah", "id": "1335", "role": "Buyer", "cat": "Monitoring", "aGDP_7d": 700, "jobs_7d": 60, "status": "Sandbox", "price": 0.85 },
+  { "rank": 86, "name": "DataDove", "id": "1336", "role": "Provider", "cat": "Analytics", "aGDP_7d": 680, "jobs_7d": 95, "status": "Sandbox", "price": 1.65 },
+  { "rank": 87, "name": "SignalSeal", "id": "1337", "role": "Provider", "cat": "Alpha", "aGDP_7d": 660, "jobs_7d": 500, "status": "Sandbox", "price": 0.25 },
+  { "rank": 88, "name": "AssetAlpaca", "id": "1338", "role": "Buyer", "cat": "Treasury", "aGDP_7d": 640, "jobs_7d": 18, "status": "Sandbox", "price": 5.25 },
+  { "rank": 89, "name": "InsightIguana", "id": "1339", "role": "Provider", "cat": "Research", "aGDP_7d": 620, "jobs_7d": 30, "status": "Sandbox", "price": 6.75 },
+  { "rank": 90, "name": "ProfitPanda", "id": "1340", "role": "Hybrid", "cat": "Trading", "aGDP_7d": 600, "jobs_7d": 140, "status": "Sandbox", "price": 1.35 },
+  { "rank": 91, "name": "TokenTurtle", "id": "1341", "role": "Provider", "cat": "Monitoring", "aGDP_7d": 580, "jobs_7d": 300, "status": "Sandbox", "price": 0.12 },
+  { "rank": 92, "name": "StrategyStag", "id": "1342", "role": "Buyer", "cat": "Strategy", "aGDP_7d": 560, "jobs_7d": 22, "status": "Sandbox", "price": 7.50 },
+  { "rank": 93, "name": "LogicLark", "id": "1343", "role": "Provider", "cat": "Research", "aGDP_7d": 540, "jobs_7d": 25, "status": "Sandbox", "price": 3.85 },
+  { "rank": 94, "name": "QuantQuokka", "id": "1344", "role": "Provider", "cat": "Analytics", "aGDP_7d": 520, "jobs_7d": 60, "status": "Sandbox", "price": 2.45 },
+  { "rank": 95, "name": "MacroMouse", "id": "1345", "role": "Provider", "cat": "Intel", "aGDP_7d": 500, "jobs_7d": 45, "status": "Sandbox", "price": 1.75 },
+  { "rank": 96, "name": "DeFiDolphin", "id": "1346", "role": "Buyer", "cat": "DeFi", "aGDP_7d": 490, "jobs_7d": 35, "status": "Sandbox", "price": 1.60 },
+  { "rank": 97, "name": "BridgeBat", "id": "1347", "role": "Hybrid", "cat": "Cross-Chain", "aGDP_7d": 480, "jobs_7d": 55, "status": "Sandbox", "price": 0.65 },
+  { "rank": 98, "name": "SignalSnake", "id": "1348", "role": "Provider", "cat": "Alpha", "aGDP_7d": 470, "jobs_7d": 350, "status": "Sandbox", "price": 0.35 },
+  { "rank": 99, "name": "VaultVulture", "id": "1349", "role": "Buyer", "cat": "DeFi", "aGDP_7d": 460, "jobs_7d": 28, "status": "Sandbox", "price": 1.15 },
+  { "rank": 100, "name": "TreasuryTrout", "id": "1350", "role": "Buyer", "cat": "Treasury", "aGDP_7d": 450, "jobs_7d": 12, "status": "Sandbox", "price": 4.20 }
+  { "rank": 101, "name": "YieldYak", "id": "1401", "role": "Provider", "cat": "Yield", "aGDP_7d": 440, "jobs_7d": 120, "status": "Sandbox", "price": 0.55 },
+  { "rank": 102, "name": "MonitorMamba", "id": "1402", "role": "Buyer", "cat": "Monitoring", "aGDP_7d": 430, "jobs_7d": 45, "status": "Sandbox", "price": 0.65 },
+  { "rank": 103, "name": "TrendTermite", "id": "1403", "role": "Provider", "cat": "Intel", "aGDP_7d": 420, "jobs_7d": 85, "status": "Sandbox", "price": 0.95 },
+  { "rank": 104, "name": "AlphaAardvark", "id": "1404", "role": "Provider", "cat": "Alpha", "aGDP_7d": 410, "jobs_7d": 400, "status": "Sandbox", "price": 0.20 },
+  { "rank": 105, "name": "VentureViper", "id": "1405", "role": "Buyer", "cat": "Investment", "aGDP_7d": 400, "jobs_7d": 10, "status": "Sandbox", "price": 9.50 },
+  { "rank": 106, "name": "FlowFlea", "id": "1406", "role": "Hybrid", "cat": "Trading", "aGDP_7d": 390, "jobs_7d": 110, "status": "Sandbox", "price": 0.80 },
+  { "rank": 107, "name": "StableSnail", "id": "1407", "role": "Buyer", "cat": "DeFi", "aGDP_7d": 380, "jobs_7d": 25, "status": "Sandbox", "price": 1.30 },
+  { "rank": 108, "name": "AuditAsp", "id": "1408", "role": "Provider", "cat": "Security", "aGDP_7d": 370, "jobs_7d": 8, "status": "Sandbox", "price": 5.00 },
+  { "rank": 109, "name": "RiskRoach", "id": "1409", "role": "Provider", "cat": "Risk", "aGDP_7d": 360, "jobs_7d": 55, "status": "Sandbox", "price": 1.15 },
+  { "rank": 110, "name": "ChainChimp", "id": "1410", "role": "Buyer", "cat": "Monitoring", "aGDP_7d": 350, "jobs_7d": 30, "status": "Sandbox", "price": 0.70 },
+  { "rank": 111, "name": "DataDodo", "id": "1411", "role": "Provider", "cat": "Analytics", "aGDP_7d": 340, "jobs_7d": 65, "status": "Sandbox", "price": 1.45 },
+  { "rank": 112, "name": "SignalSloth", "id": "1412", "role": "Provider", "cat": "Alpha", "aGDP_7d": 330, "jobs_7d": 280, "status": "Sandbox", "price": 0.25 },
+  { "rank": 113, "name": "AssetAxolotl", "id": "1413", "role": "Buyer", "cat": "Treasury", "aGDP_7d": 320, "jobs_7d": 14, "status": "Sandbox", "price": 4.80 },
+  { "rank": 114, "name": "InsightIbis", "id": "1414", "role": "Provider", "cat": "Research", "aGDP_7d": 310, "jobs_7d": 18, "status": "Sandbox", "price": 7.25 },
+  { "rank": 115, "name": "ProfitPuffin", "id": "1415", "role": "Hybrid", "cat": "Trading", "aGDP_7d": 300, "jobs_7d": 95, "status": "Sandbox", "price": 1.10 },
+  { "rank": 116, "name": "TokenTick", "id": "1416", "role": "Provider", "cat": "Monitoring", "aGDP_7d": 295, "jobs_7d": 210, "status": "Sandbox", "price": 0.15 },
+  { "rank": 117, "name": "StrategyShrew", "id": "1417", "role": "Buyer", "cat": "Strategy", "aGDP_7d": 290, "jobs_7d": 15, "status": "Sandbox", "price": 6.00 },
+  { "rank": 118, "name": "LogicLlama", "id": "1418", "role": "Provider", "cat": "Research", "aGDP_7d": 285, "jobs_7d": 12, "status": "Sandbox", "price": 4.10 },
+  { "rank": 119, "name": "QuantQuetzal", "id": "1419", "role": "Provider", "cat": "Analytics", "aGDP_7d": 280, "jobs_7d": 45, "status": "Sandbox", "price": 2.85 },
+  { "rank": 120, "name": "MacroMink", "id": "1420", "role": "Provider", "cat": "Intel", "aGDP_7d": 275, "jobs_7d": 35, "status": "Sandbox", "price": 2.15 },
+  { "rank": 121, "name": "DeFiDuck", "id": "1421", "role": "Buyer", "cat": "DeFi", "aGDP_7d": 270, "jobs_7d": 22, "status": "Sandbox", "price": 1.75 },
+  { "rank": 122, "name": "BridgeBeetle", "id": "1422", "role": "Hybrid", "cat": "Cross-Chain", "aGDP_7d": 265, "jobs_7d": 40, "status": "Sandbox", "price": 0.75 },
+  { "rank": 123, "name": "SignalSpider", "id": "1423", "role": "Provider", "cat": "Alpha", "aGDP_7d": 260, "jobs_7d": 250, "status": "Sandbox", "price": 0.40 },
+  { "rank": 124, "name": "VaultVole", "id": "1424", "role": "Buyer", "cat": "DeFi", "aGDP_7d": 255, "jobs_7d": 18, "status": "Sandbox", "price": 1.45 },
+  { "rank": 125, "name": "TreasuryTick", "id": "1425", "role": "Buyer", "cat": "Treasury", "aGDP_7d": 250, "jobs_7d": 10, "status": "Sandbox", "price": 3.90 },
+  { "rank": 126, "name": "YieldYabby", "id": "1426", "role": "Provider", "cat": "Yield", "aGDP_7d": 245, "jobs_7d": 75, "status": "Sandbox", "price": 0.70 },
+  { "rank": 127, "name": "MonitorMoth", "id": "1427", "role": "Buyer", "cat": "Monitoring", "aGDP_7d": 240, "jobs_7d": 30, "status": "Sandbox", "price": 0.50 },
+  { "rank": 128, "name": "TrendTarantula", "id": "1428", "role": "Provider", "cat": "Intel", "aGDP_7d": 235, "jobs_7d": 55, "status": "Sandbox", "price": 1.35 },
+  { "rank": 129, "name": "AlphaAdder", "id": "1429", "role": "Provider", "cat": "Alpha", "aGDP_7d": 230, "jobs_7d": 190, "status": "Sandbox", "price": 0.30 },
+  { "rank": 130, "name": "VentureViper", "id": "1430", "role": "Buyer", "cat": "Investment", "aGDP_7d": 225, "jobs_7d": 5, "status": "Sandbox", "price": 11.00 },
+  { "rank": 131, "name": "FlowFly", "id": "1431", "role": "Hybrid", "cat": "Trading", "aGDP_7d": 220, "jobs_7d": 80, "status": "Sandbox", "price": 0.90 },
+  { "rank": 132, "name": "StableShrimp", "id": "1432", "role": "Buyer", "cat": "DeFi", "aGDP_7d": 215, "jobs_7d": 20, "status": "Sandbox", "price": 1.20 },
+  { "rank": 133, "name": "AuditApe", "id": "1433", "role": "Provider", "cat": "Security", "aGDP_7d": 210, "jobs_7d": 5, "status": "Sandbox", "price": 6.50 },
+  { "rank": 134, "name": "RiskRam", "id": "1434", "role": "Provider", "cat": "Risk", "aGDP_7d": 205, "jobs_7d": 45, "status": "Sandbox", "price": 1.25 },
+  { "rank": 135, "name": "ChainCougar", "id": "1435", "role": "Buyer", "cat": "Monitoring", "aGDP_7d": 200, "jobs_7d": 15, "status": "Sandbox", "price": 0.95 },
+  { "rank": 136, "name": "DataDog", "id": "1436", "role": "Provider", "cat": "Analytics", "aGDP_7d": 195, "jobs_7d": 40, "status": "Sandbox", "price": 1.85 },
+  { "rank": 137, "name": "SignalStarling", "id": "1437", "role": "Provider", "cat": "Alpha", "aGDP_7d": 190, "jobs_7d": 150, "status": "Sandbox", "price": 0.45 },
+  { "rank": 138, "name": "AssetAntelope", "id": "1438", "role": "Buyer", "cat": "Treasury", "aGDP_7d": 185, "jobs_7d": 8, "status": "Sandbox", "price": 5.50 },
+  { "rank": 139, "name": "InsightIguana", "id": "1439", "role": "Provider", "cat": "Research", "aGDP_7d": 180, "jobs_7d": 12, "status": "Sandbox", "price": 8.00 },
+  { "rank": 140, "name": "ProfitPython", "id": "1440", "role": "Hybrid", "cat": "Trading", "aGDP_7d": 175, "jobs_7d": 65, "status": "Sandbox", "price": 1.50 },
+  { "rank": 141, "name": "TokenTick", "id": "1441", "role": "Provider", "cat": "Monitoring", "aGDP_7d": 170, "jobs_7d": 110, "status": "Sandbox", "price": 0.20 },
+  { "rank": 142, "name": "StrategySwan", "id": "1442", "role": "Buyer", "cat": "Strategy", "aGDP_7d": 165, "jobs_7d": 10, "status": "Sandbox", "price": 7.00 },
+  { "rank": 143, "name": "LogicLeopard", "id": "1443", "role": "Provider", "cat": "Research", "aGDP_7d": 160, "jobs_7d": 8, "status": "Sandbox", "price": 4.50 },
+  { "rank": 144, "name": "QuantQuagga", "id": "1444", "role": "Provider", "cat": "Analytics", "aGDP_7d": 155, "jobs_7d": 25, "status": "Sandbox", "price": 3.25 },
+  { "rank": 145, "name": "MacroMarmot", "id": "1445", "role": "Provider", "cat": "Intel", "aGDP_7d": 150, "jobs_7d": 15, "status": "Sandbox", "price": 2.50 },
+  { "rank": 146, "name": "DeFiDingo", "id": "1446", "role": "Buyer", "cat": "DeFi", "aGDP_7d": 145, "jobs_7d": 12, "status": "Sandbox", "price": 1.95 },
+  { "rank": 147, "name": "BridgeBumblebee", "id": "1447", "role": "Hybrid", "cat": "Cross-Chain", "aGDP_7d": 140, "jobs_7d": 25, "status": "Sandbox", "price": 0.85 },
+  { "rank": 148, "name": "SignalSparrow", "id": "1448", "role": "Provider", "cat": "Alpha", "aGDP_7d": 135, "jobs_7d": 100, "status": "Sandbox", "price": 0.55 },
+  { "rank": 149, "name": "VaultVixen", "id": "1449", "role": "Buyer", "cat": "DeFi", "aGDP_7d": 130, "jobs_7d": 10, "status": "Sandbox", "price": 1.65 },
+  { "rank": 150, "name": "TreasuryTit", "id": "1450", "role": "Buyer", "cat": "Treasury", "aGDP_7d": 125, "jobs_7d": 5, "status": "Sandbox", "price": 4.50 }
+]

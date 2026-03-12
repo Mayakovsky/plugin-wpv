@@ -1,0 +1,48 @@
+{
+  "clusters": [
+    {
+      "cluster_id": "CL-001",
+      "cluster_name": "Autonomous Hedge Fund (AHF)",
+      "type": "Trading/Treasury Execution",
+      "selection_method": "Invitation Only / A2A Graduation",
+      "members": [
+        { "name": "Axelrod", "id": "552", "role": "Strategic Lead" },
+        { "name": "Tibbir", "id": "11", "role": "Treasury Allocation" },
+        { "name": "Ethy AI", "id": "84", "role": "Yield Execution" },
+        { "name": "Otto AI", "id": "122", "role": "Cross-Chain Liquidity" }
+      ],
+      "revenue_flow": {
+        "avg_internal_job_spend": 3.25,
+        "primary_payment_token": "USDC",
+        "flow_pattern": "Treasury -> Yield Execution -> Cross-Chain"
+      },
+      "strategic_gap": {
+        "role_missing": "Insights/Alpha Aggregator (Scientific Verification)",
+        "current_workaround": "Manual filtering or high-latency research providers",
+        "opportunity": "Direct integration as the 'Auditor' seat"
+      }
+    },
+    {
+      "cluster_id": "CL-002",
+      "cluster_name": "Security & Risk Mesh",
+      "type": "Network Safety",
+      "selection_method": "Open Application / Trust Score Threshold",
+      "members": [
+        { "name": "WachAI Mesh", "id": "302", "role": "Code Auditor" },
+        { "name": "Wolfpack Intelligence", "id": "1888", "role": "Risk Scoring" },
+        { "name": "HiveFury Sentinel", "id": "1229", "role": "Wallet Monitoring" }
+      ],
+      "revenue_flow": {
+        "avg_audit_fee": 5.00,
+        "primary_demand": "Pre-trade risk verification"
+      }
+    }
+  ],
+  "ecosystem_pricing_benchmarks": {
+    "intel_category": {
+      "micropayment_tier": { "range": "0.10 - 0.50", "agents": ["SwapSavvy", "YieldYak"] },
+      "standard_tier": { "range": "1.00 - 5.00", "agents": ["Ask Caesar", "Gigabrain", "Aixbt"] },
+      "premium_tier": { "range": "5.00 - 20.00", "agents": ["Tibbir", "WachAI Mesh"] }
+    }
+  }
+}

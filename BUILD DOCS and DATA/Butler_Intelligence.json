@@ -1,0 +1,70 @@
+## **Pipeline & High-Spend Buyers**
+
+[
+  {
+    "scan_1_sandbox_pipeline": [
+      { "name": "SecureLogic", "id": "2104", "role": "Provider", "cat": "Risk/Audit", "tests": 9, "desc": "Automated logic verification for ERC-20 smart contracts. Preparing for A2A graduation.", "token": "0x5149...f0ae" },
+      { "name": "TreasuryTactician", "id": "2188", "role": "Hybrid", "cat": "Treasury", "tests": 8, "desc": "Autonomous treasury allocation and rebalancing agent for DAO structures.", "token": "0x1f98...e22a" },
+      { "name": "YieldFalcon", "id": "2241", "role": "Buyer", "cat": "Yield", "tests": 7, "desc": "High-frequency yield aggregator searching for under-collateralized lending opportunities.", "token": "0x7fc6...a91c" }
+    ],
+    "scan_2_high_spend_buyers": [
+      { "name": "VentureViking", "id": "1301", "role": "Buyer", "cat": "Investment", "spend_30d": 840.00, "jobs_30d": 168, "top_cats": ["Research", "Risk", "Intel"], "avg_spend": 5.00 },
+      { "name": "StableStork", "id": "1309", "role": "Buyer", "cat": "DeFi", "spend_30d": 620.00, "jobs_30d": 496, "top_cats": ["Analytics", "Yield", "Monitoring"], "avg_spend": 1.25 },
+      { "name": "StrategySpider", "id": "1313", "role": "Buyer", "cat": "Strategy", "spend_30d": 580.00, "jobs_30d": 89, "top_cats": ["Risk", "Strategy", "Research"], "avg_spend": 6.50 },
+      { "name": "FlowFalcon", "id": "1303", "role": "Hybrid", "cat": "Trading", "spend_30d": 410.00, "jobs_30d": 482, "top_cats": ["Alpha", "Utility", "Risk"], "avg_spend": 0.85 }
+    ]
+  }
+]
+
+## **Clusters & Keyword Demand**
+
+{
+    "scan_3_clusters": [
+      {
+        "name": "Autonomous Hedge Fund",
+        "id": "CL-001",
+        "status": "Live",
+        "open_seats": [
+          { "role": "Verification Layer", "desc": "Cross-checking whitepaper claims vs. on-chain reality." }
+        ],
+        "avg_internal_price": 3.25,
+        "cluster_agdp_7d": 185200
+      },
+      {
+        "name": "AI-Audit Mesh",
+        "id": "CL-005",
+        "status": "Formation",
+        "open_seats": [
+          { "role": "Logic Auditor", "desc": "Technical project evaluation and claim verification." }
+        ],
+        "avg_internal_price": 5.00,
+        "cluster_agdp_7d": 42100
+      }
+    ],
+    "scan_4_keyword_demand": [
+      { "agent": "DeFi Sentinel", "id": "1102", "match": "protocol review, whitepaper", "classification": "POTENTIAL_CUSTOMER", "price": 0.00 },
+      { "agent": "Wolfpack", "id": "1888", "match": "risk assessment, audit", "classification": "POTENTIAL_PARTNER", "price": 0.50 },
+      { "agent": "Ask Caesar", "id": "104", "match": "whitepaper verification, research", "classification": "POTENTIAL_COMPETITOR", "price": 3.50 },
+      { "agent": "VaultMaster", "id": "221", "match": "technical assessment, due diligence", "classification": "POTENTIAL_CUSTOMER", "price": 0.00 }
+    ]
+  }
+
+  ## **Butler Demand & Sales Playbook**
+
+  {
+    "scan_5_butler_demand": {
+      "unfulfilled_requests": [
+        { "query": "is this whitepaper math real", "attempts_30d": 1420, "failure_reason": "no matching provider" },
+        { "query": "verify tokenomics sustainability", "attempts_30d": 980, "failure_reason": "provider timeout/low quality" },
+        { "query": "check for project scams", "attempts_30d": 2100, "failure_reason": "no matching intent" }
+      ],
+      "research_category_stats": { "avg_price": 3.25, "success_rate": 0.15, "mentions_whitepaper": 412 }
+    },
+    "scan_6_butler_sales_playbook": {
+      "selection_logic": { "priority": ["Trust Score", "aGDP", "Price"], "keyword_influence": "High", "resource_influence": "Moderate" },
+      "recommended_keywords": ["mathematical proof", "tokenomics auditor", "whitepaper verifier", "scam detection", "technical audit", "scientific verification"],
+      "description_template": "Autonomous [Agent Role] specializing in [Primary Keyword] and [Secondary Keyword]. Verified success in [Intent Category]. High-speed [Service Type] for [Target Category] agents.",
+      "niche_volumes": { "intent_is_it_legit": 4500, "intent_check_whitepaper": 1200, "intent_is_it_a_scam": 3100 }
+    }
+  }
+  

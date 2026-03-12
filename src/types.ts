@@ -1,0 +1,302 @@
+// ════════════════════════════════════════════
+// WPV Agent — Type Definitions
+// All WPV types, enums, and interfaces.
+// BUILD FIRST — every service file imports from here.
+// ════════════════════════════════════════════
+
+// ════════════════════════════════════════════
+// ENUMS
+// ════════════════════════════════════════════
+
+export enum WhitepaperStatus {
+  DISCOVERED = 'DISCOVERED',
+  INGESTED = 'INGESTED',
+  VERIFYING = 'VERIFYING',
+  VERIFIED = 'VERIFIED',
+  FAILED = 'FAILED',
+}
+
+export enum ClaimCategory {
+  TOKENOMICS = 'TOKENOMICS',
+  PERFORMANCE = 'PERFORMANCE',
+  CONSENSUS = 'CONSENSUS',
+  SCIENTIFIC = 'SCIENTIFIC',
+}
+
+export enum Verdict {
+  PASS = 'PASS',
+  CONDITIONAL = 'CONDITIONAL',
+  FAIL = 'FAIL',
+  INSUFFICIENT_DATA = 'INSUFFICIENT_DATA',
+}
+
+export enum MathValidity { VALID = 'VALID', FLAWED = 'FLAWED', UNVERIFIABLE = 'UNVERIFIABLE' }
+export enum Plausibility { HIGH = 'HIGH', LOW = 'LOW', OUTLIER = 'OUTLIER' }
+export enum Originality { NOVEL = 'NOVEL', DERIVATIVE = 'DERIVATIVE', PLAGIARIZED = 'PLAGIARIZED' }
+export enum Consistency { CONSISTENT = 'CONSISTENT', CONTRADICTED = 'CONTRADICTED' }
+
+// ════════════════════════════════════════════
+// CORE DATA INTERFACES
+// ════════════════════════════════════════════
+
+export interface WhitepaperRecord {
+  id: string;
+  projectName: string;
+  tokenAddress: string | null;
+  chain: string;
+  documentUrl: string;
+  ipfsCid: string | null;
+  knowledgeItemId: string | null;
+  pageCount: number;
+  ingestedAt: Date;
+  status: WhitepaperStatus;
+  selectionScore: number;
+  metadataJson: Record<string, unknown>;
+}
+
+export interface ExtractedClaim {
+  claimId: string;
+  category: ClaimCategory;
+  claimText: string;
+  statedEvidence: string;
+  mathematicalProofPresent: boolean;
+  sourceSection: string;
+}
+
+export interface ClaimEvaluation {
+  claimId: string;
+  mathValidity?: MathValidity;
+  benchmarkDelta?: number;
+  plausibility?: Plausibility;
+  citationSupportsClaim?: boolean | null;
+  originality?: Originality;
+  consistency?: Consistency;
+}
+
+export interface StructuralAnalysis {
+  hasAbstract: boolean;
+  hasMethodology: boolean;
+  hasTokenomics: boolean;
+  hasReferences: boolean;
+  citationCount: number;
+  verifiedCitationRatio: number;
+  hasMath: boolean;
+  mathDensityScore: number;
+  coherenceScore: number;
+  similarityTopMatch: string | null;
+  similarityScore: number;
+  hasAuthors: boolean;
+  hasDates: boolean;
+}
+
+export interface VerificationResult {
+  structuralScore: number;        // 1–5
+  confidenceScore: number;        // 1–100
+  hypeTechRatio: number;
+  verdict: Verdict;
+  focusAreaScores: Record<ClaimCategory, number>;
+  totalClaims: number;
+  verifiedClaims: number;
+  llmTokensUsed: number;
+  computeCostUsd: number;
+}
+
+// ════════════════════════════════════════════
+// DISCOVERY INTERFACES
+// ════════════════════════════════════════════
+
+export interface TokenCreationEvent {
+  contractAddress: string;
+  deployer: string;
+  timestamp: number;
+  blockNumber: number;
+  transactionHash: string;
+}
+
+export interface ProjectMetadata {
+  agentName: string | null;
+  entityId: string | null;
+  description: string | null;
+  linkedUrls: string[];
+  category: string | null;
+  graduationStatus: string | null;
+}
+
+export interface SelectionSignal {
+  hasLinkedPdf: boolean;          // weight 3 (REQUIRED)
+  documentLengthOk: boolean;     // weight 2 (>5 pages)
+  technicalClaimsDetected: boolean; // weight 2 (keyword scan, NOT full structural analysis)
+  marketTraction: boolean;       // weight 1
+  notAFork: boolean;             // weight 1
+  isFresh: boolean;              // weight 1 (<72hrs)
+}
+
+export interface ProjectCandidate {
+  tokenAddress: string;
+  metadata: ProjectMetadata;
+  documentUrl: string | null;
+  signals: SelectionSignal;
+  score?: number;
+}
+
+export interface ResolvedWhitepaper {
+  text: string;
+  pageCount: number;
+  isImageOnly: boolean;
+  isPasswordProtected: boolean;
+  source: 'direct' | 'ipfs';
+  originalUrl: string;
+  resolvedUrl: string;
+}
+
+export interface DiscoveryRunResult {
+  tokensScanned: number;
+  candidatesFound: number;
+  candidatesAboveThreshold: number;
+  whitepapersIngested: number;
+  errors: { url: string; error: string }[];
+  durationMs: number;
+}
+
+// ════════════════════════════════════════════
+// REPORT INTERFACES (tiered — each is superset of the one below)
+// ════════════════════════════════════════════
+
+export interface LegitimacyScanReport {
+  projectName: string;
+  tokenAddress: string | null;
+  structuralScore: number;        // 1–5
+  verdict: Verdict;
+  hypeTechRatio: number;
+  claimCount: number;
+  generatedAt: string;            // ISO timestamp
+}
+
+export interface TokenomicsAuditReport extends LegitimacyScanReport {
+  claims: ExtractedClaim[];
+  claimScores: Record<string, number>;  // claimId → score
+  logicSummary: string;
+}
+
+export interface FullVerificationReport extends TokenomicsAuditReport {
+  confidenceScore: number;        // 1–100
+  evaluations: ClaimEvaluation[];
+  focusAreaScores: Record<ClaimCategory, number>;
+  llmTokensUsed: number;
+  computeCostUsd: number;
+}
+
+export interface DailyBriefingReport {
+  date: string;
+  totalVerified: number;
+  whitepapers: FullVerificationReport[];
+}
+
+// ════════════════════════════════════════════
+// RESOURCE RESPONSE INTERFACES
+// ════════════════════════════════════════════
+
+export interface GreenlightListResponse {
+  date: string;
+  totalVerified: number;
+  projects: {
+    name: string;
+    tokenAddress: string | null;
+    verdict: Verdict;
+    score: number;
+    hypeTechRatio: number;
+  }[];
+}
+
+export interface ScamAlertFeedResponse {
+  date: string;
+  flagged: {
+    name: string;
+    tokenAddress: string | null;
+    verdict: 'FAIL';
+    hypeTechRatio: number;
+    redFlags: string[];
+  }[];
+}
+
+// ════════════════════════════════════════════
+// ACP INTERFACES
+// ════════════════════════════════════════════
+
+// IAcpClient: interface defined here, implemented by AcpWrapper in Phase C.
+// AcpMetadataEnricher (Phase A) codes against this interface, not the concrete class.
+export interface IAcpClient {
+  browseAgents(keyword: string, options?: Record<string, unknown>): Promise<AgentProfile[]>;
+  handleNewTask(callback: (job: AcpJob) => void): void;
+  deliverResult(jobId: string, result: unknown): Promise<void>;
+}
+
+export interface AgentProfile {
+  name: string;
+  entityId: string;
+  description: string;
+  role: string;
+  offerings: { id: string; name: string; price: number }[];
+  graduationStatus: string;
+}
+
+export interface AcpJob {
+  jobId: string;
+  offeringId: string;
+  buyerEntityId: string;
+  input: Record<string, unknown>;
+  createdAt: number;
+}
+
+export type OfferingId =
+  | 'project_legitimacy_scan'
+  | 'tokenomics_sustainability_audit'
+  | 'verify_project_whitepaper'
+  | 'full_technical_verification'
+  | 'daily_technical_briefing';
+
+export type ResourceId =
+  | 'daily_greenlight_list'
+  | 'scam_alert_feed';
+
+// ════════════════════════════════════════════
+// SCORE WEIGHTS (configurable)
+// ════════════════════════════════════════════
+
+export interface ScoreWeights {
+  mathValidity: number;    // default 0.35
+  benchmarks: number;      // default 0.20
+  citations: number;       // default 0.20
+  originality: number;     // default 0.15
+  consistency: number;     // default 0.10
+}
+
+// ════════════════════════════════════════════
+// DATABASE TYPE (self-contained — matches autognostic's DrizzleDbLike)
+// ════════════════════════════════════════════
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export type DrizzleDbLike = {
+  select: (...args: unknown[]) => any;
+  insert: (...args: unknown[]) => any;
+  update: (...args: unknown[]) => any;
+  delete?: (...args: unknown[]) => any;
+};
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+// ════════════════════════════════════════════
+// CONTENT RESOLVER INTERFACE (for CryptoContentResolver injection)
+// ════════════════════════════════════════════
+
+export interface ResolvedContent {
+  text: string;
+  contentType: string;
+  source: string;
+  resolvedUrl: string;
+  diagnostics: string[];
+}
+
+/** Interface for content resolution — implemented by autognostic's ContentResolver */
+export interface IContentResolver {
+  resolve(url: string): Promise<ResolvedContent>;
+}
