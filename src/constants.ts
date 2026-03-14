@@ -135,6 +135,6 @@ export const ACP_ENV = {
 /** Supabase connection for production WPV database */
 export const SUPABASE_ENV = {
   url: process.env.SUPABASE_URL ?? '',
-  anonKey: process.env.SUPABASE_ANON_KEY ?? '',
+  secretKey: process.env.SUPABASE_SECRET_KEY ?? '',
   databaseUrl: process.env.WPV_DATABASE_URL ?? '',
 } as const;
