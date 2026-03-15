@@ -68,7 +68,7 @@ export class WpvService extends Service {
         claimsRepo,
         verificationsRepo,
       } as WpvServiceDeps);
-      logger.info('WpvService: Initialized with database repos');
+      logger.info(`WpvService: Initialized with database repos (hasWhitepaperRepo=${!!this.whitepaperRepo}, depsSet=${!!this.deps})`);
     } catch (err) {
       logger.warn(`WpvService: Init failed — ${(err as Error).message}`);
     }

@@ -9,19 +9,31 @@ function getWpvService(runtime: IAgentRuntime): WpvService | null {
 
 export const WpvScanAction: Action = {
   name: "WPV_SCAN",
-  description: "Trigger a manual WPV discovery scan for new whitepapers on Virtuals/Base.",
-  similes: ["WPVSCAN", "SCAN_WHITEPAPERS", "DISCOVER_WHITEPAPERS"],
+  description: "Trigger a manual WPV discovery scan for new whitepapers on Virtuals/Base. Use this action when the user wants to scan, discover, or find new whitepapers.",
+  similes: ["WPVSCAN", "SCAN_WHITEPAPERS", "DISCOVER_WHITEPAPERS", "RUN_DISCOVERY", "FIND_WHITEPAPERS"],
   examples: [
     [
+      { name: "{{name1}}", content: { text: "wpvscan" } },
+      { name: "{{name2}}", content: { text: "Starting discovery scan...", actions: ["WPV_SCAN"] } },
+    ],
+    [
       { name: "{{name1}}", content: { text: "Scan for new whitepapers" } },
-      { name: "{{name2}}", content: { text: "Starting WPV discovery scan...", actions: ["WPV_SCAN"] } },
+      { name: "{{name2}}", content: { text: "Running WPV discovery scan now.", actions: ["WPV_SCAN"] } },
+    ],
+    [
+      { name: "{{name1}}", content: { text: "Run the daily scan" } },
+      { name: "{{name2}}", content: { text: "Triggering discovery pipeline.", actions: ["WPV_SCAN"] } },
+    ],
+    [
+      { name: "{{name1}}", content: { text: "Find new whitepapers on Base" } },
+      { name: "{{name2}}", content: { text: "Scanning Base chain for new tokens with whitepapers.", actions: ["WPV_SCAN"] } },
     ],
   ],
   parameters: { type: "object", properties: {}, required: [] },
 
   validate: async (_runtime: IAgentRuntime, message: Memory) => {
     const text = ((message.content as Content)?.text || "").toLowerCase();
-    return /\b(wpv\s*scan|scan.*whitepaper|discover.*whitepaper)/i.test(text);
+    return /\b(wpv\s*scan|scan.*whitepaper|discover.*whitepaper|find.*whitepaper|run.*scan|run.*discovery|daily\s*scan)/i.test(text);
   },
 
   async handler(

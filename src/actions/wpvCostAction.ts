@@ -9,19 +9,31 @@ function getWpvService(runtime: IAgentRuntime): WpvService | null {
 
 export const WpvCostAction: Action = {
   name: "WPV_COST",
-  description: "Show current WPV LLM token usage and compute cost.",
-  similes: ["WPVCOST", "WPV_COMPUTE_COST", "VERIFICATION_COST"],
+  description: "Show current WPV LLM token usage and compute cost (COC/V). Use this action when the user asks about costs, token usage, or spending.",
+  similes: ["WPVCOST", "WPV_COMPUTE_COST", "VERIFICATION_COST", "TOKEN_USAGE", "COMPUTE_COST", "SHOW_COST"],
   examples: [
     [
-      { name: "{{name1}}", content: { text: "How much has WPV verification cost?" } },
-      { name: "{{name2}}", content: { text: "Fetching WPV cost data...", actions: ["WPV_COST"] } },
+      { name: "{{name1}}", content: { text: "wpv cost" } },
+      { name: "{{name2}}", content: { text: "Pulling cost data.", actions: ["WPV_COST"] } },
+    ],
+    [
+      { name: "{{name1}}", content: { text: "How much has verification cost?" } },
+      { name: "{{name2}}", content: { text: "Checking compute costs.", actions: ["WPV_COST"] } },
+    ],
+    [
+      { name: "{{name1}}", content: { text: "Show me the token usage" } },
+      { name: "{{name2}}", content: { text: "Fetching LLM token usage and cost.", actions: ["WPV_COST"] } },
+    ],
+    [
+      { name: "{{name1}}", content: { text: "What's the compute cost so far?" } },
+      { name: "{{name2}}", content: { text: "Checking COC/V metrics.", actions: ["WPV_COST"] } },
     ],
   ],
   parameters: { type: "object", properties: {}, required: [] },
 
   validate: async (_runtime: IAgentRuntime, message: Memory) => {
     const text = ((message.content as Content)?.text || "").toLowerCase();
-    return /\b(wpv\s*cost|compute\s*cost|verification\s*cost|token\s*usage)/i.test(text);
+    return /\b(wpv\s*cost|compute\s*cost|verification\s*cost|token\s*usage|how\s*much.*cost|cost.*verif|spending|llm\s*cost)/i.test(text);
   },
 
   async handler(

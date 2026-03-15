@@ -9,19 +9,31 @@ function getWpvService(runtime: IAgentRuntime): WpvService | null {
 
 export const WpvGreenlightAction: Action = {
   name: "WPV_GREENLIGHT",
-  description: "Show the WPV greenlight list: projects that passed verification today.",
-  similes: ["WPVGREENLIGHT", "GREENLIGHT_LIST", "VERIFIED_PROJECTS"],
+  description: "Show the WPV greenlight list: projects that passed verification today. Use this action when the user asks for the greenlight list, verified projects, or which projects passed.",
+  similes: ["WPVGREENLIGHT", "GREENLIGHT_LIST", "VERIFIED_PROJECTS", "PASSED_PROJECTS", "GOOD_PROJECTS", "APPROVED_PROJECTS"],
   examples: [
     [
+      { name: "{{name1}}", content: { text: "greenlight list" } },
+      { name: "{{name2}}", content: { text: "Fetching today's greenlight list.", actions: ["WPV_GREENLIGHT"] } },
+    ],
+    [
       { name: "{{name1}}", content: { text: "Show me the greenlight list" } },
-      { name: "{{name2}}", content: { text: "Fetching greenlight list...", actions: ["WPV_GREENLIGHT"] } },
+      { name: "{{name2}}", content: { text: "Pulling verified projects.", actions: ["WPV_GREENLIGHT"] } },
+    ],
+    [
+      { name: "{{name1}}", content: { text: "Which projects passed verification?" } },
+      { name: "{{name2}}", content: { text: "Checking the greenlight list.", actions: ["WPV_GREENLIGHT"] } },
+    ],
+    [
+      { name: "{{name1}}", content: { text: "What's on the greenlight today?" } },
+      { name: "{{name2}}", content: { text: "Loading today's verified projects.", actions: ["WPV_GREENLIGHT"] } },
     ],
   ],
   parameters: { type: "object", properties: {}, required: [] },
 
   validate: async (_runtime: IAgentRuntime, message: Memory) => {
     const text = ((message.content as Content)?.text || "").toLowerCase();
-    return /\b(greenlight|green\s*light|verified\s*projects|pass\s*list)/i.test(text);
+    return /\b(greenlight|green\s*light|verified\s*projects|pass\s*list|which.*passed|projects.*passed|approved.*projects)/i.test(text);
   },
 
   async handler(

@@ -9,19 +9,31 @@ function getWpvService(runtime: IAgentRuntime): WpvService | null {
 
 export const WpvStatusAction: Action = {
   name: "WPV_STATUS",
-  description: "Show current WPV pipeline status: whitepaper counts by status and recent verifications.",
-  similes: ["WPVSTATUS", "WPV_PIPELINE_STATUS", "WHITEPAPER_STATUS"],
+  description: "Show current WPV pipeline status: whitepaper counts by status and recent verifications. Use this action whenever the user asks about pipeline status, how many whitepapers, or verification progress.",
+  similes: ["WPVSTATUS", "WPV_PIPELINE_STATUS", "WHITEPAPER_STATUS", "PIPELINE_STATUS", "SHOW_STATUS", "CHECK_STATUS"],
   examples: [
     [
-      { name: "{{name1}}", content: { text: "What's the WPV pipeline status?" } },
-      { name: "{{name2}}", content: { text: "Fetching WPV status...", actions: ["WPV_STATUS"] } },
+      { name: "{{name1}}", content: { text: "wpv status" } },
+      { name: "{{name2}}", content: { text: "Checking WPV pipeline status...", actions: ["WPV_STATUS"] } },
+    ],
+    [
+      { name: "{{name1}}", content: { text: "What's the pipeline status?" } },
+      { name: "{{name2}}", content: { text: "Let me check the verification pipeline.", actions: ["WPV_STATUS"] } },
+    ],
+    [
+      { name: "{{name1}}", content: { text: "How many whitepapers have been verified?" } },
+      { name: "{{name2}}", content: { text: "Pulling whitepaper counts now.", actions: ["WPV_STATUS"] } },
+    ],
+    [
+      { name: "{{name1}}", content: { text: "Show me the verification status" } },
+      { name: "{{name2}}", content: { text: "Fetching status.", actions: ["WPV_STATUS"] } },
     ],
   ],
   parameters: { type: "object", properties: {}, required: [] },
 
   validate: async (_runtime: IAgentRuntime, message: Memory) => {
     const text = ((message.content as Content)?.text || "").toLowerCase();
-    return /\b(wpv\s*status|pipeline\s*status|verification\s*status)/i.test(text);
+    return /\b(wpv\s*status|pipeline\s*status|verification\s*status|how\s*many\s*whitepaper|whitepaper.*count|whitepaper.*status|verified.*count|status.*pipeline|status.*verif)/i.test(text);
   },
 
   async handler(

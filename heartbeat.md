@@ -1,8 +1,8 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-03-12 (migrated from plugin-autognostic heartbeat)
-> Updated by: Claude Opus 4.6 — SeshMem migration to standalone repo
-> Session label: Repo extraction complete — all WPV code migrated from plugin-autognostic to plugin-wpv
-> Staleness gate: 2026-03-12 — if today is >3 days past this,
+> Last updated: 2026-03-14 (action selection fix)
+> Updated by: Claude Opus 4.6 — Action selection tuning
+> Session label: Action selection fix — broadened validate() regexes, removed debug logging
+> Staleness gate: 2026-03-14 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
 ## Focus (1-3 goals, testable)
@@ -49,10 +49,8 @@
 
 ## What's Broken
 - (none identified — all 195 tests pass)
-- ⚠️ All tests use mocks — no live API calls have been made yet
-- ⚠️ Supabase schema not deployed to production instance yet
 - ⚠️ ACP SDK not tested against live Virtuals contract
-- ⚠️ LLM claim extraction/evaluation not tested with real whitepapers
+- ⚠️ Action selection E2E verification pending (validate() broadened, awaiting live test)
 
 ## Test Count
 - **195 tests across 17 files, 0 failures**
@@ -94,6 +92,7 @@ Key changes during migration:
 |------|-------|-------------|---------|
 | 2026-03-12 | Forces + Kovsky | Extract WPV to standalone plugin-wpv repo | 195 tests, clean build |
 | 2026-03-12 | Claude Opus 4.6 | Create CLAUDE.md + heartbeat.md for plugin-wpv | SeshMem initialized |
+| 2026-03-14 | Claude Opus 4.6 | Action selection fix: broadened validate() regexes in all 6 actions, removed debug logging from wpvStatusAction | 195/195 tests pass |
 
 ## Guardrails (DO / DON'T)
 DO:

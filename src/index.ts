@@ -3,6 +3,7 @@
 // ════════════════════════════════════════════
 
 import type { Plugin } from "@elizaos/core";
+import type { PgTable, TableConfig } from "drizzle-orm/pg-core";
 import { WpvScanAction } from "./actions/wpvScanAction";
 import { WpvVerifyAction } from "./actions/wpvVerifyAction";
 import { WpvStatusAction } from "./actions/wpvStatusAction";
@@ -10,6 +11,13 @@ import { WpvCostAction } from "./actions/wpvCostAction";
 import { WpvGreenlightAction } from "./actions/wpvGreenlightAction";
 import { WpvAlertsAction } from "./actions/wpvAlertsAction";
 import { WpvService } from "./WpvService";
+import { wpvWhitepapers, wpvClaims, wpvVerifications } from "./db/wpvSchema";
+
+const wpvSchema: Record<string, PgTable<TableConfig>> = {
+  wpvWhitepapers,
+  wpvClaims,
+  wpvVerifications,
+};
 
 export const wpvPlugin: Plugin = {
   name: "wpv",
@@ -23,6 +31,7 @@ export const wpvPlugin: Plugin = {
     WpvAlertsAction,
   ],
   services: [WpvService],
+  schema: wpvSchema,
 };
 
 export default wpvPlugin;

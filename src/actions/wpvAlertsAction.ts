@@ -9,19 +9,31 @@ function getWpvService(runtime: IAgentRuntime): WpvService | null {
 
 export const WpvAlertsAction: Action = {
   name: "WPV_ALERTS",
-  description: "Show the WPV scam alert feed: flagged projects with red flags.",
-  similes: ["WPVALERTS", "SCAM_ALERTS", "WPV_SCAM_FEED"],
+  description: "Show the WPV scam alert feed: flagged projects with red flags and high hype-to-tech ratios. Use this action when the user asks about scam alerts, flagged projects, or red flags.",
+  similes: ["WPVALERTS", "SCAM_ALERTS", "WPV_SCAM_FEED", "FLAGGED_PROJECTS", "RED_FLAGS", "SCAM_LIST"],
   examples: [
     [
+      { name: "{{name1}}", content: { text: "scam alerts" } },
+      { name: "{{name2}}", content: { text: "Pulling the scam alert feed.", actions: ["WPV_ALERTS"] } },
+    ],
+    [
       { name: "{{name1}}", content: { text: "Show scam alerts" } },
-      { name: "{{name2}}", content: { text: "Fetching scam alert feed...", actions: ["WPV_ALERTS"] } },
+      { name: "{{name2}}", content: { text: "Fetching flagged projects.", actions: ["WPV_ALERTS"] } },
+    ],
+    [
+      { name: "{{name1}}", content: { text: "Any red flags today?" } },
+      { name: "{{name2}}", content: { text: "Checking the scam alert feed.", actions: ["WPV_ALERTS"] } },
+    ],
+    [
+      { name: "{{name1}}", content: { text: "Which projects got flagged?" } },
+      { name: "{{name2}}", content: { text: "Loading flagged projects list.", actions: ["WPV_ALERTS"] } },
     ],
   ],
   parameters: { type: "object", properties: {}, required: [] },
 
   validate: async (_runtime: IAgentRuntime, message: Memory) => {
     const text = ((message.content as Content)?.text || "").toLowerCase();
-    return /\b(wpv\s*alert|scam\s*alert|scam\s*feed|red\s*flag)/i.test(text);
+    return /\b(wpv\s*alert|scam\s*alert|scam\s*feed|red\s*flag|flagged.*project|which.*flagged|suspicious.*project)/i.test(text);
   },
 
   async handler(
