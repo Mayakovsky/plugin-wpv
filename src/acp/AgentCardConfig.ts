@@ -7,16 +7,16 @@
 import type { OfferingId, ResourceId } from '../types';
 
 export const AGENT_CARD = {
-  name: 'Whitepaper Verifier (WPV)',
+  name: 'Whitepaper Grey',
   role: 'Provider / Evaluator',
   category: 'Research & Verification',
-  shortDescription: 'Autonomous Tokenomics Auditor & Whitepaper Verifier. Scam detection and mathematical proof for DeFi.',
+  shortDescription: 'Grey — Autonomous Whitepaper Verifier. Scam detection, MiCA compliance, and math proof for DeFi.',
   fullDescription:
-    'WPV Agent is the ecosystem\'s first autonomous Verification Layer specializing in mathematical proof validation, tokenomics auditing, and scientific verification for emerging protocols.\n\n' +
-    'Built on deep scientific analysis infrastructure with access to Crossref, Semantic Scholar, and Unpaywall academic databases, WPV identifies structural risks, whitepaper inconsistencies, and unsustainable yield models before they impact your treasury.\n\n' +
+    'Whitepaper Grey is the ecosystem\'s first autonomous Verification Layer specializing in mathematical proof validation, tokenomics auditing, MiCA compliance checking, and scientific verification for emerging protocols.\n\n' +
+    'Built on deep scientific analysis infrastructure with access to Crossref, Semantic Scholar, and Unpaywall academic databases, Grey identifies structural risks, whitepaper inconsistencies, regulatory non-compliance, and unsustainable yield models before they impact your treasury.\n\n' +
     'Free Resources — No Job Required: Browse our Daily Greenlight List for today\'s verified projects. Check the Scam Alert Feed for flagged high-risk projects.\n\n' +
-    'Core Capabilities: Whitepaper Verification — Claim extraction and evaluation against on-chain reality and published scientific literature. Tokenomics Auditing — Mathematical sanity checks on yield projections, emission schedules, and economic models. Technical Assessment — Protocol review, consensus logic evaluation, and due diligence for DeFi, Cross-Chain, and Treasury agents. Scientific Credibility Scoring — Hype vs. Tech ratio, citation verification, plagiarism detection, and structural analysis for any project PDF or URL.\n\n' +
-    'Designed for Autonomous Hedge Fund clusters, Treasury Management agents, Risk Assessment pipelines, and Butler users asking "Is this project a scam?", "Is the whitepaper math real?", and "Check this project\'s tokenomics."\n\n' +
+    'Core Capabilities: Whitepaper Verification — Claim extraction and evaluation against on-chain reality and published scientific literature. MiCA Compliance — Checks EU Markets in Crypto-Assets Regulation requirements for every whitepaper. Tokenomics Auditing — Mathematical sanity checks on yield projections, emission schedules, and economic models. Technical Assessment — Protocol review, consensus logic evaluation, and due diligence for DeFi, Cross-Chain, and Treasury agents. Scientific Credibility Scoring — Hype vs. Tech ratio, citation verification, plagiarism detection, and structural analysis for any project PDF or URL.\n\n' +
+    'Designed for Autonomous Hedge Fund clusters, Treasury Management agents, Risk Assessment pipelines, and Butler users asking "Is this project a scam?", "Is the whitepaper math real?", "Is this MiCA compliant?", and "Check this project\'s tokenomics."\n\n' +
     'Returns structured JSON. Sub-2-second response on cached verifications. On-demand verification of any whitepaper URL for $2.00 USDC.',
   capabilities: [
     'whitepaper_verification',
