@@ -29,6 +29,9 @@ export class ReportGenerator {
       verdict: verification.verdict,
       hypeTechRatio: verification.hypeTechRatio,
       claimCount: verification.totalClaims,
+      claimsMicaCompliance: analysis.mica?.claimsMicaCompliance ?? 'NOT_MENTIONED',
+      micaCompliant: analysis.mica?.micaCompliant ?? 'NO',
+      micaSummary: analysis.mica?.micaSummary ?? '',
       generatedAt: new Date().toISOString(),
     };
   }

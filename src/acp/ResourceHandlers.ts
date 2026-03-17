@@ -47,12 +47,23 @@ export class ResourceHandlers {
         if ((v.structuralScore ?? 0) < 2) redFlags.push('Poor structural quality');
         if ((v.totalClaims ?? 0) === 0) redFlags.push('No verifiable claims');
 
+        // MiCA fraud detection: claims compliance but fails the check
+        const reportJson = v.reportJson as Record<string, unknown> | null;
+        const claimsMica = (reportJson?.claimsMicaCompliance as string) ?? 'NOT_MENTIONED';
+        const micaCompliant = (reportJson?.micaCompliant as string) ?? 'NO';
+        const fraudulentMicaClaim = claimsMica === 'YES' && (micaCompliant === 'NO' || micaCompliant === 'PARTIAL');
+
+        if (fraudulentMicaClaim) {
+          redFlags.push('Fraudulent MiCA compliance claim');
+        }
+
         return {
           name: wp?.projectName ?? 'Unknown',
           tokenAddress: wp?.tokenAddress ?? null,
           verdict: 'FAIL' as const,
           hypeTechRatio: v.hypeTechRatio ?? 0,
           redFlags,
+          fraudulentMicaClaim,
         };
       }),
     );

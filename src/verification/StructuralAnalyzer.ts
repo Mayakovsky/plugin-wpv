@@ -4,8 +4,8 @@
 // Uses existing ScientificSectionDetector and ScientificPaperDetector.
 // ════════════════════════════════════════════
 
-import type { StructuralAnalysis } from '../types';
-import { HYPE_KEYWORDS, TECH_KEYWORDS, HYPE_TECH_RATIO_THRESHOLD } from '../constants';
+import type { StructuralAnalysis, MicaAnalysis, MicaClaimStatus, MicaComplianceStatus } from '../types';
+import { HYPE_KEYWORDS, TECH_KEYWORDS, HYPE_TECH_RATIO_THRESHOLD, MICA_CLAIM_KEYWORDS, MICA_SECTION_PATTERNS, MICA_REQUIRED_SECTIONS, MICA_THRESHOLDS } from '../constants';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger({ operation: 'StructuralAnalyzer' });
@@ -53,6 +53,7 @@ export class StructuralAnalyzer {
     const coherence = this.checkCoherence(text);
     const plagiarism = this.checkPlagiarism(text);
     const metadata = this.checkMetadata(text);
+    const mica = this.checkMicaCompliance(text);
 
     return {
       ...sections,
@@ -61,6 +62,7 @@ export class StructuralAnalyzer {
       ...coherence,
       ...plagiarism,
       ...metadata,
+      mica,
     };
   }
 
@@ -214,6 +216,77 @@ export class StructuralAnalyzer {
     };
   }
 
+  /**
+   * MiCA compliance check (EU Regulation 2023/1114).
+   * L1 only — keyword scan + section detection. No LLM needed.
+   */
+  checkMicaCompliance(text: string): MicaAnalysis {
+    const lowerText = text.toLowerCase();
+
+    // 1. Does the whitepaper CLAIM MiCA compliance?
+    let claimsMicaCompliance: MicaClaimStatus = 'NOT_MENTIONED';
+    for (const keyword of MICA_CLAIM_KEYWORDS) {
+      if (lowerText.includes(keyword)) {
+        claimsMicaCompliance = 'YES';
+        break;
+      }
+    }
+
+    // 2. Check for the 7 required MiCA sections
+    const sectionsFound: string[] = [];
+    const sectionsMissing: string[] = [];
+
+    for (const section of MICA_REQUIRED_SECTIONS) {
+      const patterns = MICA_SECTION_PATTERNS[section];
+      const found = patterns?.some((pattern) => pattern.test(text)) ?? false;
+      if (found) {
+        sectionsFound.push(section);
+      } else {
+        sectionsMissing.push(section);
+      }
+    }
+
+    // 3. Determine compliance status
+    let micaCompliant: MicaComplianceStatus;
+    const foundCount = sectionsFound.length;
+
+    if (foundCount >= MICA_THRESHOLDS.COMPLIANT) {
+      micaCompliant = 'YES';
+    } else if (foundCount >= MICA_THRESHOLDS.PARTIAL) {
+      micaCompliant = 'PARTIAL';
+    } else {
+      micaCompliant = 'NO';
+    }
+
+    // 4. Generate summary
+    const summaryParts: string[] = [];
+
+    if (claimsMicaCompliance === 'YES' && micaCompliant === 'NO') {
+      summaryParts.push('Claims MiCA compliance but fails structural check.');
+    } else if (claimsMicaCompliance === 'YES' && micaCompliant === 'PARTIAL') {
+      summaryParts.push('Claims MiCA compliance but only partially meets requirements.');
+    }
+
+    if (micaCompliant === 'YES') {
+      summaryParts.push(`All ${foundCount}/7 required MiCA sections present.`);
+    } else {
+      summaryParts.push(`${foundCount}/7 required MiCA sections found.`);
+    }
+
+    if (sectionsMissing.length > 0 && micaCompliant !== 'YES') {
+      const missing = sectionsMissing.map((s) => s.replace(/_/g, ' ')).join(', ');
+      summaryParts.push(`Missing: ${missing}.`);
+    }
+
+    return {
+      claimsMicaCompliance,
+      micaCompliant,
+      micaSummary: summaryParts.join(' '),
+      micaSectionsFound: sectionsFound,
+      micaSectionsMissing: sectionsMissing,
+    };
+  }
+
   private emptyAnalysis(): StructuralAnalysis {
     return {
       hasAbstract: false,
@@ -229,6 +302,13 @@ export class StructuralAnalyzer {
       similarityScore: 0,
       hasAuthors: false,
       hasDates: false,
+      mica: {
+        claimsMicaCompliance: 'NOT_MENTIONED',
+        micaCompliant: 'NO',
+        micaSummary: 'Empty document — no MiCA analysis possible.',
+        micaSectionsFound: [],
+        micaSectionsMissing: [...MICA_REQUIRED_SECTIONS],
+      },
     };
   }
 }
