@@ -72,20 +72,29 @@ export class BaseChainListener {
   async getLatestTokens(limit: number): Promise<TokenCreationEvent[]> {
     try {
       const currentBlock = await this.provider.getBlockNumber();
-      // Look back ~24h of blocks (~2s block time on Base = ~43200 blocks)
-      const lookbackBlocks = 43200;
-      const fromBlock = Math.max(0, currentBlock - lookbackBlocks);
+      // Look back ~24h in chunks of 10,000 blocks (public RPCs cap getLogs range)
+      const chunkSize = 9999;
+      const maxLookback = 43200; // ~24h at 2s/block
+      const minBlock = Math.max(0, currentBlock - maxLookback);
+      const allEvents: TokenCreationEvent[] = [];
 
-      const logs = await this.provider.getLogs({
-        address: this.contractAddress,
-        fromBlock,
-        toBlock: currentBlock,
-        topics: [GRADUATED_EVENT_TOPIC],
-      });
+      let toBlock = currentBlock;
+      while (toBlock > minBlock && allEvents.length < limit) {
+        const fromBlock = Math.max(minBlock, toBlock - chunkSize);
+        const logs = await this.provider.getLogs({
+          address: this.contractAddress,
+          fromBlock,
+          toBlock,
+          topics: [GRADUATED_EVENT_TOPIC],
+        });
+        allEvents.push(...this.parseLogs(logs));
+        toBlock = fromBlock - 1;
+      }
 
-      const events = this.parseLogs(logs);
+      // Re-sort since we fetched in reverse-chronological chunks
+      allEvents.sort((a, b) => b.blockNumber - a.blockNumber);
       this.lastProcessedBlock = currentBlock;
-      return events.slice(0, limit);
+      return allEvents.slice(0, limit);
     } catch (err) {
       log.warn('RPC call failed in getLatestTokens', { limit }, err);
       return [];
