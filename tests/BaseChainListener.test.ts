@@ -1,21 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BaseChainListener, type RpcProvider, type RpcLogEntry } from '../src/discovery/BaseChainListener';
+import { GRADUATED_EVENT_TOPIC } from '../src/constants';
 
 function padAddress(addr: string): string {
   return '0x' + addr.replace('0x', '').padStart(64, '0');
 }
 
-function makeLog(overrides: Partial<RpcLogEntry> & { tokenAddress?: string; deployer?: string } = {}): RpcLogEntry {
+/**
+ * Graduated(address indexed token, address agentToken)
+ *   topics[0] = GRADUATED_EVENT_TOPIC
+ *   topics[1] = token (bonding curve, indexed)
+ *   data      = agentToken (non-indexed, padded to 32 bytes)
+ */
+function makeLog(overrides: Partial<RpcLogEntry> & { tokenAddress?: string; agentToken?: string } = {}): RpcLogEntry {
   const tokenAddr = overrides.tokenAddress ?? '0xabc123';
-  const deployer = overrides.deployer ?? '0xdef456';
+  const agentTokenAddr = overrides.agentToken ?? '0xagent789';
   return {
     address: '0xFACTORY',
     topics: [
-      '0xEventSigHash',
+      GRADUATED_EVENT_TOPIC,
       padAddress(tokenAddr),
-      padAddress(deployer),
     ],
-    data: '0x' + (1700000000).toString(16).padStart(64, '0'),
+    data: padAddress(agentTokenAddr),
     blockNumber: overrides.blockNumber ?? 100,
     transactionHash: overrides.transactionHash ?? `0xtx${Math.random().toString(36).slice(2)}`,
   };
@@ -38,14 +44,14 @@ describe('BaseChainListener', () => {
     listener = new BaseChainListener(provider, '0xFACTORY', 0);
   });
 
-  it('parses a known token creation event correctly', async () => {
-    const log = makeLog({ tokenAddress: '0xABCDEF', deployer: '0x123456', blockNumber: 500 });
+  it('parses a Graduated event correctly', async () => {
+    const log = makeLog({ tokenAddress: '0xABCDEF', agentToken: '0x123456', blockNumber: 500 });
     (provider.getLogs as ReturnType<typeof vi.fn>).mockResolvedValue([log]);
 
     const events = await listener.getNewTokensSince(0);
     expect(events).toHaveLength(1);
     expect(events[0].contractAddress.toLowerCase()).toContain('abcdef');
-    expect(events[0].deployer.toLowerCase()).toContain('123456');
+    expect(events[0].agentToken.toLowerCase()).toContain('123456');
     expect(events[0].blockNumber).toBe(500);
     expect(events[0].transactionHash).toBe(log.transactionHash);
   });
@@ -95,7 +101,7 @@ describe('BaseChainListener', () => {
   it('handles malformed event data without crashing', async () => {
     const malformed: RpcLogEntry = {
       address: '0xFACTORY',
-      topics: ['0xEventSig'], // Missing indexed params
+      topics: [GRADUATED_EVENT_TOPIC], // Missing indexed token param
       data: '0x',
       blockNumber: 100,
       transactionHash: '0xmalformed',
@@ -118,6 +124,7 @@ describe('BaseChainListener', () => {
       address: '0xFACTORY',
       fromBlock: 301,
       toBlock: 500,
+      topics: [GRADUATED_EVENT_TOPIC],
     });
   });
 

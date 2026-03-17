@@ -10,9 +10,13 @@ import type { ScoreWeights } from './types';
 /** Daily discovery cron schedule (06:00 UTC) */
 export const WPV_DISCOVERY_CRON = '0 6 * * *';
 
-/** Virtuals bonding curve factory contract on Base — env override available */
+/** Virtuals Bonding Proxy contract on Base — emits Graduated events */
 export const VIRTUALS_FACTORY_CONTRACT =
-  process.env.VIRTUALS_FACTORY_CONTRACT ?? '0x0000000000000000000000000000000000000000';
+  process.env.VIRTUALS_FACTORY_CONTRACT ?? '0xF66DeA7b3e897cD44A5a231c61B6B4423d613259';
+
+/** Keccak256 of Graduated(address indexed token, address agentToken) */
+export const GRADUATED_EVENT_TOPIC =
+  '0x381d54fa425631e6266af114239150fae1d5db67bb65b4fa9ecc65013107e07e';
 
 /** Base mainnet RPC */
 export const BASE_RPC_URL =
@@ -103,6 +107,73 @@ export const TECH_KEYWORDS = [
   'mapping', 'modifier', 'finality', 'byzantine', 'latency',
   'throughput', 'shard', 'rollup', 'zk-snark', 'zk-stark',
 ] as const;
+
+// ── MiCA Compliance ─────────────────────────
+
+/** Keywords that indicate a whitepaper claims MiCA compliance */
+export const MICA_CLAIM_KEYWORDS = [
+  'mica',
+  'markets in crypto-assets',
+  'regulation (eu) 2023/1114',
+  'esma whitepaper',
+  'eu regulation',
+  'eu crypto regulation',
+  'mifid ii',
+] as const;
+
+/** The 7 required MiCA whitepaper sections (EU Regulation 2023/1114, Article 6) */
+export const MICA_REQUIRED_SECTIONS = [
+  'issuer_identity',
+  'technology_description',
+  'risk_disclosure',
+  'rights_obligations',
+  'redemption_mechanisms',
+  'governance',
+  'environmental_impact',
+] as const;
+
+/** Section detection patterns for each MiCA requirement */
+export const MICA_SECTION_PATTERNS: Record<string, RegExp[]> = {
+  issuer_identity: [
+    /\bissuer\b/i, /\bcompany\s+(?:information|details|identity)\b/i,
+    /\bteam\b/i, /\bfounders?\b/i, /\blegal\s+entity\b/i,
+    /\bcontact\s+(?:information|details)\b/i,
+  ],
+  technology_description: [
+    /\btechnology\b/i, /\btechnical\s+(?:architecture|design|overview)\b/i,
+    /\bprotocol\s+design\b/i, /\bsmart\s+contracts?\b/i,
+    /\bconsensus\b/i, /\bblockchain\b/i,
+  ],
+  risk_disclosure: [
+    /\brisk\s+(?:disclosure|factors?|warning)\b/i,
+    /\brisk\b.*\b(?:section|chapter)\b/i,
+    /\binvestment\s+risks?\b/i, /\bregulatory\s+risks?\b/i,
+  ],
+  rights_obligations: [
+    /\brights?\s+(?:and\s+)?obligations?\b/i,
+    /\btoken\s+holder\s+rights?\b/i,
+    /\blegal\s+rights?\b/i, /\bvoting\s+rights?\b/i,
+  ],
+  redemption_mechanisms: [
+    /\bredemption\b/i, /\brefund\b/i, /\bbuyback\b/i,
+    /\bwithdrawal\s+mechanism\b/i, /\bexit\s+mechanism\b/i,
+  ],
+  governance: [
+    /\bgovernance\b/i, /\bdao\b/i, /\bvoting\b/i,
+    /\bdecision.?making\b/i, /\bproposal\b/i,
+  ],
+  environmental_impact: [
+    /\benvironmental\b/i, /\bcarbon\b/i, /\benergy\s+consumption\b/i,
+    /\bsustainability\b/i, /\bproof.of.stake\b/i,
+  ],
+} as const;
+
+/** MiCA compliance thresholds */
+export const MICA_THRESHOLDS = {
+  COMPLIANT: 5,        // >=5 of 7 sections → YES
+  PARTIAL: 3,          // >=3 and <5 → PARTIAL
+  // <3 → NO
+} as const;
 
 // ── LLM ──────────────────────────────────────
 

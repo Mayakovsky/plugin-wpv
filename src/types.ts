@@ -73,6 +73,19 @@ export interface ClaimEvaluation {
   consistency?: Consistency;
 }
 
+export type MicaClaimStatus = 'YES' | 'NO' | 'NOT_MENTIONED';
+export type MicaComplianceStatus = 'YES' | 'NO' | 'PARTIAL' | 'NOT_APPLICABLE';
+
+export interface MicaAnalysis {
+  claimsMicaCompliance: MicaClaimStatus;
+  micaCompliant: MicaComplianceStatus;
+  micaSummary: string;
+  /** Which of the 7 required MiCA sections were found */
+  micaSectionsFound: string[];
+  /** Which of the 7 required MiCA sections are missing */
+  micaSectionsMissing: string[];
+}
+
 export interface StructuralAnalysis {
   hasAbstract: boolean;
   hasMethodology: boolean;
@@ -87,6 +100,7 @@ export interface StructuralAnalysis {
   similarityScore: number;
   hasAuthors: boolean;
   hasDates: boolean;
+  mica: MicaAnalysis;
 }
 
 export interface VerificationResult {
@@ -106,7 +120,10 @@ export interface VerificationResult {
 // ════════════════════════════════════════════
 
 export interface TokenCreationEvent {
+  /** Bonding curve token address (from Graduated event indexed topic) */
   contractAddress: string;
+  /** Graduated agent token address (from Graduated event data field) — used for ACP lookup */
+  agentToken: string;
   deployer: string;
   timestamp: number;
   blockNumber: number;
@@ -169,6 +186,9 @@ export interface LegitimacyScanReport {
   verdict: Verdict;
   hypeTechRatio: number;
   claimCount: number;
+  claimsMicaCompliance: MicaClaimStatus;
+  micaCompliant: MicaComplianceStatus;
+  micaSummary: string;
   generatedAt: string;            // ISO timestamp
 }
 
@@ -216,6 +236,8 @@ export interface ScamAlertFeedResponse {
     verdict: 'FAIL';
     hypeTechRatio: number;
     redFlags: string[];
+    /** True if project claims MiCA compliance but fails the check */
+    fraudulentMicaClaim: boolean;
   }[];
 }
 

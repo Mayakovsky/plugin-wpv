@@ -52,8 +52,9 @@ export class DiscoveryCron {
     // 2-4. Enrich, resolve, build signals for each token
     for (const token of tokens) {
       try {
-        // Enrich via ACP
-        const metadata = await this.deps.enricher.enrichToken(token.contractAddress);
+        // Enrich via ACP — use agentToken (graduated agent) if available, fall back to bonding token
+        const lookupAddress = token.agentToken || token.contractAddress;
+        const metadata = await this.deps.enricher.enrichToken(lookupAddress);
         if (!metadata) continue;
 
         // Find a document URL

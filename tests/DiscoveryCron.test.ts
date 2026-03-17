@@ -5,6 +5,7 @@ import type { TokenCreationEvent, ProjectMetadata, ResolvedWhitepaper } from '..
 function makeToken(overrides: Partial<TokenCreationEvent> = {}): TokenCreationEvent {
   return {
     contractAddress: `0x${Math.random().toString(16).slice(2, 10)}`,
+    agentToken: `0xagent${Math.random().toString(16).slice(2, 10)}`,
     deployer: '0xdeployer',
     timestamp: Math.floor(Date.now() / 1000), // fresh
     blockNumber: 1000,

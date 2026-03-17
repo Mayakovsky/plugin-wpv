@@ -1,24 +1,15 @@
 // ════════════════════════════════════════════
 // WS-A1: BaseChainListener
-// Polls Base chain for new token creation events on the Virtuals bonding curve contract.
-// Uses viem for RPC interaction. Poll-based (cron), NOT WebSocket.
+// Polls Base chain for Graduated events on the Virtuals Bonding Proxy contract.
+// Graduated events fire when agents hit the 42,000 VIRTUAL threshold.
+// Uses RPC getLogs. Poll-based (cron), NOT WebSocket.
 // ════════════════════════════════════════════
 
 import type { TokenCreationEvent } from '../types';
+import { GRADUATED_EVENT_TOPIC } from '../constants';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger({ operation: 'BaseChainListener' });
-
-/** ABI fragment for the TokenCreated event (Virtuals factory pattern) */
-const TOKEN_CREATED_EVENT_ABI = {
-  type: 'event' as const,
-  name: 'TokenCreated',
-  inputs: [
-    { name: 'tokenAddress', type: 'address', indexed: true },
-    { name: 'deployer', type: 'address', indexed: true },
-    { name: 'timestamp', type: 'uint256', indexed: false },
-  ],
-} as const;
 
 export interface RpcProvider {
   getLogs(params: {
@@ -63,6 +54,7 @@ export class BaseChainListener {
         address: this.contractAddress,
         fromBlock: sinceBlockNumber + 1,
         toBlock: currentBlock,
+        topics: [GRADUATED_EVENT_TOPIC],
       });
 
       const events = this.parseLogs(logs);
@@ -88,6 +80,7 @@ export class BaseChainListener {
         address: this.contractAddress,
         fromBlock,
         toBlock: currentBlock,
+        topics: [GRADUATED_EVENT_TOPIC],
       });
 
       const events = this.parseLogs(logs);
@@ -105,6 +98,10 @@ export class BaseChainListener {
 
   /**
    * Parse raw log entries into TokenCreationEvents.
+   * Graduated(address indexed token, address agentToken):
+   *   topics[0] = event signature hash
+   *   topics[1] = token (bonding curve token, indexed, padded to 32 bytes)
+   *   data      = agentToken (graduated agent token, non-indexed, padded to 32 bytes)
    * Deduplicates by transaction hash, sorts by blockNumber descending.
    */
   private parseLogs(logs: RpcLogEntry[]): TokenCreationEvent[] {
@@ -114,25 +111,23 @@ export class BaseChainListener {
       try {
         if (this.seenTxHashes.has(log.transactionHash)) continue;
 
-        // Extract indexed parameters from topics
-        // topics[0] = event signature hash
-        // topics[1] = tokenAddress (indexed, padded to 32 bytes)
-        // topics[2] = deployer (indexed, padded to 32 bytes)
-        if (!log.topics || log.topics.length < 3) continue;
+        // Graduated event: topics[0] = sig, topics[1] = token (indexed)
+        if (!log.topics || log.topics.length < 2) continue;
 
+        // Bonding curve token address (indexed)
         const contractAddress = '0x' + log.topics[1].slice(26);
-        const deployer = '0x' + log.topics[2].slice(26);
 
-        // Timestamp from non-indexed data field
-        let timestamp = 0;
-        if (log.data && log.data !== '0x') {
-          timestamp = parseInt(log.data, 16);
+        // Agent token address from data field (non-indexed)
+        let agentToken = '';
+        if (log.data && log.data !== '0x' && log.data.length >= 66) {
+          agentToken = '0x' + log.data.slice(26, 66);
         }
 
         events.push({
           contractAddress,
-          deployer,
-          timestamp,
+          agentToken,
+          deployer: '', // Not available in Graduated event
+          timestamp: 0, // Not available in Graduated event — use block timestamp if needed
           blockNumber: log.blockNumber,
           transactionHash: log.transactionHash,
         });
