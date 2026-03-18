@@ -51,14 +51,22 @@ export const WpvStatusAction: Action = {
     const verified = await wpv.whitepaperRepo.listByStatus('VERIFIED');
     const failed = await wpv.whitepaperRepo.listByStatus('FAILED');
 
+    // Count image-only whitepapers from metadata
+    const allWhitepapers = [...ingested, ...verified, ...failed];
+    const imageOnly = allWhitepapers.filter(
+      (wp) => (wp.metadataJson as Record<string, unknown>)?.isImageOnly === true,
+    ).length;
+
     const status = {
       ingested: ingested.length,
       verified: verified.length,
       failed: failed.length,
+      imageOnly,
       total: ingested.length + verified.length + failed.length,
     };
 
-    const text = `WPV Pipeline: ${status.total} whitepapers total — ${status.verified} verified, ${status.ingested} ingested, ${status.failed} failed.`;
+    const imageOnlySuffix = imageOnly > 0 ? `, ${imageOnly} image-only (no text extraction)` : '';
+    const text = `WPV Pipeline: ${status.total} whitepapers total — ${status.verified} verified, ${status.ingested} ingested, ${status.failed} failed${imageOnlySuffix}.`;
     if (callback) await callback({ text, action: "WPV_STATUS" });
     return { success: true, text, data: safeSerialize(status) };
   },
