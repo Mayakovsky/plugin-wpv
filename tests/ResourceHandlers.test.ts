@@ -88,4 +88,67 @@ describe('ResourceHandlers', () => {
     const result = await handlers.getScamAlertFeed();
     expect(result.flagged).toEqual([]);
   });
+
+  it('detects fraudulent MiCA claim from structuralAnalysisJson', async () => {
+    repos.verificationsRepo.getScamAlerts.mockResolvedValue([
+      {
+        whitepaperId: 'wp-3',
+        hypeTechRatio: 4.0,
+        structuralScore: 1,
+        totalClaims: 2,
+        verdict: 'FAIL',
+        structuralAnalysisJson: {
+          mica: {
+            claimsMicaCompliance: 'YES',
+            micaCompliant: 'NO',
+            micaSummary: 'Claims MiCA compliance but fails structural check.',
+          },
+        },
+      },
+    ]);
+
+    const result = await handlers.getScamAlertFeed();
+    expect(result.flagged).toHaveLength(1);
+    expect(result.flagged[0].fraudulentMicaClaim).toBe(true);
+    expect(result.flagged[0].redFlags).toContain('Fraudulent MiCA compliance claim');
+  });
+
+  it('does not flag legitimate MiCA compliance', async () => {
+    repos.verificationsRepo.getScamAlerts.mockResolvedValue([
+      {
+        whitepaperId: 'wp-4',
+        hypeTechRatio: 4.0,
+        structuralScore: 1,
+        totalClaims: 0,
+        verdict: 'FAIL',
+        structuralAnalysisJson: {
+          mica: {
+            claimsMicaCompliance: 'YES',
+            micaCompliant: 'YES',
+            micaSummary: 'All 7/7 required MiCA sections present.',
+          },
+        },
+      },
+    ]);
+
+    const result = await handlers.getScamAlertFeed();
+    expect(result.flagged[0].fraudulentMicaClaim).toBe(false);
+    expect(result.flagged[0].redFlags).not.toContain('Fraudulent MiCA compliance claim');
+  });
+
+  it('handles missing structuralAnalysisJson gracefully', async () => {
+    repos.verificationsRepo.getScamAlerts.mockResolvedValue([
+      {
+        whitepaperId: 'wp-5',
+        hypeTechRatio: 4.0,
+        structuralScore: 1,
+        totalClaims: 0,
+        verdict: 'FAIL',
+        structuralAnalysisJson: null,
+      },
+    ]);
+
+    const result = await handlers.getScamAlertFeed();
+    expect(result.flagged[0].fraudulentMicaClaim).toBe(false);
+  });
 });

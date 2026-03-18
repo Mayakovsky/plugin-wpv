@@ -41,8 +41,9 @@ export class ReportGenerator {
     claims: ExtractedClaim[],
     wp: WhitepaperRecord,
     claimScores?: Map<string, number>,
+    analysis?: StructuralAnalysis,
   ): TokenomicsAuditReport {
-    const scan = this.generateLegitimacyScan(verification, {} as StructuralAnalysis, wp);
+    const scan = this.generateLegitimacyScan(verification, analysis ?? {} as StructuralAnalysis, wp);
 
     const scores: Record<string, number> = {};
     if (claimScores) {
@@ -65,8 +66,9 @@ export class ReportGenerator {
     evaluations: ClaimEvaluation[],
     wp: WhitepaperRecord,
     claimScores?: Map<string, number>,
+    analysis?: StructuralAnalysis,
   ): FullVerificationReport {
-    const audit = this.generateTokenomicsAudit(verification, claims, wp, claimScores);
+    const audit = this.generateTokenomicsAudit(verification, claims, wp, claimScores, analysis);
 
     return {
       ...audit,

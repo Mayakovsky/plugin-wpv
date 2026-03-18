@@ -48,9 +48,10 @@ export class ResourceHandlers {
         if ((v.totalClaims ?? 0) === 0) redFlags.push('No verifiable claims');
 
         // MiCA fraud detection: claims compliance but fails the check
-        const reportJson = v.reportJson as Record<string, unknown> | null;
-        const claimsMica = (reportJson?.claimsMicaCompliance as string) ?? 'NOT_MENTIONED';
-        const micaCompliant = (reportJson?.micaCompliant as string) ?? 'NO';
+        const analysisJson = v.structuralAnalysisJson as Record<string, unknown> | null;
+        const mica = analysisJson?.mica as Record<string, unknown> | null;
+        const claimsMica = (mica?.claimsMicaCompliance as string) ?? 'NOT_MENTIONED';
+        const micaCompliant = (mica?.micaCompliant as string) ?? 'NO';
         const fraudulentMicaClaim = claimsMica === 'YES' && (micaCompliant === 'NO' || micaCompliant === 'PARTIAL');
 
         if (fraudulentMicaClaim) {

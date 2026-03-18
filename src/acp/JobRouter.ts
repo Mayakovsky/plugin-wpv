@@ -4,7 +4,7 @@
 // Depends on all verification and discovery services.
 // ════════════════════════════════════════════
 
-import type { OfferingId } from '../types';
+import type { OfferingId, StructuralAnalysis } from '../types';
 import type { WpvWhitepapersRepo } from '../db/wpvWhitepapersRepo';
 import type { WpvVerificationsRepo } from '../db/wpvVerificationsRepo';
 import type { WpvClaimsRepo } from '../db/wpvClaimsRepo';
@@ -62,9 +62,11 @@ export class JobRouter {
     const verification = await this.deps.verificationsRepo.findByWhitepaperId(wp.id);
     if (!verification) return this.notInDatabase();
 
+    const analysis = this.extractStructuralAnalysis(verification);
+
     return this.deps.reportGenerator.generateLegitimacyScan(
       this.verificationRowToResult(verification),
-      {} as never,
+      analysis,
       wp as never,
     );
   }
@@ -77,6 +79,7 @@ export class JobRouter {
     if (!verification) return this.notInDatabase();
 
     const claims = await this.deps.claimsRepo.findByWhitepaperId(wp.id);
+    const analysis = this.extractStructuralAnalysis(verification);
 
     return this.deps.reportGenerator.generateTokenomicsAudit(
       this.verificationRowToResult(verification),
@@ -90,6 +93,8 @@ export class JobRouter {
         regulatoryRelevance: (c.evaluationJson as Record<string, unknown>)?.regulatoryRelevance === true,
       })),
       wp as never,
+      undefined,
+      analysis,
     );
   }
 
@@ -144,7 +149,7 @@ export class JobRouter {
       return { error: 'missing_input', message: 'document_url and project_name are required' };
     }
 
-    const { resolved, structuralScore, hypeTechRatio, claims, wp } = await this.runL1L2(documentUrl, projectName);
+    const { resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = await this.runL1L2(documentUrl, projectName);
 
     // L2 scoring: use claimEvaluator for real scores
     const { evaluations, scores } = await this.deps.claimEvaluator.evaluateAll(claims, resolved.text);
@@ -157,7 +162,7 @@ export class JobRouter {
 
     const aggregate = this.deps.scoreAggregator.aggregate(claimScores);
 
-    // Store verification with real scores
+    // Store verification with structural analysis (includes MiCA data)
     const tokens = this.deps.costTracker.getTotalTokens();
     await this.deps.verificationsRepo.create({
       whitepaperId: wp.id,
@@ -169,6 +174,7 @@ export class JobRouter {
       verifiedClaims: evaluations.length,
       llmTokensUsed: tokens.input + tokens.output,
       computeCostUsd: this.deps.costTracker.getTotalCostUsd(),
+      structuralAnalysisJson: analysis as unknown as Record<string, unknown>,
     });
 
     return this.deps.reportGenerator.generateTokenomicsAudit(
@@ -186,6 +192,7 @@ export class JobRouter {
       claims,
       wp as never,
       scores,
+      analysis,
     );
   }
 
@@ -196,6 +203,7 @@ export class JobRouter {
       const verification = await this.deps.verificationsRepo.findByWhitepaperId(wp.id);
       if (verification) {
         const claims = await this.deps.claimsRepo.findByWhitepaperId(wp.id);
+        const analysis = this.extractStructuralAnalysis(verification);
         return this.deps.reportGenerator.generateFullVerification(
           this.verificationRowToResult(verification),
           claims.map((c) => ({
@@ -209,6 +217,8 @@ export class JobRouter {
           })),
           [],
           wp as never,
+          undefined,
+          analysis,
         );
       }
     }
@@ -221,7 +231,7 @@ export class JobRouter {
     }
 
     // Run L1+L2
-    const { resolved, structuralScore, hypeTechRatio, claims, wp: newWp } = await this.runL1L2(documentUrl, projectName);
+    const { resolved, analysis, structuralScore, hypeTechRatio, claims, wp: newWp } = await this.runL1L2(documentUrl, projectName);
 
     // L3: Full claim evaluation
     const { evaluations, scores } = await this.deps.claimEvaluator.evaluateAll(claims, resolved.text);
@@ -234,7 +244,7 @@ export class JobRouter {
 
     const aggregate = this.deps.scoreAggregator.aggregate(claimScores);
 
-    // Store verification with full L3 results
+    // Store verification with structural analysis (includes MiCA data)
     const tokens = this.deps.costTracker.getTotalTokens();
     await this.deps.verificationsRepo.create({
       whitepaperId: newWp.id,
@@ -247,6 +257,7 @@ export class JobRouter {
       llmTokensUsed: tokens.input + tokens.output,
       computeCostUsd: this.deps.costTracker.getTotalCostUsd(),
       focusAreaScores: aggregate.focusAreaScores,
+      structuralAnalysisJson: analysis as unknown as Record<string, unknown>,
     });
 
     return this.deps.reportGenerator.generateFullVerification(
@@ -265,6 +276,7 @@ export class JobRouter {
       evaluations,
       newWp as never,
       scores,
+      analysis,
     );
   }
 
@@ -279,6 +291,7 @@ export class JobRouter {
       const wp = await this.deps.whitepaperRepo.findById(v.whitepaperId);
       if (!wp) continue;
       const claims = await this.deps.claimsRepo.findByWhitepaperId(wp.id);
+      const analysis = this.extractStructuralAnalysis(v);
 
       reports.push(
         this.deps.reportGenerator.generateFullVerification(
@@ -294,6 +307,8 @@ export class JobRouter {
           })),
           [],
           wp as never,
+          undefined,
+          analysis,
         ),
       );
     }
@@ -335,5 +350,31 @@ export class JobRouter {
       llmTokensUsed: (v.llmTokensUsed as number) ?? 0,
       computeCostUsd: (v.computeCostUsd as number) ?? 0,
     };
+  }
+
+  /**
+   * Extract StructuralAnalysis (including MiCA data) from a DB verification row.
+   * Falls back to empty defaults if structuralAnalysisJson is null.
+   */
+  private extractStructuralAnalysis(v: Record<string, unknown>): StructuralAnalysis {
+    const raw = v.structuralAnalysisJson as Record<string, unknown> | null;
+    if (!raw) {
+      return {
+        hasAbstract: false, hasMethodology: false, hasTokenomics: false, hasReferences: false,
+        citationCount: 0, verifiedCitationRatio: 0,
+        hasMath: false, mathDensityScore: 0,
+        coherenceScore: 0,
+        similarityTopMatch: null, similarityScore: 0,
+        hasAuthors: false, hasDates: false,
+        mica: {
+          claimsMicaCompliance: 'NOT_MENTIONED',
+          micaCompliant: 'NO',
+          micaSummary: '',
+          micaSectionsFound: [],
+          micaSectionsMissing: [],
+        },
+      };
+    }
+    return raw as unknown as StructuralAnalysis;
   }
 }

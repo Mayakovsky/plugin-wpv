@@ -246,11 +246,17 @@ export class StructuralAnalyzer {
       }
     }
 
-    // 3. Determine compliance status
+    // 3. Check for utility token exemption (MiCA Article 4(3))
+    const isUtilityToken = this.detectUtilityToken(lowerText);
+
+    // 4. Determine compliance status
     let micaCompliant: MicaComplianceStatus;
     const foundCount = sectionsFound.length;
 
-    if (foundCount >= MICA_THRESHOLDS.COMPLIANT) {
+    if (isUtilityToken && claimsMicaCompliance === 'NOT_MENTIONED') {
+      // Utility tokens granting access to existing/functioning products are MiCA-exempt
+      micaCompliant = 'NOT_APPLICABLE';
+    } else if (foundCount >= MICA_THRESHOLDS.COMPLIANT) {
       micaCompliant = 'YES';
     } else if (foundCount >= MICA_THRESHOLDS.PARTIAL) {
       micaCompliant = 'PARTIAL';
@@ -258,16 +264,20 @@ export class StructuralAnalyzer {
       micaCompliant = 'NO';
     }
 
-    // 4. Generate summary
+    // 5. Generate summary
     const summaryParts: string[] = [];
 
-    if (claimsMicaCompliance === 'YES' && micaCompliant === 'NO') {
+    if (micaCompliant === 'NOT_APPLICABLE') {
+      summaryParts.push('Utility token — MiCA whitepaper requirements not applicable.');
+    } else if (claimsMicaCompliance === 'YES' && micaCompliant === 'NO') {
       summaryParts.push('Claims MiCA compliance but fails structural check.');
     } else if (claimsMicaCompliance === 'YES' && micaCompliant === 'PARTIAL') {
       summaryParts.push('Claims MiCA compliance but only partially meets requirements.');
     }
 
-    if (micaCompliant === 'YES') {
+    if (micaCompliant === 'NOT_APPLICABLE') {
+      // No section count needed for utility tokens
+    } else if (micaCompliant === 'YES') {
       summaryParts.push(`All ${foundCount}/7 required MiCA sections present.`);
     } else {
       summaryParts.push(`${foundCount}/7 required MiCA sections found.`);
@@ -285,6 +295,28 @@ export class StructuralAnalyzer {
       micaSectionsFound: sectionsFound,
       micaSectionsMissing: sectionsMissing,
     };
+  }
+
+  /**
+   * Detect utility tokens (MiCA Article 4(3) exemption).
+   * Utility tokens granting access to existing/functioning products are exempt.
+   */
+  private detectUtilityToken(lowerText: string): boolean {
+    const utilityIndicators = [
+      /\butility\s+token\b/,
+      /\baccess\s+token\b/,
+      /\bplatform\s+(?:access|usage|token)\b/,
+      /\bno\s+investment\b/,
+      /\bnot\s+(?:a\s+)?security\b/,
+      /\bgrants?\s+access\s+to\b/,
+      /\bservice\s+token\b/,
+    ];
+    let hits = 0;
+    for (const pattern of utilityIndicators) {
+      if (pattern.test(lowerText)) hits++;
+    }
+    // Require at least 2 indicators to avoid false positives
+    return hits >= 2;
   }
 
   private emptyAnalysis(): StructuralAnalysis {

@@ -239,4 +239,35 @@ describe('MiCA Compliance Check', () => {
       expect(mica.micaSummary).toContain('Claims MiCA compliance but fails');
     });
   });
+
+  describe('Utility token NOT_APPLICABLE', () => {
+    const UTILITY_TOKEN_WP = `
+      PlatformToken is a utility token that grants access to the DecentralCloud
+      platform services. This is not a security and has no investment intent.
+      The access token enables users to pay for compute resources. This is a
+      service token for platform usage only.
+    `;
+
+    it('detects utility token and returns NOT_APPLICABLE', () => {
+      const mica = analyzer.checkMicaCompliance(UTILITY_TOKEN_WP);
+      expect(mica.micaCompliant).toBe('NOT_APPLICABLE');
+    });
+
+    it('utility token summary explains exemption', () => {
+      const mica = analyzer.checkMicaCompliance(UTILITY_TOKEN_WP);
+      expect(mica.micaSummary).toContain('Utility token');
+      expect(mica.micaSummary).toContain('not applicable');
+    });
+
+    it('utility token that also claims MiCA gets normal assessment', () => {
+      const UTILITY_WITH_MICA_CLAIM = `
+        This utility token grants access to platform services. Not a security.
+        We are fully MiCA compliant under Regulation (EU) 2023/1114.
+      `;
+      const mica = analyzer.checkMicaCompliance(UTILITY_WITH_MICA_CLAIM);
+      // Claims MiCA compliance → should be assessed normally, not exempted
+      expect(mica.claimsMicaCompliance).toBe('YES');
+      expect(mica.micaCompliant).not.toBe('NOT_APPLICABLE');
+    });
+  });
 });
