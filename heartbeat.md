@@ -1,7 +1,7 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-03-17 (Phase 1 factory contract + MiCA + brand)
+> Last updated: 2026-03-17 (Phase 1 complete — all code tasks done)
 > Updated by: Claude Opus 4.6 — Phase 1 execution
-> Session label: Phase 1 tasks 1.1, 1.2, 1.4 complete — brand, factory contract, MiCA compliance
+> Session label: Phase 1 tasks 1.1–1.5 complete — brand, factory, MiCA L1+L2, PDF audit, agent tests
 > Staleness gate: 2026-03-17 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
@@ -12,14 +12,14 @@
 - [x] Extract WPV into standalone plugin-wpv repo (separated from plugin-autognostic)
 - [x] **Brand update** — rebrand to Whitepaper Grey / Grey (user-facing only)
 - [x] **Factory contract** — Virtuals Bonding Proxy `0xF66D...3259` wired into BaseChainListener + constants
-- [x] **MiCA compliance** — L1 structural checks (7 sections), claim detection, scam alert flagging
-- [ ] **PDF robustness audit** — 20 real whitepapers, OCR gap evaluation
+- [x] **MiCA compliance** — L1 structural checks (7 sections) + L2 regulatory relevance tagging, scam alert flagging
+- [x] **PDF robustness audit** — 20-WP corpus, 32 audit tests, image-only tracking in WPV_STATUS, OCR gap evaluated (defer to Phase 2)
 - [ ] **IRL testing round** — live agent with real whitepapers, real LLM calls, real Supabase
 - [ ] **ACP sandbox graduation** — 10 test transactions, submit graduation request
 
 ## What Works (verified)
 - ✅ Build (`bun run build`) — 0 errors — verified 2026-03-17
-- ✅ Tests (`bun run test`) — 215/215 pass across 18 test files — verified 2026-03-17
+- ✅ Tests (`bun run test`) — 249/249 pass across 20 test files — verified 2026-03-17
 - ✅ Plugin registration: 6 actions + WpvService registered via Eliza Plugin interface
 - ✅ @elizaos/core mocked in tests/setup.ts (Service base class + logger)
 - ✅ plugin-autognostic as optional peer dependency
@@ -52,12 +52,14 @@
 - ✅ Integration e2e test — full pipeline: discovery → verification → delivery
 
 ## What's Broken
-- (none identified — all 215 tests pass)
+- (none identified — all 249 tests pass)
 - ⚠️ ACP SDK not tested against live Virtuals contract
 - ⚠️ Public Base RPC (`mainnet.base.org`) throttles `eth_getLogs` — paid RPC needed for production cron
+- ⚠️ Image-only PDF detection limited by text-derived page count (see PDF audit findings)
+- ⚠️ OCR gap — scanned PDFs return INSUFFICIENT_DATA (deferred to Phase 2)
 
 ## Test Count
-- **215 tests across 18 test files, 0 failures**
+- **249 tests across 20 test files, 0 failures**
 
 | Area | Files | Tests |
 |------|-------|-------|
@@ -66,14 +68,14 @@
 | ACP | 4 | ~40 |
 | Schema + Actions | 2 | ~25 |
 | MiCA compliance | 1 | 20 |
+| PDF audit | 1 | 32 |
 | Integration e2e | 1 | ~15 |
 
 ## Next Actions (ordered)
-1. **PDF robustness audit** — 20 real crypto whitepapers through pipeline, document findings, evaluate OCR gap
-2. **Pre-launch cron** — once PDF audit complete, start daily cron to build database
-3. **ACP sandbox** — register agent (waiting on Forces), 10 test transactions, submit graduation request
-4. **VPS deployment** — Hetzner CX22, PM2 ecosystem, paid Base RPC
-5. **v1 release prep**
+1. **Pre-launch cron (1.7)** — all code prerequisites done, start daily cron to build database
+2. **VPS deployment (1.6)** — Hetzner CX22, PM2 ecosystem, paid Base RPC (waiting on Forces for IP/SSH)
+3. **ACP sandbox (Phase 2)** — register agent (waiting on Forces), 10 test transactions, submit graduation request
+4. **v1 release prep**
 
 ## Repo Migration Notes
 This plugin was extracted from `plugin-autognostic` where WPV was built as a subsystem under `src/wpv/`. The decision to separate was made to keep autognostic focused on general knowledge infrastructure (CAKC) and give WPV its own release cycle, dependency tree, and GitHub repo.
@@ -98,6 +100,8 @@ Key changes during migration:
 | 2026-03-17 | Claude Opus 4.6 | Factory contract: wire 0xF66D...3259 into constants + BaseChainListener | Graduated event parsing verified |
 | 2026-03-17 | Claude Opus 4.6 | MiCA compliance: L1 structural checks, claim keywords, scam alert flagging | 20 MiCA tests added |
 | 2026-03-17 | Claude Opus 4.6 | Fix getLatestTokens 10k block RPC limit + live integration test | 215/215 tests, build clean |
+| 2026-03-17 | Claude Opus 4.6 | L2 regulatory relevance tagging in ClaimExtractor | regulatoryRelevance flag on ExtractedClaim |
+| 2026-03-17 | Claude Opus 4.6 | PDF robustness audit: 20-WP corpus, 32 tests, image-only tracking, OCR gap eval | 249/249 tests, build clean |
 
 ## Guardrails (DO / DON'T)
 DO:
