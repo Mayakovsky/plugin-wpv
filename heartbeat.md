@@ -1,8 +1,8 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-03-14 (action selection fix)
-> Updated by: Claude Opus 4.6 — Action selection tuning
-> Session label: Action selection fix — broadened validate() regexes, removed debug logging
-> Staleness gate: 2026-03-14 — if today is >3 days past this,
+> Last updated: 2026-03-17 (Phase 1 factory contract + MiCA + brand)
+> Updated by: Claude Opus 4.6 — Phase 1 execution
+> Session label: Phase 1 tasks 1.1, 1.2, 1.4 complete — brand, factory contract, MiCA compliance
+> Staleness gate: 2026-03-17 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
 ## Focus (1-3 goals, testable)
@@ -10,12 +10,16 @@
 - [x] Phase B: Verification engine — structural analyzer, claim extraction, evaluation, score aggregator, reports
 - [x] Phase C: ACP integration — ACP wrapper, agent card, resource handlers, job router, rate limiter, actions
 - [x] Extract WPV into standalone plugin-wpv repo (separated from plugin-autognostic)
+- [x] **Brand update** — rebrand to Whitepaper Grey / Grey (user-facing only)
+- [x] **Factory contract** — Virtuals Bonding Proxy `0xF66D...3259` wired into BaseChainListener + constants
+- [x] **MiCA compliance** — L1 structural checks (7 sections), claim detection, scam alert flagging
+- [ ] **PDF robustness audit** — 20 real whitepapers, OCR gap evaluation
 - [ ] **IRL testing round** — live agent with real whitepapers, real LLM calls, real Supabase
 - [ ] **ACP sandbox graduation** — 10 test transactions, submit graduation request
 
 ## What Works (verified)
-- ✅ Build (`bun run build`) — 0 errors — verified 2026-03-12
-- ✅ Tests (`bun run test`) — 195/195 pass across 17 test files — verified 2026-03-12
+- ✅ Build (`bun run build`) — 0 errors — verified 2026-03-17
+- ✅ Tests (`bun run test`) — 215/215 pass across 18 test files — verified 2026-03-17
 - ✅ Plugin registration: 6 actions + WpvService registered via Eliza Plugin interface
 - ✅ @elizaos/core mocked in tests/setup.ts (Service base class + logger)
 - ✅ plugin-autognostic as optional peer dependency
@@ -48,31 +52,28 @@
 - ✅ Integration e2e test — full pipeline: discovery → verification → delivery
 
 ## What's Broken
-- (none identified — all 195 tests pass)
+- (none identified — all 215 tests pass)
 - ⚠️ ACP SDK not tested against live Virtuals contract
-- ⚠️ Action selection E2E verification pending (validate() broadened, awaiting live test)
+- ⚠️ Public Base RPC (`mainnet.base.org`) throttles `eth_getLogs` — paid RPC needed for production cron
 
 ## Test Count
-- **195 tests across 17 files, 0 failures**
+- **215 tests across 18 test files, 0 failures**
 
 | Area | Files | Tests |
 |------|-------|-------|
-| Discovery | 5 | ~50 |
+| Discovery | 5 + 1 live | ~50 + 5 |
 | Verification | 6 | ~65 |
 | ACP | 4 | ~40 |
 | Schema + Actions | 2 | ~25 |
+| MiCA compliance | 1 | 20 |
 | Integration e2e | 1 | ~15 |
 
 ## Next Actions (ordered)
-1. **Deploy Supabase schema** — run Drizzle migrations against Pro instance, verify tables + indexes
-2. **Smoke test: StructuralAnalyzer with real WP** — fetch a known crypto whitepaper PDF, run L1 analysis, verify scores
-3. **Smoke test: ClaimExtractor with real LLM** — run L2 extraction against real whitepaper with live Anthropic API
-4. **Smoke test: Full pipeline** — discovery cron → L1+L2+L3 → report generation → DB storage
-5. **Smoke test: CryptoContentResolver** — test IPFS fallback, image-only detection with real PDFs
-6. **Smoke test: BaseChainListener** — connect to Base RPC, verify event parsing against live contract
-7. **ACP sandbox** — register agent, run 10 test transactions, submit graduation request
-8. **Agent integration** — build wpv-agent that loads both plugin-wpv + plugin-autognostic, test slash commands
-9. **v1 release prep**
+1. **PDF robustness audit** — 20 real crypto whitepapers through pipeline, document findings, evaluate OCR gap
+2. **Pre-launch cron** — once PDF audit complete, start daily cron to build database
+3. **ACP sandbox** — register agent (waiting on Forces), 10 test transactions, submit graduation request
+4. **VPS deployment** — Hetzner CX22, PM2 ecosystem, paid Base RPC
+5. **v1 release prep**
 
 ## Repo Migration Notes
 This plugin was extracted from `plugin-autognostic` where WPV was built as a subsystem under `src/wpv/`. The decision to separate was made to keep autognostic focused on general knowledge infrastructure (CAKC) and give WPV its own release cycle, dependency tree, and GitHub repo.
@@ -93,6 +94,10 @@ Key changes during migration:
 | 2026-03-12 | Forces + Kovsky | Extract WPV to standalone plugin-wpv repo | 195 tests, clean build |
 | 2026-03-12 | Claude Opus 4.6 | Create CLAUDE.md + heartbeat.md for plugin-wpv | SeshMem initialized |
 | 2026-03-14 | Claude Opus 4.6 | Action selection fix: broadened validate() regexes in all 6 actions, removed debug logging from wpvStatusAction | 195/195 tests pass |
+| 2026-03-17 | Claude Opus 4.6 | Brand update: AgentCardConfig → Whitepaper Grey / Grey | User-facing strings updated |
+| 2026-03-17 | Claude Opus 4.6 | Factory contract: wire 0xF66D...3259 into constants + BaseChainListener | Graduated event parsing verified |
+| 2026-03-17 | Claude Opus 4.6 | MiCA compliance: L1 structural checks, claim keywords, scam alert flagging | 20 MiCA tests added |
+| 2026-03-17 | Claude Opus 4.6 | Fix getLatestTokens 10k block RPC limit + live integration test | 215/215 tests, build clean |
 
 ## Guardrails (DO / DON'T)
 DO:
