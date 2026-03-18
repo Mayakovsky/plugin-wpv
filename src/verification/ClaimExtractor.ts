@@ -41,6 +41,7 @@ For each claim, extract:
 - statedEvidence: What evidence the whitepaper provides
 - mathematicalProofPresent: Whether a mathematical proof accompanies the claim
 - sourceSection: Which section of the document contains this claim
+- regulatoryRelevance: Whether this claim relates to regulatory compliance (MiCA, EU regulation, KYC/AML, ESMA requirements, investor protection, risk disclosure obligations, or legal compliance frameworks). Set true for any claim about meeting regulatory standards or legal requirements. Also flag risk disclosures — note whether they are substantive (specific, quantified risks) or boilerplate (generic, vague warnings).
 
 Example:
 {
@@ -48,7 +49,8 @@ Example:
   "claimText": "Staking APY will be maintained at 12% through algorithmic token emission",
   "statedEvidence": "Emission curve formula in Section 4.2",
   "mathematicalProofPresent": true,
-  "sourceSection": "Tokenomics"
+  "sourceSection": "Tokenomics",
+  "regulatoryRelevance": false
 }`;
 
 const CLAIM_EXTRACTION_TOOL = {
@@ -70,8 +72,9 @@ const CLAIM_EXTRACTION_TOOL = {
             statedEvidence: { type: 'string' },
             mathematicalProofPresent: { type: 'boolean' },
             sourceSection: { type: 'string' },
+            regulatoryRelevance: { type: 'boolean' },
           },
-          required: ['category', 'claimText', 'statedEvidence', 'mathematicalProofPresent', 'sourceSection'],
+          required: ['category', 'claimText', 'statedEvidence', 'mathematicalProofPresent', 'sourceSection', 'regulatoryRelevance'],
         },
       },
     },
@@ -146,6 +149,7 @@ export class ClaimExtractor {
             statedEvidence: String(c.statedEvidence ?? ''),
             mathematicalProofPresent: Boolean(c.mathematicalProofPresent),
             sourceSection: String(c.sourceSection ?? ''),
+            regulatoryRelevance: Boolean(c.regulatoryRelevance),
           }))
           .filter((c) => c.claimText.length > 0);
       }

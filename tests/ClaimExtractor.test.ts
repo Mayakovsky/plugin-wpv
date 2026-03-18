@@ -19,6 +19,7 @@ function createMockClient(toolResponse?: Record<string, unknown>): AnthropicClie
                   statedEvidence: 'See Section 4',
                   mathematicalProofPresent: true,
                   sourceSection: 'Tokenomics',
+                  regulatoryRelevance: false,
                 },
                 {
                   category: 'PERFORMANCE',
@@ -26,6 +27,7 @@ function createMockClient(toolResponse?: Record<string, unknown>): AnthropicClie
                   statedEvidence: 'Benchmark tests in Section 5',
                   mathematicalProofPresent: false,
                   sourceSection: 'Performance',
+                  regulatoryRelevance: false,
                 },
                 {
                   category: 'CONSENSUS',
@@ -33,6 +35,7 @@ function createMockClient(toolResponse?: Record<string, unknown>): AnthropicClie
                   statedEvidence: 'Proof in Appendix A',
                   mathematicalProofPresent: true,
                   sourceSection: 'Consensus',
+                  regulatoryRelevance: false,
                 },
               ],
             },
@@ -149,6 +152,32 @@ describe('ClaimExtractor', () => {
     const claims = await extractor.extractClaims('Text', 'TestProject');
     expect(claims).toHaveLength(1);
     expect(claims[0].claimText).toBe('Valid claim');
+  });
+
+  it('parses regulatoryRelevance flag correctly', async () => {
+    const regClient = createMockClient({
+      claims: [
+        { category: 'TOKENOMICS', claimText: 'APY of 12%', statedEvidence: '', mathematicalProofPresent: false, sourceSection: '', regulatoryRelevance: false },
+        { category: 'SCIENTIFIC', claimText: 'Compliant with MiCA Article 6', statedEvidence: 'Legal section', mathematicalProofPresent: false, sourceSection: 'Compliance', regulatoryRelevance: true },
+      ],
+    });
+    extractor = new ClaimExtractor({ client: regClient, costTracker });
+
+    const claims = await extractor.extractClaims('Text', 'TestProject');
+    expect(claims[0].regulatoryRelevance).toBe(false);
+    expect(claims[1].regulatoryRelevance).toBe(true);
+  });
+
+  it('defaults regulatoryRelevance to false when missing', async () => {
+    const noRegClient = createMockClient({
+      claims: [
+        { category: 'TOKENOMICS', claimText: 'Some claim', statedEvidence: '', mathematicalProofPresent: false, sourceSection: '' },
+      ],
+    });
+    extractor = new ClaimExtractor({ client: noRegClient, costTracker });
+
+    const claims = await extractor.extractClaims('Text', 'TestProject');
+    expect(claims[0].regulatoryRelevance).toBe(false);
   });
 
   it('accumulates cost across multiple calls', async () => {

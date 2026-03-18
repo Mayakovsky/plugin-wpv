@@ -87,6 +87,7 @@ export class JobRouter {
         statedEvidence: c.statedEvidence,
         mathematicalProofPresent: c.mathProofPresent,
         sourceSection: c.sourceSection,
+        regulatoryRelevance: (c.evaluationJson as Record<string, unknown>)?.regulatoryRelevance === true,
       })),
       wp as never,
     );
@@ -128,6 +129,7 @@ export class JobRouter {
         statedEvidence: claim.statedEvidence,
         sourceSection: claim.sourceSection,
         mathProofPresent: claim.mathematicalProofPresent,
+        evaluationJson: claim.regulatoryRelevance ? { regulatoryRelevance: true } : undefined,
       });
     }
 
@@ -203,6 +205,7 @@ export class JobRouter {
             statedEvidence: c.statedEvidence,
             mathematicalProofPresent: c.mathProofPresent,
             sourceSection: c.sourceSection,
+            regulatoryRelevance: (c.evaluationJson as Record<string, unknown>)?.regulatoryRelevance === true,
           })),
           [],
           wp as never,
@@ -287,6 +290,7 @@ export class JobRouter {
             statedEvidence: c.statedEvidence,
             mathematicalProofPresent: c.mathProofPresent,
             sourceSection: c.sourceSection,
+            regulatoryRelevance: (c.evaluationJson as Record<string, unknown>)?.regulatoryRelevance === true,
           })),
           [],
           wp as never,

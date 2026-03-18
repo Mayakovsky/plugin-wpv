@@ -61,6 +61,8 @@ export interface ExtractedClaim {
   statedEvidence: string;
   mathematicalProofPresent: boolean;
   sourceSection: string;
+  /** True if the claim relates to regulatory compliance (MiCA, KYC/AML, ESMA, etc.) */
+  regulatoryRelevance: boolean;
 }
 
 export interface ClaimEvaluation {
