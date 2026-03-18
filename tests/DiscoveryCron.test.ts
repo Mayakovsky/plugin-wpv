@@ -189,4 +189,52 @@ describe('DiscoveryCron', () => {
 
     expect(result.candidatesFound).toBe(0);
   });
+
+  it('skips image-only documents and logs error', async () => {
+    const tokens = [makeToken()];
+    (deps.chainListener.getNewTokensSince as ReturnType<typeof vi.fn>).mockResolvedValue(tokens);
+    (deps.resolver.resolveWhitepaper as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeResolved({ isImageOnly: true, text: 'x', pageCount: 5 })
+    );
+
+    const result = await cron.runDaily();
+
+    expect(result.candidatesFound).toBe(0);
+    expect(result.errors.length).toBe(1);
+    expect(result.errors[0].error).toBe('image_only');
+  });
+
+  it('skips password-protected documents and logs error', async () => {
+    const tokens = [makeToken()];
+    (deps.chainListener.getNewTokensSince as ReturnType<typeof vi.fn>).mockResolvedValue(tokens);
+    (deps.resolver.resolveWhitepaper as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeResolved({ isPasswordProtected: true, text: '' })
+    );
+
+    const result = await cron.runDaily();
+
+    expect(result.candidatesFound).toBe(0);
+    expect(result.errors.length).toBe(1);
+    expect(result.errors[0].error).toBe('password_protected');
+  });
+
+  it('stores pageCount and isImageOnly in whitepaper record', async () => {
+    const tokens = [makeToken()];
+    (deps.chainListener.getNewTokensSince as ReturnType<typeof vi.fn>).mockResolvedValue(tokens);
+    (deps.resolver.resolveWhitepaper as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeResolved({ pageCount: 12 })
+    );
+    (deps.selector.filterProjects as ReturnType<typeof vi.fn>).mockImplementation((candidates) =>
+      candidates.map((c: Record<string, unknown>) => ({ ...c, score: 8 }))
+    );
+
+    await cron.runDaily();
+
+    expect(deps.whitepaperRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pageCount: 12,
+        metadataJson: expect.objectContaining({ isImageOnly: false }),
+      })
+    );
+  });
 });

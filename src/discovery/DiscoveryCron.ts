@@ -47,7 +47,7 @@ export class DiscoveryCron {
     const tokens = await this.deps.chainListener.getNewTokensSince(lastBlock);
     log.info('Discovery: tokens scanned', { count: tokens.length });
 
-    const candidates: (ProjectCandidate & { resolvedText?: string })[] = [];
+    const candidates: (ProjectCandidate & { resolvedText?: string; resolvedPageCount?: number; resolvedIsImageOnly?: boolean })[] = [];
 
     // 2-4. Enrich, resolve, build signals for each token
     for (const token of tokens) {
@@ -67,15 +67,31 @@ export class DiscoveryCron {
         // Resolve the document to get text and page count
         let text = '';
         let pageCount = 0;
+        let isImageOnly = false;
+        let isPasswordProtected = false;
         try {
           const resolved = await this.deps.resolver.resolveWhitepaper(documentUrl);
           text = resolved.text;
           pageCount = resolved.pageCount;
+          isImageOnly = resolved.isImageOnly;
+          isPasswordProtected = resolved.isPasswordProtected;
         } catch (err) {
           errors.push({
             url: documentUrl,
             error: err instanceof Error ? err.message : String(err),
           });
+          continue;
+        }
+
+        // Skip password-protected or image-only documents (no useful text to verify)
+        if (isPasswordProtected) {
+          log.info('Skipping password-protected document', { url: documentUrl });
+          errors.push({ url: documentUrl, error: 'password_protected' });
+          continue;
+        }
+        if (isImageOnly) {
+          log.info('Skipping image-only document (no text layer)', { url: documentUrl });
+          errors.push({ url: documentUrl, error: 'image_only' });
           continue;
         }
 
@@ -95,6 +111,8 @@ export class DiscoveryCron {
           documentUrl,
           signals,
           resolvedText: text,
+          resolvedPageCount: pageCount,
+          resolvedIsImageOnly: isImageOnly,
         });
 
         candidatesFound++;
@@ -107,7 +125,7 @@ export class DiscoveryCron {
     }
 
     // 5. Filter via selector
-    const filtered = this.deps.selector.filterProjects(candidates) as (ProjectCandidate & { resolvedText?: string })[];
+    const filtered = this.deps.selector.filterProjects(candidates) as (ProjectCandidate & { resolvedText?: string; resolvedPageCount?: number; resolvedIsImageOnly?: boolean })[];
     candidatesAboveThreshold = filtered.length;
 
     // 6. Store passing candidates + optionally mirror to knowledge store
@@ -120,9 +138,13 @@ export class DiscoveryCron {
           chain: 'base',
           documentUrl: candidate.documentUrl!,
           ipfsCid: null,
+          pageCount: candidate.resolvedPageCount ?? 0,
           status: 'INGESTED' as WhitepaperStatus,
           selectionScore: candidate.score ?? 0,
-          metadataJson: candidate.metadata as unknown as Record<string, unknown>,
+          metadataJson: {
+            ...(candidate.metadata as unknown as Record<string, unknown>),
+            isImageOnly: candidate.resolvedIsImageOnly ?? false,
+          },
         });
         whitepapersIngested++;
 
