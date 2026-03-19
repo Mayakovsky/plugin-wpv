@@ -1,8 +1,8 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-03-17 (Phase 1 complete — all code tasks done)
-> Updated by: Claude Opus 4.6 — Phase 1 execution
-> Session label: Phase 1 tasks 1.1–1.5 complete — brand, factory, MiCA L1+L2, PDF audit, agent tests
-> Staleness gate: 2026-03-17 — if today is >3 days past this,
+> Last updated: 2026-03-18 (MiCA pipeline fixes + VPS deployed)
+> Updated by: Claude Opus 4.6 — Phase 1 execution + MiCA audit
+> Session label: Phase 1 complete, MiCA pipeline fixed, VPS running Grey 24/7
+> Staleness gate: 2026-03-18 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
 ## Focus (1-3 goals, testable)
@@ -18,8 +18,8 @@
 - [ ] **ACP sandbox graduation** — 10 test transactions, submit graduation request
 
 ## What Works (verified)
-- ✅ Build (`bun run build`) — 0 errors — verified 2026-03-17
-- ✅ Tests (`bun run test`) — 249/249 pass across 20 test files — verified 2026-03-17
+- ✅ Build (`bun run build`) — 0 errors — verified 2026-03-18
+- ✅ Tests (`bun run test`) — 258/258 pass across 20 test files — verified 2026-03-18
 - ✅ Plugin registration: 6 actions + WpvService registered via Eliza Plugin interface
 - ✅ @elizaos/core mocked in tests/setup.ts (Service base class + logger)
 - ✅ plugin-autognostic as optional peer dependency
@@ -52,14 +52,14 @@
 - ✅ Integration e2e test — full pipeline: discovery → verification → delivery
 
 ## What's Broken
-- (none identified — all 249 tests pass)
+- (none identified — all 258 tests pass)
 - ⚠️ ACP SDK not tested against live Virtuals contract
 - ⚠️ Public Base RPC (`mainnet.base.org`) throttles `eth_getLogs` — paid RPC needed for production cron
 - ⚠️ Image-only PDF detection limited by text-derived page count (see PDF audit findings)
 - ⚠️ OCR gap — scanned PDFs return INSUFFICIENT_DATA (deferred to Phase 2)
 
 ## Test Count
-- **249 tests across 20 test files, 0 failures**
+- **258 tests across 20 test files, 0 failures**
 
 | Area | Files | Tests |
 |------|-------|-------|
@@ -102,6 +102,8 @@ Key changes during migration:
 | 2026-03-17 | Claude Opus 4.6 | Fix getLatestTokens 10k block RPC limit + live integration test | 215/215 tests, build clean |
 | 2026-03-17 | Claude Opus 4.6 | L2 regulatory relevance tagging in ClaimExtractor | regulatoryRelevance flag on ExtractedClaim |
 | 2026-03-17 | Claude Opus 4.6 | PDF robustness audit: 20-WP corpus, 32 tests, image-only tracking, OCR gap eval | 249/249 tests, build clean |
+| 2026-03-18 | Claude Opus 4.6 | MiCA pipeline audit: persist structuralAnalysisJson, fix cached reports, fix scam alerts, add NOT_APPLICABLE | 258/258 tests, 4 critical bugs fixed |
+| 2026-03-18 | Claude Opus 4.6 | VPS deployed: AWS Lightsail us-west-2, Grey running 24/7 via PM2, reboot recovery tested | Production infrastructure live |
 
 ## Guardrails (DO / DON'T)
 DO:
