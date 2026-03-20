@@ -107,13 +107,18 @@ export class JobRouter {
     // Resolve the document
     const resolved = await this.deps.cryptoResolver.resolveWhitepaper(documentUrl);
 
-    // L1: Structural analysis
+    // L1: Structural analysis (timed)
+    this.deps.costTracker.startStage('l1');
     const analysis = await this.deps.structuralAnalyzer.analyze(resolved.text, resolved.pageCount);
     const structuralScore = this.deps.structuralAnalyzer.computeQuickFilterScore(analysis);
     const hypeTechRatio = this.deps.structuralAnalyzer.computeHypeTechRatio(resolved.text);
+    this.deps.costTracker.endStage('l1', 0, 0); // L1 uses no LLM tokens
 
-    // L2: Claim extraction
+    // L2: Claim extraction (timed + token tracked)
+    this.deps.costTracker.startStage('l2');
     const claims = await this.deps.claimExtractor.extractClaims(resolved.text, projectName);
+    // Note: ClaimExtractor calls costTracker.recordUsage() internally
+    // We capture the delta via getStageMetrics() after the verification
 
     // Store whitepaper
     const wp = await this.deps.whitepaperRepo.create({
@@ -151,8 +156,10 @@ export class JobRouter {
 
     const { resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = await this.runL1L2(documentUrl, projectName);
 
-    // L2 scoring: use claimEvaluator for real scores
+    // L3: Claim evaluation (timed)
+    this.deps.costTracker.startStage('l3');
     const { evaluations, scores } = await this.deps.claimEvaluator.evaluateAll(claims, resolved.text);
+    this.deps.costTracker.endStage('l3', 0, 0); // L3 tokens tracked via recordUsage internally
 
     // Build score array from evaluation results
     const claimScores = claims.map((c) => ({
@@ -162,8 +169,9 @@ export class JobRouter {
 
     const aggregate = this.deps.scoreAggregator.aggregate(claimScores);
 
-    // Store verification with structural analysis (includes MiCA data)
+    // Store verification with structural analysis + cost metrics
     const tokens = this.deps.costTracker.getTotalTokens();
+    const stageMetrics = this.deps.costTracker.getStageMetrics();
     await this.deps.verificationsRepo.create({
       whitepaperId: wp.id,
       structuralScore,
@@ -175,6 +183,17 @@ export class JobRouter {
       llmTokensUsed: tokens.input + tokens.output,
       computeCostUsd: this.deps.costTracker.getTotalCostUsd(),
       structuralAnalysisJson: analysis as unknown as Record<string, unknown>,
+      triggerSource: (input._triggerSource as string) ?? 'manual',
+      cacheHit: false,
+      l1DurationMs: stageMetrics.l1.durationMs,
+      l2InputTokens: stageMetrics.l2.inputTokens,
+      l2OutputTokens: stageMetrics.l2.outputTokens,
+      l2CostUsd: stageMetrics.l2.costUsd,
+      l2DurationMs: stageMetrics.l2.durationMs,
+      l3InputTokens: stageMetrics.l3.inputTokens,
+      l3OutputTokens: stageMetrics.l3.outputTokens,
+      l3CostUsd: stageMetrics.l3.costUsd,
+      l3DurationMs: stageMetrics.l3.durationMs,
     });
 
     return this.deps.reportGenerator.generateTokenomicsAudit(

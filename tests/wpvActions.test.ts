@@ -133,7 +133,23 @@ describe('WpvCostAction', () => {
 
   it('handler returns cost from tracker', async () => {
     const runtime = makeMockRuntime({
-      costTracker: { getTotalTokens: () => ({ input: 1000, output: 200 }), getTotalCostUsd: () => 0.006 },
+      costTracker: {
+        getTotalTokens: () => ({ input: 1000, output: 200 }),
+        getTotalCostUsd: () => 0.006,
+        getStageMetrics: () => ({
+          l1: { inputTokens: 0, outputTokens: 0, costUsd: 0, durationMs: 50 },
+          l2: { inputTokens: 800, outputTokens: 150, costUsd: 0.005, durationMs: 2000 },
+          l3: { inputTokens: 200, outputTokens: 50, costUsd: 0.001, durationMs: 1000 },
+          totalCostUsd: 0.006, totalInputTokens: 1000, totalOutputTokens: 200,
+        }),
+      },
+      verificationsRepo: {
+        getMonthlyCostSummary: vi.fn().mockResolvedValue({
+          totalVerifications: 5, liveRuns: 4, cacheHits: 1,
+          totalCostUsd: 1.5, l2CostUsd: 1.0, l3CostUsd: 0.5,
+          avgCostPerVerification: 0.3, cacheHitRate: 0.2,
+        }),
+      },
     });
     const cb = vi.fn();
     const result = await WpvCostAction.handler(runtime, makeMessage('wpvcost'), undefined, undefined, cb);

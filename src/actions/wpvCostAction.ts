@@ -41,23 +41,58 @@ export const WpvCostAction: Action = {
     _options: HandlerOptions | undefined, callback: HandlerCallback | undefined,
   ): Promise<ActionResult> {
     const wpv = getWpvService(runtime);
-    if (!wpv?.costTracker) {
+    if (!wpv?.costTracker || !wpv?.verificationsRepo) {
       const text = "WPV service not initialized. Cost tracking unavailable.";
       if (callback) await callback({ text, action: "WPV_COST" });
       return { success: false, text, data: safeSerialize({ error: "service_unavailable" }) };
     }
 
-    const tokens = wpv.costTracker.getTotalTokens();
-    const totalCost = wpv.costTracker.getTotalCostUsd();
+    // Session-level metrics (current process)
+    const sessionTokens = wpv.costTracker.getTotalTokens();
+    const sessionCost = wpv.costTracker.getTotalCostUsd();
+    const stageMetrics = wpv.costTracker.getStageMetrics();
 
-    const costData = {
-      inputTokens: tokens.input,
-      outputTokens: tokens.output,
-      totalCostUsd: totalCost,
-    };
+    // Monthly aggregate from database
+    let monthly;
+    try {
+      monthly = await wpv.verificationsRepo.getMonthlyCostSummary();
+    } catch {
+      monthly = null;
+    }
 
-    const text = `WPV compute cost: $${totalCost.toFixed(4)} (${tokens.input} input + ${tokens.output} output tokens)`;
+    const parts: string[] = [];
+
+    // Session costs
+    parts.push(`**Session:** $${sessionCost.toFixed(4)} (${sessionTokens.input} input + ${sessionTokens.output} output tokens)`);
+
+    if (stageMetrics.l2.inputTokens > 0 || stageMetrics.l3.inputTokens > 0) {
+      parts.push(`  L2 claim extraction: $${stageMetrics.l2.costUsd.toFixed(4)} (${stageMetrics.l2.durationMs}ms)`);
+      parts.push(`  L3 claim evaluation: $${stageMetrics.l3.costUsd.toFixed(4)} (${stageMetrics.l3.durationMs}ms)`);
+    }
+
+    // Monthly aggregate
+    if (monthly && monthly.totalVerifications > 0) {
+      parts.push('');
+      parts.push(`**This month:** ${monthly.totalVerifications} verifications, $${monthly.totalCostUsd.toFixed(2)} total`);
+      parts.push(`  Live runs: ${monthly.liveRuns} | Cache hits: ${monthly.cacheHits} (${(monthly.cacheHitRate * 100).toFixed(0)}%)`);
+      parts.push(`  L2 cost: $${monthly.l2CostUsd.toFixed(2)} | L3 cost: $${monthly.l3CostUsd.toFixed(2)}`);
+      parts.push(`  Avg COC/V: $${monthly.avgCostPerVerification.toFixed(4)}`);
+
+      if (monthly.totalVerifications >= 300) {
+        parts.push('');
+        parts.push('⚠ Volume approaching local LLM evaluation threshold (300/month). See LOCAL_LLM_EVALUATION.md.');
+      }
+    }
+
+    const text = parts.join('\n');
     if (callback) await callback({ text, action: "WPV_COST" });
-    return { success: true, text, data: safeSerialize(costData) };
+    return {
+      success: true,
+      text,
+      data: safeSerialize({
+        session: { ...sessionTokens, cost: sessionCost, stages: stageMetrics },
+        monthly: monthly ?? null,
+      }),
+    };
   },
 };

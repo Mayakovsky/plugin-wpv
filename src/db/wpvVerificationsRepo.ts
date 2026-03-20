@@ -85,4 +85,43 @@ export class WpvVerificationsRepo {
       .from(wpvVerifications)
       .where(eq(wpvVerifications.verdict, verdict));
   }
+
+  /** Get monthly cost aggregation from persisted verification data */
+  async getMonthlyCostSummary(): Promise<{
+    totalVerifications: number;
+    liveRuns: number;
+    cacheHits: number;
+    totalCostUsd: number;
+    l2CostUsd: number;
+    l3CostUsd: number;
+    avgCostPerVerification: number;
+    cacheHitRate: number;
+  }> {
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+
+    const rows: WpvVerificationRow[] = await this.db
+      .select()
+      .from(wpvVerifications)
+      .where(gte(wpvVerifications.verifiedAt, monthStart));
+
+    const total = rows.length;
+    const cacheHits = rows.filter((r) => r.cacheHit).length;
+    const liveRuns = total - cacheHits;
+    const totalCostUsd = rows.reduce((sum, r) => sum + (r.computeCostUsd ?? 0), 0);
+    const l2CostUsd = rows.reduce((sum, r) => sum + ((r as Record<string, unknown>).l2CostUsd as number ?? 0), 0);
+    const l3CostUsd = rows.reduce((sum, r) => sum + ((r as Record<string, unknown>).l3CostUsd as number ?? 0), 0);
+
+    return {
+      totalVerifications: total,
+      liveRuns,
+      cacheHits,
+      totalCostUsd,
+      l2CostUsd,
+      l3CostUsd,
+      avgCostPerVerification: total > 0 ? totalCostUsd / total : 0,
+      cacheHitRate: total > 0 ? cacheHits / total : 0,
+    };
+  }
 }
