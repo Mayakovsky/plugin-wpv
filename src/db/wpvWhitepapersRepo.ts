@@ -2,7 +2,7 @@
 // WPV Whitepapers Repository — CRUD for wpv_whitepapers
 // ════════════════════════════════════════════
 
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { wpvWhitepapers, type WpvWhitepaperRow, type WpvWhitepaperInsert } from './wpvSchema';
 import type { DrizzleDbLike } from '../types';
 
@@ -59,6 +59,14 @@ export class WpvWhitepapersRepo {
       .update(wpvWhitepapers)
       .set({ knowledgeItemId })
       .where(eq(wpvWhitepapers.id, id));
+  }
+
+  async listRecent(limit: number): Promise<WpvWhitepaperRow[]> {
+    return this.db
+      .select()
+      .from(wpvWhitepapers)
+      .orderBy(desc(wpvWhitepapers.ingestedAt))
+      .limit(limit);
   }
 
   async findByProjectAndChain(projectName: string, chain: string): Promise<WpvWhitepaperRow | null> {

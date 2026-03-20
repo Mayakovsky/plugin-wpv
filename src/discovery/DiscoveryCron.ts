@@ -10,6 +10,7 @@ import type { AcpMetadataEnricher } from './AcpMetadataEnricher';
 import type { WhitepaperSelector } from './WhitepaperSelector';
 import type { TieredDocumentDiscovery } from './TieredDocumentDiscovery';
 import type { MarketTractionAnalyzer } from './MarketTractionAnalyzer';
+import type { ForkDetector } from './ForkDetector';
 import type { WpvWhitepapersRepo } from '../db/wpvWhitepapersRepo';
 import { TECHNICAL_CLAIM_KEYWORDS, TECHNICAL_CLAIMS_MIN_HITS, MIN_PAGE_COUNT, FRESHNESS_WINDOW_MS } from '../constants';
 import { createLogger } from '../utils/logger';
@@ -27,6 +28,7 @@ interface ResolvedCandidate extends ProjectCandidate {
   documentSource?: DocumentSource;
   discoveryTier?: number;
   traction?: Record<string, unknown>;
+  forkDetection?: Record<string, unknown>;
 }
 
 export interface DiscoveryCronDeps {
@@ -35,6 +37,7 @@ export interface DiscoveryCronDeps {
   selector: WhitepaperSelector;
   tieredDiscovery: TieredDocumentDiscovery;
   tractionAnalyzer: MarketTractionAnalyzer;
+  forkDetector: ForkDetector;
   whitepaperRepo: WpvWhitepapersRepo;
   /** Optional hook to mirror ingested whitepapers to the knowledge store. */
   onIngest?: OnIngestHook;
@@ -96,13 +99,20 @@ export class DiscoveryCron {
           token.blockNumber,
         );
 
+        // Check for fork/clone
+        const forkResult = await this.deps.forkDetector.detect(
+          metadata.agentName ?? '',
+          metadata.description ?? '',
+          resolved.text,
+        );
+
         // Build selection signals
         const signals: SelectionSignal = {
           hasLinkedPdf: documentSource === 'pdf' || documentSource === 'ipfs',
           documentLengthOk: resolved.pageCount > MIN_PAGE_COUNT,
           technicalClaimsDetected: this.detectTechnicalClaims(resolved.text),
           marketTraction: traction.marketTraction,
-          notAFork: true, // Replaced in 1.6C
+          notAFork: !forkResult.isFork,
           isFresh: (Date.now() - token.timestamp * 1000) < FRESHNESS_WINDOW_MS,
         };
 
@@ -117,6 +127,7 @@ export class DiscoveryCron {
           documentSource,
           discoveryTier: tier,
           traction: traction as unknown as Record<string, unknown>,
+          forkDetection: forkResult as unknown as Record<string, unknown>,
         });
 
         candidatesFound++;
@@ -151,6 +162,8 @@ export class DiscoveryCron {
             documentSource: candidate.documentSource ?? 'pdf',
             discoveryTier: candidate.discoveryTier ?? 1,
             traction: candidate.traction ?? null,
+            forkDetection: candidate.forkDetection ?? null,
+            textFingerprint: (candidate.resolvedText ?? '').slice(0, 2000),
           },
         });
         whitepapersIngested++;

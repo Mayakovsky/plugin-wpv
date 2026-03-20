@@ -175,6 +175,21 @@ export const MICA_THRESHOLDS = {
   // <3 → NO
 } as const;
 
+// ── Fork Detection ──────────────────────────
+
+/** Description similarity threshold — above this = potential fork */
+export const FORK_DESCRIPTION_SIMILARITY_THRESHOLD = 0.80;
+
+/** Whitepaper text similarity threshold — above this = potential fork */
+export const FORK_WHITEPAPER_SIMILARITY_THRESHOLD = 0.90;
+
+/** Known clone/scam naming patterns */
+export const FORK_NAME_PATTERNS: RegExp[] = [
+  /^(Safe|Moon|Elon|Pepe|Doge|Shib)\w*(Inu|Token|Coin|Finance|Swap|Chain|Verse)$/i,
+  /^(Baby|Mini|Mega|Super|Ultra)\w*(Inu|Doge|Pepe|Shib|Moon|Token|Coin)$/i,
+  /\b(v2|2\.0|fork|clone|pro|plus|classic)\b/i,
+];
+
 // ── Market Traction ─────────────────────────
 
 /** Fast graduation threshold: <7 days at ~2s/block on Base */

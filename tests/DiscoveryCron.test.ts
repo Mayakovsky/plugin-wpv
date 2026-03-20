@@ -70,6 +70,9 @@ function createMockDeps(): DiscoveryCronDeps {
         marketTraction: false,
       }),
     } as never,
+    forkDetector: {
+      detect: vi.fn().mockResolvedValue({ isFork: false }),
+    } as never,
     whitepaperRepo: {
       create: vi.fn().mockResolvedValue({ id: 'wp-1' }),
     } as never,
