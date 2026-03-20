@@ -44,49 +44,87 @@ function loadEnv() {
 
 loadEnv();
 
-const SUPABASE_URL = process.env.SUPABASE_URL!;
-const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY!;
+const DATABASE_URL = process.env.WPV_DATABASE_URL!;
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY!;
 
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error('Missing SUPABASE_URL or SUPABASE_SECRET_KEY');
+if (!DATABASE_URL) {
+  console.error('Missing WPV_DATABASE_URL');
   process.exit(1);
 }
 
-// ── Supabase REST helpers ─────────────────────────────────
+// ── PostgreSQL direct connection ──────────────────────────
 
-async function supabaseInsert(table: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const url = `${SUPABASE_URL}/rest/v1/${table}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': `Bearer ${SUPABASE_KEY}`,
-      'Content-Type': 'application/json',
-      'Content-Profile': 'autognostic',
-      'Prefer': 'return=representation',
-    },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Supabase insert ${table} failed: ${res.status} ${body}`);
-  }
-  const rows = await res.json() as Record<string, unknown>[];
-  return rows[0];
+import postgres from 'postgres';
+const sql = postgres(DATABASE_URL, { ssl: { rejectUnauthorized: false } });
+
+async function dbInsertWhitepaper(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const rows = await sql`
+    INSERT INTO autognostic.wpv_whitepapers (
+      project_name, token_address, chain, document_url,
+      page_count, status, selection_score, metadata_json
+    ) VALUES (
+      ${data.project_name as string}, ${data.token_address as string},
+      ${data.chain as string}, ${data.document_url as string},
+      ${data.page_count as number}, ${data.status as string},
+      ${data.selection_score as number}, ${JSON.stringify(data.metadata_json)}::jsonb
+    ) RETURNING *
+  `;
+  return rows[0] as Record<string, unknown>;
 }
 
-async function supabaseSelect(table: string, query: string): Promise<Record<string, unknown>[]> {
-  const url = `${SUPABASE_URL}/rest/v1/${table}?${query}`;
-  const res = await fetch(url, {
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': `Bearer ${SUPABASE_KEY}`,
-      'Accept-Profile': 'autognostic',
-    },
-  });
-  if (!res.ok) return [];
-  return res.json() as Promise<Record<string, unknown>[]>;
+async function dbInsertVerification(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const rows = await sql`
+    INSERT INTO autognostic.wpv_verifications (
+      whitepaper_id, structural_score, hype_tech_ratio, verdict,
+      total_claims, verified_claims, llm_tokens_used, compute_cost_usd,
+      trigger_source, cache_hit, l1_duration_ms, structural_analysis_json
+    ) VALUES (
+      ${data.whitepaper_id as string}, ${data.structural_score as number},
+      ${data.hype_tech_ratio as number}, ${data.verdict as string},
+      ${data.total_claims as number}, ${data.verified_claims as number},
+      ${data.llm_tokens_used as number}, ${data.compute_cost_usd as number},
+      ${data.trigger_source as string}, ${data.cache_hit as boolean},
+      ${data.l1_duration_ms as number},
+      ${JSON.stringify(data.structural_analysis_json)}::jsonb
+    ) RETURNING *
+  `;
+  return rows[0] as Record<string, unknown>;
+}
+
+async function dbInsertClaim(data: Record<string, unknown>): Promise<void> {
+  await sql`
+    INSERT INTO autognostic.wpv_claims (
+      whitepaper_id, category, claim_text, stated_evidence,
+      source_section, math_proof_present, evaluation_json
+    ) VALUES (
+      ${data.whitepaper_id as string}, ${data.category as string},
+      ${data.claim_text as string}, ${data.stated_evidence as string},
+      ${data.source_section as string}, ${data.math_proof_present as boolean},
+      ${data.evaluation_json ? JSON.stringify(data.evaluation_json) : null}::jsonb
+    )
+  `;
+}
+
+async function dbSelectByAddress(address: string): Promise<Record<string, unknown>[]> {
+  return sql`SELECT id FROM autognostic.wpv_whitepapers WHERE token_address = ${address} LIMIT 1` as unknown as Record<string, unknown>[];
+}
+
+async function dbUpdateVerification(wpId: string, data: Record<string, unknown>): Promise<void> {
+  await sql`
+    UPDATE autognostic.wpv_verifications SET
+      total_claims = ${data.total_claims as number},
+      llm_tokens_used = ${data.llm_tokens_used as number},
+      compute_cost_usd = ${data.compute_cost_usd as number},
+      l2_input_tokens = ${data.l2_input_tokens as number},
+      l2_output_tokens = ${data.l2_output_tokens as number},
+      l2_cost_usd = ${data.l2_cost_usd as number},
+      verdict = ${data.verdict as string}
+    WHERE whitepaper_id = ${wpId}
+  `;
+}
+
+async function dbUpdateWhitepaperStatus(wpId: string, status: string): Promise<void> {
+  await sql`UPDATE autognostic.wpv_whitepapers SET status = ${status} WHERE id = ${wpId}`;
 }
 
 // ── Anthropic API helper (L2 claim extraction) ────────────
@@ -241,17 +279,16 @@ async function fetchText(url: string): Promise<string> {
 
 async function main() {
   console.log(`\n=== Grey Seed Ingestion — ${SEED_TOKENS.length} tokens ===`);
-  console.log(`Supabase: ${SUPABASE_URL}`);
+  console.log(`Database: ${DATABASE_URL.replace(/:[^@]+@/, ':***@')}`);
   console.log(`Anthropic: ${ANTHROPIC_KEY ? 'configured' : 'MISSING'}\n`);
 
-  // ── Step 0: Test Supabase connection ──
-  console.log('Testing Supabase connection...');
+  // ── Step 0: Test database connection ──
+  console.log('Testing database connection...');
   try {
-    const existing = await supabaseSelect('wpv_whitepapers', 'select=id&limit=1');
-    console.log(`  ✓ Connected. Existing records: ${existing.length >= 0 ? 'accessible' : 'unknown'}\n`);
+    const rows = await sql`SELECT count(*) as cnt FROM autognostic.wpv_whitepapers`;
+    console.log(`  ✓ Connected. Existing whitepaper records: ${rows[0].cnt}\n`);
   } catch (err) {
-    console.error(`  ✗ Supabase connection failed: ${err}`);
-    console.error('  Check SUPABASE_URL and SUPABASE_SECRET_KEY');
+    console.error(`  ✗ Database connection failed: ${err}`);
     process.exit(1);
   }
 
@@ -273,10 +310,7 @@ async function main() {
 
     try {
       // Check if already in DB
-      const existing = await supabaseSelect(
-        'wpv_whitepapers',
-        `token_address=eq.${token.address}&select=id&limit=1`,
-      );
+      const existing = await dbSelectByAddress(token.address);
       if (existing.length > 0) {
         console.log(`  → Already in DB (${existing[0].id}), skipping`);
         skipped++;
@@ -338,7 +372,7 @@ async function main() {
       const hypeTechRatio = analyzer.computeHypeTechRatio(text);
 
       // Store whitepaper in Supabase
-      const wpRow = await supabaseInsert('wpv_whitepapers', {
+      const wpRow = await dbInsertWhitepaper({
         project_name: token.name,
         token_address: token.address,
         chain: token.chain.toLowerCase(),
@@ -356,7 +390,7 @@ async function main() {
       });
 
       // Store L1 verification
-      await supabaseInsert('wpv_verifications', {
+      await dbInsertVerification({
         whitepaper_id: wpRow.id,
         structural_score: structuralScore,
         hype_tech_ratio: hypeTechRatio,
@@ -423,7 +457,7 @@ async function main() {
       // Store claims
       for (let j = 0; j < result.claims.length; j++) {
         const claim = result.claims[j];
-        await supabaseInsert('wpv_claims', {
+        await dbInsertClaim({
           whitepaper_id: candidate.wpId,
           category: claim.category,
           claim_text: claim.claimText,
@@ -435,39 +469,18 @@ async function main() {
       }
 
       // Update verification with L2 data
-      const updateUrl = `${SUPABASE_URL}/rest/v1/wpv_verifications?whitepaper_id=eq.${candidate.wpId}`;
-      await fetch(updateUrl, {
-        method: 'PATCH',
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'Content-Type': 'application/json',
-          'Content-Profile': 'autognostic',
-        },
-        body: JSON.stringify({
-          total_claims: result.claims.length,
-          llm_tokens_used: result.inputTokens + result.outputTokens,
-          compute_cost_usd: totalCost,
-          l2_input_tokens: result.inputTokens,
-          l2_output_tokens: result.outputTokens,
-          l2_cost_usd: totalCost,
-          verdict: result.claims.length >= 3 ? 'CONDITIONAL' : 'INSUFFICIENT_DATA',
-          status: 'VERIFIED',
-        }),
+      await dbUpdateVerification(candidate.wpId, {
+        total_claims: result.claims.length,
+        llm_tokens_used: result.inputTokens + result.outputTokens,
+        compute_cost_usd: totalCost,
+        l2_input_tokens: result.inputTokens,
+        l2_output_tokens: result.outputTokens,
+        l2_cost_usd: totalCost,
+        verdict: result.claims.length >= 3 ? 'CONDITIONAL' : 'INSUFFICIENT_DATA',
       });
 
       // Update whitepaper status
-      const wpUpdateUrl = `${SUPABASE_URL}/rest/v1/wpv_whitepapers?id=eq.${candidate.wpId}`;
-      await fetch(wpUpdateUrl, {
-        method: 'PATCH',
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'Content-Type': 'application/json',
-          'Content-Profile': 'autognostic',
-        },
-        body: JSON.stringify({ status: 'VERIFIED' }),
-      });
+      await dbUpdateWhitepaperStatus(candidate.wpId, 'VERIFIED');
 
       l2Success++;
       console.log(`  ✓ ${result.claims.length} claims | $${totalCost.toFixed(4)} | ${result.inputTokens}/${result.outputTokens} tokens`);
@@ -490,4 +503,4 @@ async function main() {
 main().catch((err) => {
   console.error('Fatal error:', err);
   process.exit(1);
-});
+}).finally(() => sql.end());
