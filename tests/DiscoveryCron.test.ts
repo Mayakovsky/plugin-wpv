@@ -61,6 +61,15 @@ function createMockDeps(): DiscoveryCronDeps {
     tieredDiscovery: {
       discover: vi.fn().mockResolvedValue(makeDiscoveryResult()),
     } as never,
+    tractionAnalyzer: {
+      evaluate: vi.fn().mockResolvedValue({
+        graduationSpeed: 'moderate',
+        transferCount7d: 10,
+        uniqueAddresses7d: 5,
+        agdp7d: null,
+        marketTraction: false,
+      }),
+    } as never,
     whitepaperRepo: {
       create: vi.fn().mockResolvedValue({ id: 'wp-1' }),
     } as never,

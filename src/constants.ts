@@ -175,6 +175,30 @@ export const MICA_THRESHOLDS = {
   // <3 → NO
 } as const;
 
+// ── Market Traction ─────────────────────────
+
+/** Fast graduation threshold: <7 days at ~2s/block on Base */
+export const GRADUATION_FAST_THRESHOLD_BLOCKS = 302400; // 7 days
+
+/** Moderate graduation: 7–30 days */
+export const GRADUATION_MODERATE_THRESHOLD_BLOCKS = 1296000; // 30 days
+
+/** Minimum transfer count in 7 days to indicate activity */
+export const TRANSFER_MIN_COUNT_7D = 50;
+
+/** Minimum unique addresses in 7 days */
+export const TRANSFER_MIN_UNIQUE_7D = 30;
+
+/** Blocks to look back for transfers (~7 days at 2s/block) */
+export const TRANSFER_LOOKBACK_BLOCKS = 302400;
+
+/** ERC-20 Transfer event topic (keccak256 of Transfer(address,address,uint256)) */
+export const ERC20_TRANSFER_TOPIC =
+  '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+
+/** Minimum aGDP (weekly USD) to indicate economic activity */
+export const AGDP_MIN_WEEKLY_USD = 100;
+
 // ── Document Discovery ──────────────────────
 
 /** Virtuals Protocol page URL template */
