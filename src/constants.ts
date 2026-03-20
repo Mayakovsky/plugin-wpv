@@ -175,6 +175,29 @@ export const MICA_THRESHOLDS = {
   // <3 → NO
 } as const;
 
+// ── Document Discovery ──────────────────────
+
+/** Virtuals Protocol page URL template */
+export const VIRTUALS_PAGE_URL = 'https://app.virtuals.io/virtuals/';
+
+/** Patterns for finding whitepaper links in HTML */
+export const WHITEPAPER_LINK_PATTERNS = [
+  /href=["']([^"']*\.pdf)["']/gi,
+  /href=["']([^"']*whitepaper[^"']*)["']/gi,
+  /href=["']([^"']*litepaper[^"']*)["']/gi,
+  /href=["']([^"']*tokenomics[^"']*)["']/gi,
+  /href=["']([^"']*\/docs[^"']*)["']/gi,
+] as const;
+
+/** Patterns for known documentation hosting platforms */
+export const DOCS_SITE_PATTERNS = [
+  /gitbook\.io/i,
+  /docs\.\w+\.\w+/i,
+  /notion\.so/i,
+  /medium\.com/i,
+  /github\.com.*\.md/i,
+] as const;
+
 // ── LLM ──────────────────────────────────────
 
 /** Default model for claim extraction / evaluation */

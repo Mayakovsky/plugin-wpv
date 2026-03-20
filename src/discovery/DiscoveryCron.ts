@@ -1,14 +1,14 @@
 // ════════════════════════════════════════════
 // WS-A6: DiscoveryCron
 // Daily discovery orchestrator. Depends on all other A workstreams.
-// Flow: chain events → enrich → resolve → score → filter → store
+// Flow: chain events → enrich → tiered discovery → score → filter → store
 // ════════════════════════════════════════════
 
-import type { DiscoveryRunResult, ProjectCandidate, SelectionSignal, WhitepaperStatus } from '../types';
+import type { DiscoveryRunResult, ProjectCandidate, SelectionSignal, WhitepaperStatus, DocumentSource } from '../types';
 import type { BaseChainListener } from './BaseChainListener';
 import type { AcpMetadataEnricher } from './AcpMetadataEnricher';
 import type { WhitepaperSelector } from './WhitepaperSelector';
-import type { CryptoContentResolver } from './CryptoContentResolver';
+import type { TieredDocumentDiscovery } from './TieredDocumentDiscovery';
 import type { WpvWhitepapersRepo } from '../db/wpvWhitepapersRepo';
 import { TECHNICAL_CLAIM_KEYWORDS, TECHNICAL_CLAIMS_MIN_HITS, MIN_PAGE_COUNT, FRESHNESS_WINDOW_MS } from '../constants';
 import { createLogger } from '../utils/logger';
@@ -18,11 +18,20 @@ const log = createLogger({ operation: 'DiscoveryCron' });
 /** Called after a whitepaper is stored; return a knowledge item ID to link back. */
 export type OnIngestHook = (whitepaperId: string, documentUrl: string, text: string, projectName: string) => Promise<string | null>;
 
+/** Extended candidate with resolution data */
+interface ResolvedCandidate extends ProjectCandidate {
+  resolvedText?: string;
+  resolvedPageCount?: number;
+  resolvedIsImageOnly?: boolean;
+  documentSource?: DocumentSource;
+  discoveryTier?: number;
+}
+
 export interface DiscoveryCronDeps {
   chainListener: BaseChainListener;
   enricher: AcpMetadataEnricher;
   selector: WhitepaperSelector;
-  resolver: CryptoContentResolver;
+  tieredDiscovery: TieredDocumentDiscovery;
   whitepaperRepo: WpvWhitepapersRepo;
   /** Optional hook to mirror ingested whitepapers to the knowledge store. */
   onIngest?: OnIngestHook;
@@ -47,49 +56,32 @@ export class DiscoveryCron {
     const tokens = await this.deps.chainListener.getNewTokensSince(lastBlock);
     log.info('Discovery: tokens scanned', { count: tokens.length });
 
-    const candidates: (ProjectCandidate & { resolvedText?: string; resolvedPageCount?: number; resolvedIsImageOnly?: boolean })[] = [];
+    const candidates: ResolvedCandidate[] = [];
 
-    // 2-4. Enrich, resolve, build signals for each token
+    // 2-4. Enrich, discover document (multi-tier), build signals
     for (const token of tokens) {
       try {
-        // Enrich via ACP — use agentToken (graduated agent) if available, fall back to bonding token
+        // Enrich via ACP — use agentToken (graduated agent) if available
         const lookupAddress = token.agentToken || token.contractAddress;
         const metadata = await this.deps.enricher.enrichToken(lookupAddress);
         if (!metadata) continue;
 
-        // Find a document URL
-        const documentUrl = metadata.linkedUrls.find(
-          (u) => u.endsWith('.pdf') || u.includes('ipfs')
-        ) ?? metadata.linkedUrls[0] ?? null;
-
-        if (!documentUrl) continue;
-
-        // Resolve the document to get text and page count
-        let text = '';
-        let pageCount = 0;
-        let isImageOnly = false;
-        let isPasswordProtected = false;
-        try {
-          const resolved = await this.deps.resolver.resolveWhitepaper(documentUrl);
-          text = resolved.text;
-          pageCount = resolved.pageCount;
-          isImageOnly = resolved.isImageOnly;
-          isPasswordProtected = resolved.isPasswordProtected;
-        } catch (err) {
-          errors.push({
-            url: documentUrl,
-            error: err instanceof Error ? err.message : String(err),
-          });
+        // Multi-tier document discovery
+        const discovery = await this.deps.tieredDiscovery.discover(metadata, lookupAddress);
+        if (!discovery) {
+          errors.push({ url: lookupAddress, error: 'all_discovery_tiers_failed' });
           continue;
         }
 
-        // Skip password-protected or image-only documents (no useful text to verify)
-        if (isPasswordProtected) {
+        const { resolved, documentUrl, documentSource, tier } = discovery;
+
+        // Skip password-protected or image-only documents
+        if (resolved.isPasswordProtected) {
           log.info('Skipping password-protected document', { url: documentUrl });
           errors.push({ url: documentUrl, error: 'password_protected' });
           continue;
         }
-        if (isImageOnly) {
+        if (resolved.isImageOnly) {
           log.info('Skipping image-only document (no text layer)', { url: documentUrl });
           errors.push({ url: documentUrl, error: 'image_only' });
           continue;
@@ -97,11 +89,11 @@ export class DiscoveryCron {
 
         // Build selection signals
         const signals: SelectionSignal = {
-          hasLinkedPdf: documentUrl.endsWith('.pdf') || documentUrl.includes('ipfs'),
-          documentLengthOk: pageCount > MIN_PAGE_COUNT,
-          technicalClaimsDetected: this.detectTechnicalClaims(text),
-          marketTraction: false, // Default — could integrate CoinGecko/DeFiLlama later
-          notAFork: true, // Default — no fork detection yet
+          hasLinkedPdf: documentSource === 'pdf' || documentSource === 'ipfs',
+          documentLengthOk: resolved.pageCount > MIN_PAGE_COUNT,
+          technicalClaimsDetected: this.detectTechnicalClaims(resolved.text),
+          marketTraction: false, // Replaced in 1.6B
+          notAFork: true, // Replaced in 1.6C
           isFresh: (Date.now() - token.timestamp * 1000) < FRESHNESS_WINDOW_MS,
         };
 
@@ -110,9 +102,11 @@ export class DiscoveryCron {
           metadata,
           documentUrl,
           signals,
-          resolvedText: text,
-          resolvedPageCount: pageCount,
-          resolvedIsImageOnly: isImageOnly,
+          resolvedText: resolved.text,
+          resolvedPageCount: resolved.pageCount,
+          resolvedIsImageOnly: resolved.isImageOnly,
+          documentSource,
+          discoveryTier: tier,
         });
 
         candidatesFound++;
@@ -125,7 +119,7 @@ export class DiscoveryCron {
     }
 
     // 5. Filter via selector
-    const filtered = this.deps.selector.filterProjects(candidates) as (ProjectCandidate & { resolvedText?: string; resolvedPageCount?: number; resolvedIsImageOnly?: boolean })[];
+    const filtered = this.deps.selector.filterProjects(candidates) as ResolvedCandidate[];
     candidatesAboveThreshold = filtered.length;
 
     // 6. Store passing candidates + optionally mirror to knowledge store
@@ -144,6 +138,8 @@ export class DiscoveryCron {
           metadataJson: {
             ...(candidate.metadata as unknown as Record<string, unknown>),
             isImageOnly: candidate.resolvedIsImageOnly ?? false,
+            documentSource: candidate.documentSource ?? 'pdf',
+            discoveryTier: candidate.discoveryTier ?? 1,
           },
         });
         whitepapersIngested++;

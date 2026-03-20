@@ -158,14 +158,23 @@ export interface ProjectCandidate {
   score?: number;
 }
 
+export type DocumentSource = 'pdf' | 'docs_site' | 'composed' | 'ipfs';
+
 export interface ResolvedWhitepaper {
   text: string;
   pageCount: number;
   isImageOnly: boolean;
   isPasswordProtected: boolean;
-  source: 'direct' | 'ipfs';
+  source: 'direct' | 'ipfs' | 'composed' | 'docs_site';
   originalUrl: string;
   resolvedUrl: string;
+}
+
+export interface TieredDiscoveryResult {
+  resolved: ResolvedWhitepaper;
+  documentUrl: string;
+  documentSource: DocumentSource;
+  tier: 1 | 2 | 3 | 4;
 }
 
 export interface DiscoveryRunResult {

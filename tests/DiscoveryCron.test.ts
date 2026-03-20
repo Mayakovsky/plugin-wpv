@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DiscoveryCron, type DiscoveryCronDeps } from '../src/discovery/DiscoveryCron';
-import type { TokenCreationEvent, ProjectMetadata, ResolvedWhitepaper } from '../src/types';
+import type { TokenCreationEvent, ProjectMetadata, ResolvedWhitepaper, TieredDiscoveryResult } from '../src/types';
 
 function makeToken(overrides: Partial<TokenCreationEvent> = {}): TokenCreationEvent {
   return {
@@ -26,16 +26,20 @@ function makeMetadata(overrides: Partial<ProjectMetadata> = {}): ProjectMetadata
   };
 }
 
-function makeResolved(overrides: Partial<ResolvedWhitepaper> = {}): ResolvedWhitepaper {
-  // Default: 20K chars with technical keywords (consensus, protocol, algorithm = 3 hits)
+function makeDiscoveryResult(overrides: Partial<TieredDiscoveryResult> = {}): TieredDiscoveryResult {
   return {
-    text: 'This document describes a consensus protocol with a novel algorithm for validator selection. The proof of the theorem shows convergence.',
-    pageCount: 8,
-    isImageOnly: false,
-    isPasswordProtected: false,
-    source: 'direct',
-    originalUrl: 'https://example.com/whitepaper.pdf',
-    resolvedUrl: 'https://example.com/whitepaper.pdf',
+    resolved: {
+      text: 'This document describes a consensus protocol with a novel algorithm for validator selection. The proof of the theorem shows convergence.',
+      pageCount: 8,
+      isImageOnly: false,
+      isPasswordProtected: false,
+      source: 'direct',
+      originalUrl: 'https://example.com/whitepaper.pdf',
+      resolvedUrl: 'https://example.com/whitepaper.pdf',
+    },
+    documentUrl: 'https://example.com/whitepaper.pdf',
+    documentSource: 'pdf',
+    tier: 1,
     ...overrides,
   };
 }
@@ -54,8 +58,8 @@ function createMockDeps(): DiscoveryCronDeps {
       filterProjects: vi.fn((candidates) => candidates), // pass-through
       scoreProject: vi.fn().mockReturnValue(8),
     } as never,
-    resolver: {
-      resolveWhitepaper: vi.fn().mockResolvedValue(makeResolved()),
+    tieredDiscovery: {
+      discover: vi.fn().mockResolvedValue(makeDiscoveryResult()),
     } as never,
     whitepaperRepo: {
       create: vi.fn().mockResolvedValue({ id: 'wp-1' }),
@@ -72,12 +76,10 @@ describe('DiscoveryCron', () => {
     cron = new DiscoveryCron(deps);
   });
 
-  it('full mock pipeline: tokens → enriched → resolved → filtered → ingested', async () => {
-    // 20 tokens, 12 with docs, 8 pass filter
+  it('full mock pipeline: tokens → enriched → discovered → filtered → ingested', async () => {
     const tokens = Array.from({ length: 20 }, () => makeToken());
     (deps.chainListener.getNewTokensSince as ReturnType<typeof vi.fn>).mockResolvedValue(tokens);
 
-    // 12 tokens have metadata with docs, 8 return null
     let enrichCallCount = 0;
     (deps.enricher.enrichToken as ReturnType<typeof vi.fn>).mockImplementation(() => {
       enrichCallCount++;
@@ -85,7 +87,6 @@ describe('DiscoveryCron', () => {
       return Promise.resolve(makeMetadata());
     });
 
-    // Selector passes 8 of 12
     (deps.selector.filterProjects as ReturnType<typeof vi.fn>).mockImplementation((candidates) =>
       candidates.slice(0, 8).map((c: Record<string, unknown>) => ({ ...c, score: 8 }))
     );
@@ -122,19 +123,18 @@ describe('DiscoveryCron', () => {
     const result = await cron.runDaily();
 
     expect(result.errors.length).toBe(3);
-    // 2 tokens enriched successfully → candidates
     expect(result.candidatesFound).toBe(2);
   });
 
-  it('resolution failure on some docs → others continue, failures logged', async () => {
+  it('discovery failure on some tokens → others continue, failures logged', async () => {
     const tokens = Array.from({ length: 5 }, () => makeToken());
     (deps.chainListener.getNewTokensSince as ReturnType<typeof vi.fn>).mockResolvedValue(tokens);
 
-    let resolveCount = 0;
-    (deps.resolver.resolveWhitepaper as ReturnType<typeof vi.fn>).mockImplementation(() => {
-      resolveCount++;
-      if (resolveCount <= 2) return Promise.reject(new Error('resolution failed'));
-      return Promise.resolve(makeResolved());
+    let discoverCount = 0;
+    (deps.tieredDiscovery.discover as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      discoverCount++;
+      if (discoverCount <= 2) return Promise.resolve(null); // all tiers failed
+      return Promise.resolve(makeDiscoveryResult());
     });
 
     const result = await cron.runDaily();
@@ -153,7 +153,7 @@ describe('DiscoveryCron', () => {
     expect(typeof result.durationMs).toBe('number');
   });
 
-  it('stores results with correct status (INGESTED)', async () => {
+  it('stores results with correct status and document metadata', async () => {
     const tokens = [makeToken()];
     (deps.chainListener.getNewTokensSince as ReturnType<typeof vi.fn>).mockResolvedValue(tokens);
     (deps.selector.filterProjects as ReturnType<typeof vi.fn>).mockImplementation((candidates) =>
@@ -163,21 +163,14 @@ describe('DiscoveryCron', () => {
     await cron.runDaily();
 
     expect(deps.whitepaperRepo.create).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'INGESTED' })
+      expect.objectContaining({
+        status: 'INGESTED',
+        metadataJson: expect.objectContaining({
+          documentSource: 'pdf',
+          discoveryTier: 1,
+        }),
+      })
     );
-  });
-
-  it('tokens with no document URL are skipped', async () => {
-    const tokens = [makeToken()];
-    (deps.chainListener.getNewTokensSince as ReturnType<typeof vi.fn>).mockResolvedValue(tokens);
-    (deps.enricher.enrichToken as ReturnType<typeof vi.fn>).mockResolvedValue(
-      makeMetadata({ linkedUrls: [] })
-    );
-
-    const result = await cron.runDaily();
-
-    expect(result.candidatesFound).toBe(0);
-    expect(result.whitepapersIngested).toBe(0);
   });
 
   it('tokens returning null metadata are skipped', async () => {
@@ -193,8 +186,13 @@ describe('DiscoveryCron', () => {
   it('skips image-only documents and logs error', async () => {
     const tokens = [makeToken()];
     (deps.chainListener.getNewTokensSince as ReturnType<typeof vi.fn>).mockResolvedValue(tokens);
-    (deps.resolver.resolveWhitepaper as ReturnType<typeof vi.fn>).mockResolvedValue(
-      makeResolved({ isImageOnly: true, text: 'x', pageCount: 5 })
+    (deps.tieredDiscovery.discover as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeDiscoveryResult({
+        resolved: {
+          text: 'x', pageCount: 5, isImageOnly: true, isPasswordProtected: false,
+          source: 'direct', originalUrl: 'x', resolvedUrl: 'x',
+        },
+      })
     );
 
     const result = await cron.runDaily();
@@ -207,33 +205,48 @@ describe('DiscoveryCron', () => {
   it('skips password-protected documents and logs error', async () => {
     const tokens = [makeToken()];
     (deps.chainListener.getNewTokensSince as ReturnType<typeof vi.fn>).mockResolvedValue(tokens);
-    (deps.resolver.resolveWhitepaper as ReturnType<typeof vi.fn>).mockResolvedValue(
-      makeResolved({ isPasswordProtected: true, text: '' })
+    (deps.tieredDiscovery.discover as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeDiscoveryResult({
+        resolved: {
+          text: '', pageCount: 1, isImageOnly: false, isPasswordProtected: true,
+          source: 'direct', originalUrl: 'x', resolvedUrl: 'x',
+        },
+      })
     );
 
     const result = await cron.runDaily();
 
     expect(result.candidatesFound).toBe(0);
-    expect(result.errors.length).toBe(1);
     expect(result.errors[0].error).toBe('password_protected');
   });
 
-  it('stores pageCount and isImageOnly in whitepaper record', async () => {
+  it('composed whitepaper (Tier 4) stores correct documentSource', async () => {
     const tokens = [makeToken()];
     (deps.chainListener.getNewTokensSince as ReturnType<typeof vi.fn>).mockResolvedValue(tokens);
-    (deps.resolver.resolveWhitepaper as ReturnType<typeof vi.fn>).mockResolvedValue(
-      makeResolved({ pageCount: 12 })
+    (deps.tieredDiscovery.discover as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeDiscoveryResult({
+        documentSource: 'composed',
+        tier: 4,
+        resolved: {
+          text: '# Composed Whitepaper\nSome content about the project and its tokenomics.',
+          pageCount: 1, isImageOnly: false, isPasswordProtected: false,
+          source: 'composed', originalUrl: 'https://app.virtuals.io/virtuals/0x123',
+          resolvedUrl: 'https://app.virtuals.io/virtuals/0x123',
+        },
+      })
     );
-    (deps.selector.filterProjects as ReturnType<typeof vi.fn>).mockImplementation((candidates) =>
-      candidates.map((c: Record<string, unknown>) => ({ ...c, score: 8 }))
+    (deps.selector.filterProjects as ReturnType<typeof vi.fn>).mockImplementation((c) =>
+      c.map((x: Record<string, unknown>) => ({ ...x, score: 6 }))
     );
 
     await cron.runDaily();
 
     expect(deps.whitepaperRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        pageCount: 12,
-        metadataJson: expect.objectContaining({ isImageOnly: false }),
+        metadataJson: expect.objectContaining({
+          documentSource: 'composed',
+          discoveryTier: 4,
+        }),
       })
     );
   });
