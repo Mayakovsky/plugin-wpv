@@ -260,6 +260,17 @@ const SEED_TOKENS: SeedToken[] = [
   { name: 'XAUt', chain: 'Ethereum', address: '0x68749665ff8d2d112fa859aa293f07a622782f38', description: 'Gold-backed token interest as a market hedge.' },
   { name: 'BSB', chain: 'BNB', address: '0x595deaad1eb5476ff1e649fdb7efc36f1e4679cc', description: 'Increased usage in niche trading strategies.' },
   { name: 'USDT0', chain: 'Polygon', address: '0xc2132d05d31c914a87c6611c10748aeb04b58e8f', description: 'Popularity of Tether on cost-effective chains.' },
+  // Wave 2: Base + ETH tokens from Butler intelligence (2026-03-21)
+  { name: 'AXOBOTL', chain: 'Base', address: '0x810affc8aadad2824c65e0a2c5ef96ef1de42ba3', description: 'Top Momentum: +322% price change; strong buy signal.' },
+  { name: 'BLUEAGENT', chain: 'Base', address: '0xf895783b2931c919955e18b5e3343e7c7c456ba3', description: 'Top Momentum: +156% price change; strong buy signal.' },
+  { name: 'LUKSO', chain: 'Base', address: '0x81040cfd2bb62062525d958ad01931988a590b07', description: 'High volatility; heightened selling pressure.' },
+  { name: 'KTA', chain: 'Base', address: '0xc0634090f2fe6c6d75e61be2b949464abb498973', description: 'Consistent buy momentum; price breakout.' },
+  { name: 'VVV', chain: 'Base', address: '0xacfe6019ed1a7dc6f7b508c02d1b04ec88cc21bf', description: 'Organic price breakout; steady trend.' },
+  { name: 'MOLT', chain: 'Base', address: '0xb695559b26bb2c9703ef1935c37aeae9526bab07', description: 'Heightened selling; potential entry or avoid.' },
+  { name: 'ODAI', chain: 'Base', address: '0x0086cff0c1e5d17b19f5bcd4c8840a5b4251d959', description: 'Price pullback; retail cooling off.' },
+  { name: 'ROBOTMONEY', chain: 'Base', address: '0x65021a79aeef22b17cdc1b768f5e79a8618beba3', description: 'Pullback after recent activity.' },
+  { name: 'RARI', chain: 'Ethereum', address: '0xfca59cd816ab1ead66534d82bc21e7515ce441cf', description: 'Narrative breakout (Impossible Finance acquisition).' },
+  { name: 'CULT', chain: 'Ethereum', address: '0xf0f9d895aca5c8678f706fb8216fa22957685a13', description: 'Social "Cult" narrative; high concentration.' },
 ];
 
 const KNOWN_WHITEPAPERS: Record<string, string> = {
@@ -274,6 +285,10 @@ const KNOWN_WHITEPAPERS: Record<string, string> = {
   'USD1': 'https://docs.worldlibertyfinancial.com/',
   'SKILL': 'https://docs.cryptoblades.io/',
   'LGNS': 'https://docs.orionprotocol.io/',
+  'LUKSO': 'https://docs.lukso.tech/',
+  'RARI': 'https://docs.rarible.org/',
+  'CULT': 'https://cultdao.io/',
+  'VVV': 'https://docs.vvv.money/',
 };
 
 // ── L2 threshold: only run LLM extraction on tokens with enough text ──
