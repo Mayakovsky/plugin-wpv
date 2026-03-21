@@ -381,21 +381,22 @@ async function main() {
         wpRow = existing[0];
       } else {
         wpRow = await dbInsertWhitepaper({
-        project_name: token.name,
-        token_address: token.address,
-        chain: token.chain.toLowerCase(),
-        document_url: documentUrl ?? `composed://${token.address}`,
-        page_count: pageCount,
-        status: 'INGESTED',
-        selection_score: structuralScore,
-        metadata_json: {
-          description: token.description,
-          documentSource,
-          triggerSource: 'seed',
-          textFingerprint: text.slice(0, 2000),
-          textLength: text.length,
-        },
-      });
+          project_name: token.name,
+          token_address: token.address,
+          chain: token.chain.toLowerCase(),
+          document_url: documentUrl ?? `composed://${token.address}`,
+          page_count: pageCount,
+          status: 'INGESTED',
+          selection_score: structuralScore,
+          metadata_json: {
+            description: token.description,
+            documentSource,
+            triggerSource: 'seed',
+            textFingerprint: text.slice(0, 2000),
+            textLength: text.length,
+          },
+        });
+      }
 
       // Store L1 verification
       await dbInsertVerification({
