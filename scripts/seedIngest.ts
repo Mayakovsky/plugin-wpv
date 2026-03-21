@@ -309,12 +309,16 @@ async function main() {
     console.log(`[${i + 1}/${SEED_TOKENS.length}] ${token.name} (${token.chain})`);
 
     try {
-      // Check if already in DB
+      // Check if already in DB with verification
       const existing = await dbSelectByAddress(token.address);
       if (existing.length > 0) {
-        console.log(`  → Already in DB (${existing[0].id}), skipping`);
-        skipped++;
-        continue;
+        const hasVerification = await sql`SELECT id FROM autognostic.wpv_verifications WHERE whitepaper_id = ${existing[0].id as string} LIMIT 1`;
+        if (hasVerification.length > 0) {
+          console.log(`  → Already verified (${existing[0].id}), skipping`);
+          skipped++;
+          continue;
+        }
+        console.log(`  → In DB but missing verification — re-processing`);
       }
 
       // Find whitepaper text
@@ -371,8 +375,12 @@ async function main() {
       const structuralScore = analyzer.computeQuickFilterScore(analysis);
       const hypeTechRatio = analyzer.computeHypeTechRatio(text);
 
-      // Store whitepaper in Supabase
-      const wpRow = await dbInsertWhitepaper({
+      // Store whitepaper in Supabase (or use existing)
+      let wpRow: Record<string, unknown>;
+      if (existing.length > 0) {
+        wpRow = existing[0];
+      } else {
+        wpRow = await dbInsertWhitepaper({
         project_name: token.name,
         token_address: token.address,
         chain: token.chain.toLowerCase(),
