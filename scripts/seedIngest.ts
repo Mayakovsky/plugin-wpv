@@ -129,12 +129,35 @@ async function dbUpdateWhitepaperStatus(wpId: string, status: string): Promise<v
 
 // ── Anthropic API helper (L2 claim extraction) ────────────
 
-async function extractClaimsViaApi(text: string, projectName: string): Promise<{
+async function extractClaimsViaApi(text: string, projectName: string, maxRetries = 2): Promise<{
   claims: Array<{ category: string; claimText: string; statedEvidence: string; regulatoryRelevance: boolean }>;
   inputTokens: number;
   outputTokens: number;
 }> {
   if (!ANTHROPIC_KEY) throw new Error('No ANTHROPIC_API_KEY');
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await _callAnthropicApi(text, projectName);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (attempt < maxRetries && (msg.includes('429') || msg.includes('rate_limit'))) {
+        const waitSec = 65;
+        console.log(`    ⏳ Rate limited — waiting ${waitSec}s before retry (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise((r) => setTimeout(r, waitSec * 1000));
+        continue;
+      }
+      throw err;
+    }
+  }
+  return { claims: [], inputTokens: 0, outputTokens: 0 };
+}
+
+async function _callAnthropicApi(text: string, projectName: string): Promise<{
+  claims: Array<{ category: string; claimText: string; statedEvidence: string; regulatoryRelevance: boolean }>;
+  inputTokens: number;
+  outputTokens: number;
+}> {
 
   const systemPrompt = `You are a scientific claim extractor for cryptocurrency and DeFi whitepapers.
 Extract all testable claims. Categorize as: TOKENOMICS, PERFORMANCE, CONSENSUS, SCIENTIFIC.

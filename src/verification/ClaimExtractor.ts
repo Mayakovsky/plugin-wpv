@@ -101,35 +101,70 @@ export class ClaimExtractor {
    * Extract testable claims from whitepaper text.
    * Returns empty array (not error) if no claims found.
    */
-  async extractClaims(text: string, projectName: string): Promise<ExtractedClaim[]> {
+  async extractClaims(text: string, projectName: string, maxRetries = 2): Promise<ExtractedClaim[]> {
     if (!text || text.trim().length === 0) return [];
 
-    try {
-      const response = await this.client.messages.create({
-        model: this.model,
-        max_tokens: CLAIM_EXTRACTION_MAX_TOKENS,
-        system: EXTRACTION_SYSTEM_PROMPT,
-        messages: [
-          {
-            role: 'user',
-            content: `Extract all testable claims from this ${projectName} whitepaper:\n\n${text.slice(0, 50000)}`,
-          },
-        ],
-        tools: [CLAIM_EXTRACTION_TOOL],
-      });
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await this.client.messages.create({
+          model: this.model,
+          max_tokens: CLAIM_EXTRACTION_MAX_TOKENS,
+          system: EXTRACTION_SYSTEM_PROMPT,
+          messages: [
+            {
+              role: 'user',
+              content: `Extract all testable claims from this ${projectName} whitepaper:\n\n${text.slice(0, 50000)}`,
+            },
+          ],
+          tools: [CLAIM_EXTRACTION_TOOL],
+        });
 
-      // Track token usage
-      this.costTracker.recordUsage(
-        response.usage.input_tokens,
-        response.usage.output_tokens,
-      );
+        // Track token usage
+        this.costTracker.recordUsage(
+          response.usage.input_tokens,
+          response.usage.output_tokens,
+        );
 
-      // Extract claims from tool_use response
-      return this.parseResponse(response.content);
-    } catch (err) {
-      log.warn('Claim extraction failed', { projectName }, err);
-      throw err;
+        // Extract claims from tool_use response
+        return this.parseResponse(response.content);
+      } catch (err) {
+        // Retry on rate limit (429) after waiting for the reset window
+        if (attempt < maxRetries && this.isRateLimitError(err)) {
+          const waitMs = this.extractRetryAfter(err);
+          log.warn('Rate limited — waiting before retry', { projectName, attempt: attempt + 1, waitMs });
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+          continue;
+        }
+        log.warn('Claim extraction failed', { projectName }, err);
+        throw err;
+      }
     }
+
+    return []; // Should not reach here
+  }
+
+  private isRateLimitError(err: unknown): boolean {
+    if (err && typeof err === 'object') {
+      const e = err as Record<string, unknown>;
+      if (e.status === 429) return true;
+      const msg = String(e.message ?? '');
+      if (msg.includes('rate_limit') || msg.includes('429')) return true;
+    }
+    return false;
+  }
+
+  private extractRetryAfter(err: unknown): number {
+    // Try to parse retry-after from error headers or message
+    if (err && typeof err === 'object') {
+      const e = err as Record<string, unknown>;
+      const headers = e.headers as Record<string, string> | undefined;
+      if (headers?.['retry-after']) {
+        const seconds = parseInt(headers['retry-after'], 10);
+        if (!isNaN(seconds)) return seconds * 1000;
+      }
+    }
+    // Default: wait 65 seconds (rate limit window is 60s + buffer)
+    return 65000;
   }
 
   private parseResponse(
