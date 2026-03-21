@@ -55,7 +55,7 @@ if (!DATABASE_URL) {
 // ── PostgreSQL direct connection ──────────────────────────
 
 import postgres from 'postgres';
-const sql = postgres(DATABASE_URL, { ssl: { rejectUnauthorized: false } });
+const sql = postgres(DATABASE_URL);
 
 async function dbInsertWhitepaper(data: Record<string, unknown>): Promise<Record<string, unknown>> {
   const rows = await sql`
