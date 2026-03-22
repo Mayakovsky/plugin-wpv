@@ -16,7 +16,7 @@
 | **Framework** | ElizaOS v1.x (`@elizaos/core` 1.6.5) |
 | **Database** | Supabase Pro (PostgreSQL + pgvector, $25/mo) |
 | **Package Manager** | `bun` (required) |
-| **Test Framework** | Vitest (195 tests, 17 files) |
+| **Test Framework** | Vitest (304 tests, 23 files) |
 | **Peer Dependency** | `@elizaos/plugin-autognostic` (optional — for ContentResolver, ScientificSectionDetector, Crossref, S2) |
 | **LLM** | Claude Sonnet via Anthropic API (claim extraction + evaluation) |
 | **Chain** | Base (Virtuals Protocol) |
@@ -54,7 +54,14 @@ src/
 │   ├── AcpMetadataEnricher.ts        # Query ACP registry for agent profiles + linked document URLs
 │   ├── WhitepaperSelector.ts         # Score candidates against selection rubric (max 10, threshold 6)
 │   ├── CryptoContentResolver.ts      # Resolve WP URLs with IPFS fallback, image-only + password detection
-│   └── DiscoveryCron.ts              # Daily orchestrator (06:00 UTC), error-tolerant batch processing
+│   ├── DiscoveryCron.ts              # Daily orchestrator (06:00 UTC), error-tolerant batch processing
+│   ├── ForkDetector.ts               # Detect cloned/forked projects via text similarity + name patterns
+│   ├── MarketTractionAnalyzer.ts     # On-chain signals: time-to-graduation, transfer activity, aGDP
+│   ├── TieredDocumentDiscovery.ts    # Multi-tier WP discovery orchestrator (ACP → website → search → composed)
+│   ├── WebsiteScraper.ts             # Tier 2: Follow project URLs, scrape for whitepaper links
+│   ├── WebSearchFallback.ts          # Tier 3: Web search fallback for WP discovery
+│   ├── SyntheticWhitepaperComposer.ts # Tier 4: Compose WP from Virtuals page when no doc found
+│   └── similarity.ts                 # Text similarity utilities for fork detection
 │
 ├── verification/                     # Stage 2: Three-layer verification pipeline
 │   ├── StructuralAnalyzer.ts         # L1: 6 deterministic checks, no LLM. Quick filter score (1–5), hype/tech ratio
@@ -62,11 +69,11 @@ src/
 │   ├── ClaimEvaluator.ts             # L3: 5 evaluation methods (math, benchmarks, citations, originality, consistency)
 │   ├── ScoreAggregator.ts            # Weighted score aggregation → confidence score (1–100) → verdict
 │   ├── ReportGenerator.ts            # Tiered JSON reports: Legitimacy → Tokenomics → Full → Daily Briefing
-│   └── CostTracker.ts               # LLM token usage + compute cost per verification (COC/V)
+│   └── CostTracker.ts               # LLM token usage + compute cost per verification (COC/V), per-stage breakdown
 │
 ├── acp/                              # Stage 3: Virtuals ACP service interface
 │   ├── AcpWrapper.ts                 # Thin wrapper around @virtuals-protocol/acp-node SDK (implements IAcpClient)
-│   ├── AgentCardConfig.ts            # Static config: Agent Card, 5 offerings, 2 resources, capabilities
+│   ├── AgentCardConfig.ts            # Static config: Agent Card, 5 offerings, 2 resources, ACP v2 deliverable schemas
 │   ├── JobRouter.ts                  # Routes offering_id → correct pipeline depth (cached vs. live)
 │   ├── ResourceHandlers.ts           # Free endpoints: Daily Greenlight List + Scam Alert Feed
 │   └── RateLimiter.ts               # Sequential queue for live verification tiers
@@ -104,8 +111,12 @@ CryptoContentResolver     ClaimEvaluator (L3)              ↓
        ↓                         ↓                    AcpWrapper (on-chain)
 WhitepaperSelector        ScoreAggregator
        ↓                         ↓
-DiscoveryCron             ReportGenerator
-  (daily cron)              (tiered JSON)
+ForkDetector              ReportGenerator
+       ↓                    (tiered JSON)
+MarketTractionAnalyzer
+       ↓
+DiscoveryCron
+  (daily cron)
 ```
 
 ### Three-Layer Verification
@@ -181,20 +192,24 @@ bun run test:watch
 
 ## Testing
 
-Tests live in `tests/` (17 files, 195 tests). All external APIs are mocked (ACP SDK, Anthropic, Base RPC). Eliza `@elizaos/core` is mocked in `tests/setup.ts`.
+Tests live in `tests/` (23 files, 304 tests). All external APIs are mocked (ACP SDK, Anthropic, Base RPC). Eliza `@elizaos/core` is mocked in `tests/setup.ts`.
 
 | File | What it covers |
 |------|---------------|
 | `BaseChainListener.test.ts` | Base chain event polling, dedup, graceful errors |
+| `BaseChainListener.live.test.ts` | Live Base RPC integration (real chain queries) |
 | `AcpMetadataEnricher.test.ts` | ACP registry queries via IAcpClient, PDF/IPFS URL extraction |
 | `WhitepaperSelector.test.ts` | Weighted scoring, PDF required gate, configurable threshold |
 | `CryptoContentResolver.test.ts` | IPFS fallback, image-only detection, password detection |
 | `DiscoveryCron.test.ts` | Daily orchestrator, batch error tolerance |
+| `TieredDocumentDiscovery.test.ts` | Multi-tier WP discovery (website → search → composed) |
+| `ForkDetector.test.ts` | Clone/fork detection via similarity + name patterns |
+| `MarketTractionAnalyzer.test.ts` | On-chain graduation time, transfer activity signals |
 | `StructuralAnalyzer.test.ts` | 6 structural checks, quick filter score, hype/tech ratio |
 | `ClaimExtractor.test.ts` | Anthropic tool_use extraction, cost tracking |
 | `ClaimEvaluator.test.ts` | 5 evaluation methods, batch consistency |
 | `ScoreAggregator.test.ts` | Weighted scores, verdict thresholds, INSUFFICIENT_DATA |
-| `CostTracker.test.ts` | Token usage + compute cost tracking |
+| `CostTracker.test.ts` | Token usage + compute cost tracking, per-stage breakdown |
 | `ReportGenerator.test.ts` | 3 tiered reports + daily briefing, superset rule |
 | `AcpWrapper.test.ts` | IAcpClient implementation, init validation |
 | `ResourceHandlers.test.ts` | Greenlight list, scam alert feed |
@@ -202,6 +217,8 @@ Tests live in `tests/` (17 files, 195 tests). All external APIs are mocked (ACP 
 | `RateLimiter.test.ts` | Sequential queue, wait time, cancellation |
 | `wpvActions.test.ts` | 6 action handlers validate + handler + callback |
 | `wpvSchema.test.ts` | Schema creation, CRUD, indexes, FK constraints |
+| `MicaCompliance.test.ts` | MiCA regulatory compliance checks |
+| `pdfAudit.test.ts` | PDF robustness audit — 20-WP corpus, image-only tracking |
 | `integration.test.ts` | Full pipeline e2e: discovery → verification → delivery |
 
 ---
@@ -251,6 +268,18 @@ WPV_DATABASE_URL=postgresql://postgres:password@db.your-project.supabase.co:5432
 
 ---
 
+## Scripts (Operational)
+
+```
+scripts/
+├── seedIngest.ts        # Seed ingestion: search WPs, run L1+L2, store in Supabase
+└── seedL2.ts            # Targeted L2 extraction for tokens with known documentation
+```
+
+Run on VPS: `cd /opt/grey/plugin-wpv && bun run scripts/seedIngest.ts`
+
+---
+
 ## Related Documentation
 
 - `heartbeat.md` — Live session state, build/test status, next actions
@@ -262,4 +291,4 @@ WPV_DATABASE_URL=postgresql://postgres:password@db.your-project.supabase.co:5432
 
 ---
 
-*Last updated: 2026-03-12*
+*Last updated: 2026-03-22*
