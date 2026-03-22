@@ -101,7 +101,7 @@ const FULL_VERIFICATION_SPEC: DeliverableSpec = {
   inherits_from: 'verify_project_whitepaper',
   required_fields: [
     ...VERIFY_WHITEPAPER_SPEC.required_fields,
-    { path: 'confidenceScore', type: 'number', min: 1, max: 100, required: true },
+    { path: 'confidenceScore', type: 'number', min: 0, max: 100, required: true },
     { path: 'focusAreaScores', type: 'object', required: true },
     { path: 'evaluations', type: 'array', required: true },
     { path: 'llmTokensUsed', type: 'number', min: 0, required: true },
