@@ -1,8 +1,8 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-03-22 (IRL seeding in progress, 3 waves ingested)
-> Updated by: Claude Opus 4.6 — doc refresh
-> Session label: Phase 1 complete, IRL seeding active, 304 tests green
-> Staleness gate: 2026-03-22 — if today is >3 days past this,
+> Last updated: 2026-03-23 (instruction sets rewritten, Virtuals registration in progress)
+> Updated by: Claude Opus 4.6 — Forces session, doc refresh + registration prep
+> Session label: 66 Test certified, Virtuals registration in progress, ACP sandbox next
+> Staleness gate: 2026-03-23 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
 ## Focus (1-3 goals, testable)
@@ -21,12 +21,16 @@
 - [x] **ACP v2 deliverable schemas** — evaluation specs with required fields for all 5 offerings
 - [x] **Seed ingestion pipeline** — seedIngest.ts + seedL2.ts scripts, Supabase storage, auto-retry on 429
 - [x] **Wave 1–3 token seeding** — Base + ETH + Solana + Virtuals agents + PAXG ingested via L1+L2
-- [ ] **IRL testing round** — live agent with real whitepapers, real LLM calls, real Supabase (in progress)
-- [ ] **ACP sandbox graduation** — 10 test transactions, submit graduation request
+- [x] **66 Test (pre-launch certification)** — 66 tokens × 7 endpoints, 267/267 pass, local + VPS certified (2026-03-23)
+- [x] **Pre-graduation tweets** — 5 tweets posted/scheduled on @WhitepaperGrey
+- [x] **Instruction sets rewritten** — Grey_Kovsky_Execution.md + Grey_PreLaunch_Checklist.md updated to match actual state
+- [ ] **Virtuals registration** — Forces registering on ACP developer dashboard NOW. Role: **Provider**.
+- [ ] **ACP sandbox graduation** — blocked on registration → ACP credentials → 10 test transactions
 
 ## What Works (verified)
-- ✅ Build (`bun run build`) — 0 errors — verified 2026-03-22
-- ✅ Tests (`bun run test`) — 304/304 pass across 23 test files — verified 2026-03-22
+- ✅ Build (`bun run build`) — 0 errors — verified 2026-03-23
+- ✅ Tests (`bun run test`) — 304/304 pass across 23 test files — verified 2026-03-23
+- ✅ **66 Test certified** — 267/267 pass (local + VPS), 100% evaluator readiness — verified 2026-03-23
 - ✅ Plugin registration: 6 actions + WpvService registered via Eliza Plugin interface
 - ✅ @elizaos/core mocked in tests/setup.ts (Service base class + logger)
 - ✅ plugin-autognostic as optional peer dependency
@@ -62,7 +66,7 @@
 **Integration:**
 - ✅ Integration e2e test — full pipeline: discovery → verification → delivery
 
-**IRL Seeding (in progress):**
+**IRL Seeding (COMPLETE):**
 - ✅ Seed ingestion script (seedIngest.ts) — L1+L2 with Supabase storage
 - ✅ Targeted L2 script (seedL2.ts) — for tokens with known documentation
 - ✅ Wave 1: initial OG token set
@@ -73,8 +77,8 @@
 
 ## What's Broken
 - (none identified — all 304 tests pass)
-- ⚠️ ACP SDK not tested against live Virtuals contract
-- ⚠️ Public Base RPC (`mainnet.base.org`) throttles `eth_getLogs` — paid RPC needed for production cron
+- ⚠️ ACP SDK not tested against live Virtuals contract (blocked on credentials from Forces)
+- ⚠️ Public Base RPC (`mainnet.base.org`) throttles `eth_getLogs` — paid Alchemy RPC in use on VPS
 - ⚠️ Image-only PDF detection limited by text-derived page count (see PDF audit findings)
 - ⚠️ OCR gap — scanned PDFs return INSUFFICIENT_DATA (deferred to Phase 2)
 
@@ -94,9 +98,19 @@
 | Integration e2e | 1 | ~15 |
 
 ## Next Actions (ordered)
-1. **Complete IRL testing** — verify L3 evaluation on seeded tokens, validate full pipeline end-to-end with real data
-2. **ACP sandbox (Phase 2)** — register agent, 10 test transactions, submit graduation request
-3. **v1 release prep**
+1. **Forces: complete Virtuals registration** — role: Provider. Share ACP credentials with Kovsky.
+2. **Kovsky: update .env** (local + VPS) with ACP credentials, re-run Smoke Test 8/8
+3. **Kovsky: build buyer test agent** — 10 transactions at $0.01 for sandbox graduation
+4. **Sandbox graduation** — Virtuals manual review 24–48hr
+5. **GRADUATION DAY** — fire 22 outreach messages, post pinned thread
+6. **v1 release prep**
+
+## ACP Registration Context
+- **Role:** Provider (confirmed — Grey sells verification services, does not evaluate other agents)
+- **ACP v2 evaluation is optional** — buyers can skip evaluation for data retrieval queries
+- **Grey defines its own Deliverable Requirements schemas** — evaluators check against Grey's published contract
+- **66 Test certified 267/267** — every response matches the published schemas
+- **Pre-graduation tweets posted:** 5 tweets on @WhitepaperGrey (posted/scheduled 2026-03-23)
 
 ## Repo Migration Notes
 This plugin was extracted from `plugin-autognostic` where WPV was built as a subsystem under `src/wpv/`. The decision to separate was made to keep autognostic focused on general knowledge infrastructure (CAKC) and give WPV its own release cycle, dependency tree, and GitHub repo.
@@ -135,6 +149,8 @@ Key changes during migration:
 | 2026-03-21 | Claude Opus 4.6 | ACP v2 deliverable schemas — evaluation specs for all offerings | AgentCardConfig enhanced |
 | 2026-03-21 | Claude Opus 4.6 | confidenceScore min 0 fix | Not-yet-L3-evaluated tokens valid |
 | 2026-03-22 | Claude Opus 4.6 | Update CLAUDE.md + heartbeat to reflect current state | 304/304 tests, docs current |
+| 2026-03-23 | Claude Opus 4.6 | 66 Test evaluator built + run locally and on VPS | 267/267 pass, 100% evaluator readiness |
+| 2026-03-23 | Claude Opus 4.6 (Forces session) | Instruction sets rewritten, ACP role confirmed Provider, tweets posted, Virtuals registration in progress | Docs current, registration underway |
 
 ## Guardrails (DO / DON'T)
 DO:
@@ -169,6 +185,13 @@ bun run test:watch
 
 # Seed ingestion (VPS)
 cd /opt/grey/plugin-wpv && bun run scripts/seedIngest.ts
+
+# SSH to VPS (bun needs PATH export for non-interactive shells)
+ssh -i C:\Users\kidco\.ssh\WhitepaperGrey.pem ubuntu@44.243.254.19
+# Remote: export PATH="$HOME/.bun/bin:$PATH"
+
+# 66 Test (VPS)
+cd /opt/grey/plugin-wpv && bun run scripts/run66Test.ts
 ```
 
 ## Links

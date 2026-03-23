@@ -273,10 +273,12 @@ WPV_DATABASE_URL=postgresql://postgres:password@db.your-project.supabase.co:5432
 ```
 scripts/
 ├── seedIngest.ts        # Seed ingestion: search WPs, run L1+L2, store in Supabase
-└── seedL2.ts            # Targeted L2 extraction for tokens with known documentation
+├── seedL2.ts            # Targeted L2 extraction for tokens with known documentation
+└── run66Test.ts         # Pre-launch certification: 66 tokens × 7 endpoints vs DELIVERABLE_SPECS
 ```
 
 Run on VPS: `cd /opt/grey/plugin-wpv && bun run scripts/seedIngest.ts`
+66 Test: `bun run scripts/run66Test.ts` (local or VPS — results to `scripts/66test_results.json`)
 
 ---
 
