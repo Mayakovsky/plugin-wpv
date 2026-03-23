@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "@elizaos/core": "1.6.5",
-    "drizzle-orm": "^0.36.4"
+    "drizzle-orm": "^0.36.4",
+    "postgres": "^3.4.8"
   },
   "devDependencies": {
     "@types/node": "^20.19.31",
