@@ -70,11 +70,19 @@ export class ReportGenerator {
   ): FullVerificationReport {
     const audit = this.generateTokenomicsAudit(verification, claims, wp, claimScores, analysis);
 
+    // Transform focusAreaScores keys to lowercase for ACP deliverable compliance.
+    // Internal ScoreAggregator uses ClaimCategory enum values (TOKENOMICS, PERFORMANCE, etc.)
+    // but ACP schema requires camelCase/snake_case field names.
+    const lowercaseScores: Record<string, number> = {};
+    for (const [key, value] of Object.entries(verification.focusAreaScores)) {
+      lowercaseScores[key.toLowerCase()] = value;
+    }
+
     return {
       ...audit,
       confidenceScore: verification.confidenceScore,
       evaluations,
-      focusAreaScores: verification.focusAreaScores,
+      focusAreaScores: lowercaseScores,
       llmTokensUsed: verification.llmTokensUsed,
       computeCostUsd: verification.computeCostUsd,
     };

@@ -1,8 +1,8 @@
 # Whitepaper Grey — Kovsky Technical Execution
 
-**Date:** 2026-03-23 (rewritten — reflects actual state from heartbeats)
+**Date:** 2026-03-24 (rewritten — agent registered, plugin-acp needed for ACP marketplace connection)
 **Owner:** Kovsky (autonomous execution)
-**Status:** All pre-ACP work DONE. 66 Test CERTIFIED (267/267). VPS running 24/7. Database seeded (3 waves). Waiting for Forces to complete Virtuals registration and deliver ACP credentials.
+**Status:** Agent registered on Virtuals. 66 Test CERTIFIED. VPS running. Database seeded. ACP credentials available. BLOCKED: Grey cannot receive or fulfill jobs — the ACP SDK connection does not exist yet. Build `plugin-acp` to bridge ElizaOS ↔ ACP marketplace, then sandbox graduation.
 
 ---
 
@@ -12,27 +12,14 @@
 |------|--------|------|---------|
 | plugin-wpv built and tested | ✅ 304/304 | 2026-03-23 | 23 test files |
 | plugin-autognostic built and tested | ✅ 746/746 | 2026-03-14 | |
-| wpv-agent scaffold, build, plugins loaded | ✅ COMPLETE | 2026-03-14 | |
-| wpv-agent tests | ✅ 12/12 | 2026-03-17 | config validation |
-| Supabase schema deployed | ✅ COMPLETE | 2026-03-14 | 3 tables + indexes |
-| .env populated (all except ACP) | ✅ COMPLETE | 2026-03-14 | |
-| Smoke tests 7/8 PASS | ✅ COMPLETE | 2026-03-14 | COC/V $0.026 |
-| Tier 2 + Tier 3 E2E | ✅ COMPLETE | 2026-03-15 | |
-| 1.1 Brand update | ✅ COMPLETE | 2026-03-17 | Grey / Whitepaper Grey |
-| 1.2 Factory contract | ✅ COMPLETE | 2026-03-17 | 0xF66D...3259 wired, chunked getLogs |
-| 1.3 PDF robustness audit | ✅ COMPLETE | 2026-03-17 | 20-WP corpus, 32 tests |
-| 1.4 MiCA compliance | ✅ COMPLETE | 2026-03-17 | L1 structural + L2 regulatory tagging |
-| 1.5 Agent-level tests | ✅ COMPLETE | 2026-03-17 | 12 tests |
-| 1.6A Discovery overhaul | ✅ COMPLETE | 2026-03-18 | Multi-tier: ACP → website → search → composed |
-| 1.6B Market traction | ✅ COMPLETE | 2026-03-18 | On-chain time-to-grad + transfers + aGDP |
-| 1.6C Fork detection | ✅ COMPLETE | 2026-03-18 | Description similarity, name patterns, WP dedup |
-| 1.6D LLM cost tracking | ✅ COMPLETE | 2026-03-18 | Per-stage breakdown, monthly aggregation |
-| 1.7 VPS setup | ✅ COMPLETE | 2026-03-18 | Grey running 24/7 via PM2, reboot recovery tested |
-| 1.8 Seed ingestion | ✅ COMPLETE | 2026-03-21 | 3 waves: Base+ETH+Solana+Virtuals+PAXG |
-| 1.9 ACP v2 deliverable schemas | ✅ COMPLETE | 2026-03-21 | All 5 offerings + 2 resources |
-| 1.10 66 Test | ✅ CERTIFIED | 2026-03-23 | 267/267 pass, local + VPS, 100% readiness |
-| VPS provisioned | ✅ COMPLETE | 2026-03-18 | AWS Lightsail us-west-2 |
-| Paid RPC provisioned | ✅ COMPLETE | 2026-03-18 | Alchemy Base free tier |
+| wpv-agent built, tested, E2E verified | ✅ 12/12 | 2026-03-17 | |
+| Supabase Pro deployed | ✅ COMPLETE | 2026-03-14 | 3 tables + indexes |
+| VPS setup + Grey running 24/7 | ✅ COMPLETE | 2026-03-18 | PM2, reboot recovery tested |
+| Seed ingestion (3 waves) | ✅ COMPLETE | 2026-03-21 | Base+ETH+Solana+Virtuals+PAXG |
+| 66 Test | ✅ CERTIFIED | 2026-03-23 | 267/267 pass, 100% readiness |
+| ACP v2 schemas hardened | ✅ COMPLETE | 2026-03-24 | NOT_IN_DATABASE, flat shape, cache-only tiers |
+| Virtuals registration | ✅ COMPLETE | 2026-03-24 | Role: Provider, 5 offerings registered |
+| Pre-graduation tweets | ✅ COMPLETE | 2026-03-23 | 5 tweets posted/scheduled |
 
 ---
 
@@ -40,8 +27,6 @@
 
 | Item | Value |
 |------|-------|
-| **Provider** | AWS Lightsail |
-| **Region** | us-west-2 (Hillsboro, OR) — matches Supabase |
 | **Public IPv4** | `44.243.254.19` |
 | **SSH Key** | `C:\Users\kidco\.ssh\WhitepaperGrey.pem` |
 | **SSH Command** | `ssh -i C:\Users\kidco\.ssh\WhitepaperGrey.pem ubuntu@44.243.254.19` |
@@ -51,85 +36,223 @@
 
 # ACP v2 Evaluation Context
 
-**There is no platform-level standardized evaluator.** Key facts:
-
-1. **Evaluation is optional.** Buyers can set `evaluator_address` to zero. Most of Grey's $0.25 scans will skip evaluation.
-2. **Buyer is often the evaluator.** If no dedicated evaluator assigned, buyer assumes the role.
-3. **Grey defines the contract.** ACP v2 Deliverable Requirements schemas (already coded into AgentCardConfig.ts) are what evaluators check against.
-4. **Evaluators list present/missing elements.** Every required field must appear in every response.
-5. **Trust Score economics.** Early rejections are disproportionately damaging. Target: 100% approval on first 50 real deliveries.
-6. **Grey's role is Provider** (not Evaluator).
-
-The 66 Test validates Grey's responses against these schemas. 267/267 PASS. Grey is certified ready.
+1. Evaluation is optional — buyers can skip for data retrieval.
+2. Buyer is often the evaluator if no dedicated evaluator assigned.
+3. Grey defines the contract via Deliverable Requirements schemas (coded in AgentCardConfig.ts).
+4. Evaluators list present/missing elements. All declared fields must always be present.
+5. Trust Score: target 100% approval on first 50 deliveries.
+6. Grey's role is **Provider**.
+7. Cache-only tiers ($0.25, $1.50) return `verdict: NOT_IN_DATABASE` with zeroed fields if project not cached. Same flat shape always. Live tiers ($2.00, $3.00) run pipeline if not cached.
+8. `token_address` required on all offerings. `project_name` optional on all.
+9. `focusAreaScores` keys are lowercase: `tokenomics`, `performance`, `consensus`, `scientific`.
 
 ---
 
-# Remaining Tasks — ACP Sandbox and Graduation
+# Remaining Tasks — Build plugin-acp, Then Graduate
 
-**Everything below is blocked on Forces completing Virtuals registration and sharing ACP credentials.**
+## Phase 2A: Build plugin-acp (NEW — ElizaOS ↔ ACP Bridge)
 
-## 2.1 Update .env with ACP Credentials (local + VPS)
+**Why:** The current `AcpWrapper.ts` in plugin-wpv is entirely stubbed. Grey is registered on Virtuals but cannot receive or fulfill any ACP jobs. The `@virtuals-protocol/acp-node` SDK needs to be wired into the ElizaOS runtime.
 
-When Forces provides:
-- `ACP_WALLET_PRIVATE_KEY`
-- `ACP_SESSION_ENTITY_KEY_ID`
-- `ACP_AGENT_WALLET_ADDRESS`
+**Strategy:** Build this as a standalone, generic ElizaOS plugin — `plugin-acp` — that any ElizaOS agent can use to connect to Virtuals ACP. Not WPV-specific. Releasable to the ElizaOS plugin repository. First-mover advantage — no ElizaOS ↔ ACP plugin exists today.
 
-Add to both:
-- Local: `C:\Users\kidco\dev\eliza\wpv-agent\.env`
-- VPS: `/opt/grey/wpv-agent/.env`
+### 2A.1 Create plugin-acp repo
 
-Then rebuild on VPS:
-```bash
-ssh -i C:\Users\kidco\.ssh\WhitepaperGrey.pem ubuntu@44.243.254.19
-cd /opt/grey/wpv-agent && git pull && bun run build
-pm2 restart grey
+```
+C:\Users\kidco\dev\eliza\plugin-acp\
+├── src/
+│   ├── index.ts                 # Plugin registration
+│   ├── AcpService.ts            # Core: wraps AcpClient, lifecycle, handler registry
+│   ├── types.ts                 # ACP-specific types for ElizaOS integration
+│   ├── constants.ts             # Config defaults
+│   ├── actions/
+│   │   ├── acpBrowseAction.ts   # ACP_BROWSE — search marketplace agents
+│   │   ├── acpJobsAction.ts     # ACP_JOBS — list active/completed jobs
+│   │   └── acpWalletAction.ts   # ACP_WALLET — check agent wallet balance
+│   └── utils/
+│       └── logger.ts
+├── tests/
+│   ├── AcpService.test.ts
+│   ├── actions.test.ts
+│   └── setup.ts
+├── package.json
+├── tsconfig.json
+├── vitest.config.ts
+├── CLAUDE.md
+└── heartbeat.md
 ```
 
-## 2.2 Re-Run ACP Smoke Test
+### 2A.2 Install SDK
 
-All 8/8 should now pass (Smoke 7 was the only skip — ACP SDK).
+```bash
+bun add @virtuals-protocol/acp-node
+```
 
-## 2.3 Build Buyer Test Agent
+### 2A.3 Build AcpService
 
-Create `grey-buyer-agent/` — lightweight agent that:
-- Requests each of Grey's 5 offerings at $0.01
-- Validates responses against the published Deliverable Requirements schemas
-- 10 total transactions for sandbox graduation threshold
+The core of the plugin. Extends Eliza `Service`.
 
-## 2.4 Sandbox Graduation
+```typescript
+import AcpClient, { AcpContractClientV2 } from "@virtuals-protocol/acp-node";
 
-1. Grey appears in Sandbox tab after registration
-2. Run 10 test transactions via buyer agent
-3. All should pass (66 Test already certified the response format)
-4. Hit "Proceed to Graduation" button when threshold reached
-5. Virtuals manual review: 24–48 hours
+class AcpService extends Service {
+  private acpClient: AcpClient;
+  private offeringHandlers: Map<string, (job) => Promise<unknown>>;
+  private resourceHandlers: Map<string, () => Promise<unknown>>;
 
-## 2.5 Post-Graduation
+  async start(runtime) {
+    const contractClient = await AcpContractClientV2.build(
+      runtime.getSetting('ACP_WALLET_PRIVATE_KEY'),
+      runtime.getSetting('ACP_SESSION_ENTITY_KEY_ID'),
+      runtime.getSetting('ACP_AGENT_WALLET_ADDRESS'),
+      runtime.getSetting('BASE_RPC_URL'),  // our Alchemy RPC
+    );
+
+    this.acpClient = new AcpClient({
+      acpContractClient: contractClient,
+      onNewTask: async (job) => this.handleNewTask(job),
+    });
+
+    await this.acpClient.init();
+  }
+
+  // Other plugins register handlers for their offering IDs
+  registerOfferingHandler(offeringId: string, handler: (job) => Promise<unknown>) {
+    this.offeringHandlers.set(offeringId, handler);
+  }
+
+  registerResourceHandler(resourceId: string, handler: () => Promise<unknown>) {
+    this.resourceHandlers.set(resourceId, handler);
+  }
+
+  private async handleNewTask(job) {
+    const handler = this.offeringHandlers.get(job.offeringId);
+    if (!handler) {
+      await job.reject("Offering not supported");
+      return;
+    }
+    try {
+      await job.accept("Processing your request");
+      const result = await handler(job);
+      await job.deliver(JSON.stringify(result));
+    } catch (err) {
+      await job.deliver(JSON.stringify({ error: err.message, verdict: "INSUFFICIENT_DATA" }));
+    }
+  }
+
+  // Expose for actions
+  getClient(): AcpClient { return this.acpClient; }
+}
+```
+
+### 2A.4 Build actions
+
+- **ACP_BROWSE** — search for agents: `acpClient.browseAgents(keyword, options)`
+- **ACP_JOBS** — list jobs: `acpClient.getActiveJobs()`, `acpClient.getCompletedJobs()`
+- **ACP_WALLET** — check balance (from SDK wallet utilities)
+
+### 2A.5 Tests
+
+Mock `@virtuals-protocol/acp-node`. Test:
+- AcpService lifecycle (init, teardown)
+- Handler registration and dispatch
+- Job accept/deliver flow
+- Unregistered offering → reject
+- Handler error → structured error response
+- Actions (browse, jobs, wallet)
+
+### 2A.6 Wire plugin-wpv to use plugin-acp
+
+In `WpvService.start()`:
+```typescript
+const acpService = runtime.getService('acp');
+acpService.registerOfferingHandler('project_legitimacy_scan', (job) => this.jobRouter.route(job));
+acpService.registerOfferingHandler('tokenomics_sustainability_audit', (job) => this.jobRouter.route(job));
+acpService.registerOfferingHandler('verify_project_whitepaper', (job) => this.jobRouter.route(job));
+acpService.registerOfferingHandler('full_technical_verification', (job) => this.jobRouter.route(job));
+acpService.registerOfferingHandler('daily_technical_briefing', (job) => this.jobRouter.route(job));
+```
+
+Remove the stubbed AcpWrapper from plugin-wpv. Add `plugin-acp` as a peer dependency.
+
+### 2A.7 Update wpv-agent plugin load order
+
+```
+sql → ollama → anthropic → knowledge → autognostic → acp → wpv → bootstrap
+```
+
+`acp` must load before `wpv` so WpvService can find AcpService at registration time.
+
+Commit: `feat: plugin-acp — ElizaOS bridge to Virtuals ACP marketplace`
+
+---
+
+## Phase 2B: ACP Credentials + Rebuild
+
+### 2B.1 Update .env (local + VPS)
+
+Forces has the credentials from registration. Add:
+```bash
+ACP_WALLET_PRIVATE_KEY=0x...
+ACP_SESSION_ENTITY_KEY_ID=...
+ACP_AGENT_WALLET_ADDRESS=0x...
+```
+
+### 2B.2 Rebuild + Retest
+
+```bash
+bun run build && bun run test  # plugin-acp
+bun run build && bun run test  # plugin-wpv (now depends on plugin-acp)
+bun run build && bun run test  # wpv-agent
+```
+
+Verify: all 8/8 smoke tests pass (including ACP).
+
+### 2B.3 Re-run 66 Test
+
+Verify response shapes still match schemas after the focusAreaScores lowercase change and Verdict enum update.
+
+---
+
+## Phase 2C: Sandbox Graduation
+
+### 2C.1 Build buyer test agent
+
+`grey-buyer-agent/` — uses `plugin-acp` in buyer mode. Sends 10 test jobs at $0.01 each across Grey's 5 offerings.
+
+### 2C.2 Run 10 sandbox transactions
+
+Buyer sends jobs → Grey accepts via `onNewTask` → JobRouter processes → Grey delivers → escrow releases. All 10 must complete successfully.
+
+### 2C.3 Submit graduation request
+
+Hit "Proceed to Graduation" when threshold reached. Virtuals manual review: 24–48 hours.
+
+### 2C.4 Post-graduation
 
 1. Grey appears in Agent-to-Agent tab
 2. Butler starts routing queries
-3. Fire all 22 outreach messages simultaneously
+3. Fire all 22 outreach messages
 4. Post pinned thread on @WhitepaperGrey
-5. Monitor: jobs, payments, Trust Score, COC/V via WPV_COST
+5. Add resources (Greenlight List, Scam Alert Feed) to agent profile once HTTP endpoints are wired
+6. Monitor: Trust Score, jobs, payments, COC/V
 
 ---
 
-# Phase 3: Post-Graduation
+## Phase 3: Post-Graduation
 
-## 3.1 Public Website (Weeks 3–4)
-Next.js on Supabase backend at whitepapergrey.com.
-
-## 3.2 Shadow Pipeline for Local LLM Evaluation (at 300 verifications/month)
-When WPV_COST shows 300+ monthly verifications sustained for 2+ months, begin shadow pipeline comparison (Qwen 2.5 72B or Llama 3.1 70B vs Sonnet).
+### 3.1 Release plugin-acp to ElizaOS plugin repository
+### 3.2 Add HTTP resource endpoints + register on Virtuals profile
+### 3.3 Public website (Next.js on Supabase)
+### 3.4 Shadow pipeline for local LLM evaluation (at 300 verifications/month)
 
 ---
 
 # Operational Notes
 
-## Plugin Load Order (Mandatory)
+## Plugin Load Order (Updated)
 ```
-sql → ollama → anthropic → knowledge → autognostic → wpv → bootstrap
+sql → ollama → anthropic → knowledge → autognostic → acp → wpv → bootstrap
 ```
 
 ## Test Baselines
@@ -138,20 +261,11 @@ sql → ollama → anthropic → knowledge → autognostic → wpv → bootstrap
 |-------|-------|---------------|
 | plugin-autognostic | 746 | 2026-03-14 |
 | plugin-wpv | 304 | 2026-03-23 |
+| plugin-acp | TBD | TBD |
 | wpv-agent | 12 | 2026-03-17 |
-| 66 Test (evaluator) | 267/267 | 2026-03-23 |
+| 66 Test | 267/267 | 2026-03-23 |
 
-## VPS Update Procedure
-```bash
-ssh -i C:\Users\kidco\.ssh\WhitepaperGrey.pem ubuntu@44.243.254.19
-export PATH="$HOME/.bun/bin:$PATH"
-cd /opt/grey/plugin-autognostic && git pull && bun run build
-cd /opt/grey/plugin-wpv && git pull && bun run build
-cd /opt/grey/wpv-agent && git pull && bun run build
-pm2 restart grey
-```
-
-## Environment Variables (Production)
+## Environment Variables (Complete — Production)
 ```bash
 ANTHROPIC_API_KEY=sk-ant-...
 WPV_DATABASE_URL=postgresql://...
@@ -159,13 +273,9 @@ SUPABASE_URL=https://...
 SUPABASE_SECRET_KEY=sb_secret_...
 BASE_RPC_URL=https://base-mainnet.g.alchemy.com/v2/ymBOZFSx-xXOZp0HpU2Gq
 VIRTUALS_FACTORY_CONTRACT=0xF66DeA7b3e897cD44A5a231c61B6B4423d613259
-
-# Waiting for Forces
-ACP_WALLET_PRIVATE_KEY=
-ACP_SESSION_ENTITY_KEY_ID=
-ACP_AGENT_WALLET_ADDRESS=
-
-# Optional
+ACP_WALLET_PRIVATE_KEY=0x...    # From Virtuals registration
+ACP_SESSION_ENTITY_KEY_ID=...   # From Virtuals registration
+ACP_AGENT_WALLET_ADDRESS=0x...  # From Virtuals registration
 WPV_MODEL=claude-sonnet-4-20250514
 ```
 
@@ -174,12 +284,10 @@ WPV_MODEL=claude-sonnet-4-20250514
 | File | Path |
 |------|------|
 | Architecture doc | `plugin-wpv/BUILD DOCS and DATA/WPV_Agent_Technical_Architecture_v1.3.md` |
-| Brand & naming | `wpv-agent/Whitepaper_Grey_Brand_Naming.md` |
 | 66 Test Regimen | `plugin-wpv/BUILD DOCS and DATA/Grey_50_Test_Regimen.md` |
-| Local LLM Evaluation | `wpv-agent/LOCAL_LLM_EVALUATION.md` |
+| 66 Test script | `plugin-wpv/scripts/run66Test.ts` |
 | Plugin heartbeat | `plugin-wpv/heartbeat.md` |
 | Agent heartbeat | `wpv-agent/heartbeat.md` |
-| 66 Test script | `plugin-wpv/scripts/run66Test.ts` |
 
 ---
 

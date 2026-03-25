@@ -28,6 +28,7 @@ export enum Verdict {
   CONDITIONAL = 'CONDITIONAL',
   FAIL = 'FAIL',
   INSUFFICIENT_DATA = 'INSUFFICIENT_DATA',
+  NOT_IN_DATABASE = 'NOT_IN_DATABASE',
 }
 
 export enum MathValidity { VALID = 'VALID', FLAWED = 'FLAWED', UNVERIFIABLE = 'UNVERIFIABLE' }
@@ -106,8 +107,8 @@ export interface StructuralAnalysis {
 }
 
 export interface VerificationResult {
-  structuralScore: number;        // 1–5
-  confidenceScore: number;        // 1–100
+  structuralScore: number;        // 0–5 (0 = not analyzed, 1–5 = real score)
+  confidenceScore: number;        // 0–100
   hypeTechRatio: number;
   verdict: Verdict;
   focusAreaScores: Record<ClaimCategory, number>;
@@ -193,7 +194,7 @@ export interface DiscoveryRunResult {
 export interface LegitimacyScanReport {
   projectName: string;
   tokenAddress: string | null;
-  structuralScore: number;        // 1–5
+  structuralScore: number;        // 0–5 (0 = not analyzed / NOT_IN_DATABASE)
   verdict: Verdict;
   hypeTechRatio: number;
   claimCount: number;
@@ -210,9 +211,9 @@ export interface TokenomicsAuditReport extends LegitimacyScanReport {
 }
 
 export interface FullVerificationReport extends TokenomicsAuditReport {
-  confidenceScore: number;        // 1–100
+  confidenceScore: number;        // 0–100
   evaluations: ClaimEvaluation[];
-  focusAreaScores: Record<ClaimCategory, number>;
+  focusAreaScores: Record<string, number>;  // lowercase keys: tokenomics, performance, consensus, scientific
   llmTokensUsed: number;
   computeCostUsd: number;
 }

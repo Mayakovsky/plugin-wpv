@@ -17,7 +17,7 @@ import type { CryptoContentResolver } from './discovery/CryptoContentResolver';
 import type { DiscoveryCron } from './discovery/DiscoveryCron';
 import type { JobRouter } from './acp/JobRouter';
 import type { ResourceHandlers } from './acp/ResourceHandlers';
-import type { DrizzleDbLike } from './types';
+import type { DrizzleDbLike, OfferingId } from './types';
 import { logger } from './utils/logger';
 
 export interface WpvServiceDeps {
@@ -69,6 +69,9 @@ export class WpvService extends Service {
         verificationsRepo,
       } as WpvServiceDeps);
       logger.info(`WpvService: Initialized with database repos (hasWhitepaperRepo=${!!this.whitepaperRepo}, depsSet=${!!this.deps})`);
+
+      // Register offering handlers with AcpService if available
+      this.registerWithAcp(runtime);
     } catch (err) {
       logger.warn(`WpvService: Init failed — ${(err as Error).message}`);
     }
@@ -106,6 +109,45 @@ export class WpvService extends Service {
     }
 
     return null;
+  }
+
+  /**
+   * Register WPV offering handlers with AcpService (plugin-acp).
+   * Called during init if AcpService is available.
+   * If AcpService is not loaded (e.g., no ACP credentials), this is a no-op.
+   */
+  private registerWithAcp(runtime: IAgentRuntime): void {
+    try {
+      const acpService = runtime.getService('acp') as {
+        registerOfferingHandler?: (id: string, handler: (input: { requirement: Record<string, unknown> }) => Promise<unknown>) => void;
+      } | null;
+
+      if (!acpService?.registerOfferingHandler) {
+        logger.info('WpvService: AcpService not available — skipping ACP handler registration (Grey will operate in standalone mode)');
+        return;
+      }
+
+      const offerings: OfferingId[] = [
+        'project_legitimacy_scan',
+        'tokenomics_sustainability_audit',
+        'verify_project_whitepaper',
+        'full_technical_verification',
+        'daily_technical_briefing',
+      ];
+
+      for (const offeringId of offerings) {
+        acpService.registerOfferingHandler(offeringId, async (input) => {
+          if (!this.deps?.jobRouter) {
+            return { error: 'wpv_not_ready', message: 'WPV JobRouter not initialized' };
+          }
+          return this.deps.jobRouter.handleJob(offeringId, input.requirement);
+        });
+      }
+
+      logger.info(`WpvService: Registered ${offerings.length} offering handlers with AcpService`);
+    } catch (err) {
+      logger.warn(`WpvService: ACP registration failed — ${(err as Error).message}`);
+    }
   }
 
   async stop(): Promise<void> {

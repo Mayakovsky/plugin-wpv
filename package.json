@@ -23,10 +23,14 @@
     "vitest": "^1.6.1"
   },
   "peerDependencies": {
-    "@elizaos/plugin-autognostic": ">=0.1.0"
+    "@elizaos/plugin-autognostic": ">=0.1.0",
+    "@elizaos/plugin-acp": ">=0.1.0"
   },
   "peerDependenciesMeta": {
     "@elizaos/plugin-autognostic": {
+      "optional": true
+    },
+    "@elizaos/plugin-acp": {
       "optional": true
     }
   },

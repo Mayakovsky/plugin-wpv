@@ -17,9 +17,23 @@
 | **Database** | Supabase Pro (PostgreSQL + pgvector, $25/mo) |
 | **Package Manager** | `bun` (required) |
 | **Test Framework** | Vitest (304 tests, 23 files) |
-| **Peer Dependency** | `@elizaos/plugin-autognostic` (optional — for ContentResolver, ScientificSectionDetector, Crossref, S2) |
+| **Peer Dependencies** | `@elizaos/plugin-autognostic` (optional), `plugin-acp` (required — ACP marketplace connection) |
 | **LLM** | Claude Sonnet via Anthropic API (claim extraction + evaluation) |
 | **Chain** | Base (Virtuals Protocol) |
+
+---
+
+## CRITICAL: AcpWrapper.ts Is a Stub
+
+**The current `src/acp/AcpWrapper.ts` is entirely stubbed.** Every method logs and returns empty. The `@virtuals-protocol/acp-node` SDK has never been wired in. Grey cannot receive or fulfill ACP jobs.
+
+**Resolution:** A standalone `plugin-acp` is being built to bridge ElizaOS ↔ Virtuals ACP. When complete, `plugin-wpv` will register offering handlers via `runtime.getService('acp')` and the stubbed AcpWrapper will be removed. See `BUILD DOCS and DATA/Grey_Kovsky_Execution.md` Phase 2A for the full plan.
+
+**Plugin load order (when plugin-acp is ready):**
+```
+sql → ollama → anthropic → knowledge → autognostic → acp → wpv → bootstrap
+```
+`acp` must load before `wpv` so WpvService can find AcpService at registration time.
 
 ---
 
@@ -27,14 +41,9 @@
 
 **Full read/write access granted to all files in this repository.**
 
-Read without confirmation:
-- `**/*` — All files in this repository and subfolders
+Read/Modify without confirmation: `**/*`
 
-Modify without confirmation:
-- `**/*` — All files in this repository and subfolders
-- This includes: source code, tests, docs, BUILD DOCS and DATA, package.json, configs, and any other files
-
-**Execution mode:** Always run with `--dangerously-skip-permissions` (auto-accept all tool calls). No confirmation needed for any operation within this repository.
+**Execution mode:** Always run with `--dangerously-skip-permissions`.
 
 ---
 
@@ -50,201 +59,99 @@ src/
 ├── WpvService.ts                     # Central service — dependency container for all WPV subsystems
 │
 ├── discovery/                        # Stage 1: Find and ingest crypto whitepapers
-│   ├── BaseChainListener.ts          # Poll Base chain for Virtuals bonding curve token creation events
-│   ├── AcpMetadataEnricher.ts        # Query ACP registry for agent profiles + linked document URLs
-│   ├── WhitepaperSelector.ts         # Score candidates against selection rubric (max 10, threshold 6)
-│   ├── CryptoContentResolver.ts      # Resolve WP URLs with IPFS fallback, image-only + password detection
-│   ├── DiscoveryCron.ts              # Daily orchestrator (06:00 UTC), error-tolerant batch processing
-│   ├── ForkDetector.ts               # Detect cloned/forked projects via text similarity + name patterns
-│   ├── MarketTractionAnalyzer.ts     # On-chain signals: time-to-graduation, transfer activity, aGDP
-│   ├── TieredDocumentDiscovery.ts    # Multi-tier WP discovery orchestrator (ACP → website → search → composed)
-│   ├── WebsiteScraper.ts             # Tier 2: Follow project URLs, scrape for whitepaper links
-│   ├── WebSearchFallback.ts          # Tier 3: Web search fallback for WP discovery
-│   ├── SyntheticWhitepaperComposer.ts # Tier 4: Compose WP from Virtuals page when no doc found
-│   └── similarity.ts                 # Text similarity utilities for fork detection
+│   ├── BaseChainListener.ts
+│   ├── AcpMetadataEnricher.ts
+│   ├── WhitepaperSelector.ts
+│   ├── CryptoContentResolver.ts
+│   ├── DiscoveryCron.ts
+│   ├── ForkDetector.ts
+│   ├── MarketTractionAnalyzer.ts
+│   ├── TieredDocumentDiscovery.ts
+│   ├── WebsiteScraper.ts
+│   ├── WebSearchFallback.ts
+│   ├── SyntheticWhitepaperComposer.ts
+│   └── similarity.ts
 │
 ├── verification/                     # Stage 2: Three-layer verification pipeline
-│   ├── StructuralAnalyzer.ts         # L1: 6 deterministic checks, no LLM. Quick filter score (1–5), hype/tech ratio
-│   ├── ClaimExtractor.ts             # L2: Claude Sonnet structured output. Extracts testable claims by category
-│   ├── ClaimEvaluator.ts             # L3: 5 evaluation methods (math, benchmarks, citations, originality, consistency)
-│   ├── ScoreAggregator.ts            # Weighted score aggregation → confidence score (1–100) → verdict
-│   ├── ReportGenerator.ts            # Tiered JSON reports: Legitimacy → Tokenomics → Full → Daily Briefing
-│   └── CostTracker.ts               # LLM token usage + compute cost per verification (COC/V), per-stage breakdown
+│   ├── StructuralAnalyzer.ts         # L1: score 0–5 (0=not analyzed), hype/tech ratio
+│   ├── ClaimExtractor.ts             # L2: Claude Sonnet structured output
+│   ├── ClaimEvaluator.ts             # L3: 5 evaluation methods
+│   ├── ScoreAggregator.ts            # → confidence score (0–100) → verdict
+│   ├── ReportGenerator.ts            # Tiered JSON reports (focusAreaScores keys: lowercase)
+│   └── CostTracker.ts               # Per-stage breakdown
 │
-├── acp/                              # Stage 3: Virtuals ACP service interface
-│   ├── AcpWrapper.ts                 # Thin wrapper around @virtuals-protocol/acp-node SDK (implements IAcpClient)
-│   ├── AgentCardConfig.ts            # Static config: Agent Card, 5 offerings, 2 resources, ACP v2 deliverable schemas
-│   ├── JobRouter.ts                  # Routes offering_id → correct pipeline depth (cached vs. live)
-│   ├── ResourceHandlers.ts           # Free endpoints: Daily Greenlight List + Scam Alert Feed
-│   └── RateLimiter.ts               # Sequential queue for live verification tiers
+├── acp/                              # Stage 3: ACP service interface
+│   ├── AcpWrapper.ts                 # ⚠️ STUB — being replaced by plugin-acp
+│   ├── AgentCardConfig.ts            # 5 offerings, 2 resources, ACP v2 deliverable schemas
+│   ├── JobRouter.ts                  # Routes offering_id → pipeline depth (cached vs. live)
+│   ├── ResourceHandlers.ts           # Greenlight List + Scam Alert Feed
+│   └── RateLimiter.ts               # Sequential queue for live tiers
 │
-├── db/                               # Database layer (Drizzle ORM on Supabase PostgreSQL)
-│   ├── wpvSchema.ts                  # 3 tables: wpv_whitepapers, wpv_claims, wpv_verifications
-│   ├── wpvWhitepapersRepo.ts         # CRUD + listByStatus, listByVerdict, findByProjectName
-│   ├── wpvClaimsRepo.ts             # CRUD + findByWhitepaperId, listByCategory
-│   └── wpvVerificationsRepo.ts       # CRUD + getGreenlightList, getScamAlerts, getLatestDailyBatch
-│
-├── actions/                          # Eliza action handlers (slash commands)
-│   ├── wpvScanAction.ts              # WPV_SCAN — trigger manual discovery run
-│   ├── wpvVerifyAction.ts            # WPV_VERIFY — submit URL for verification
-│   ├── wpvStatusAction.ts            # WPV_STATUS — pipeline counts by status
-│   ├── wpvCostAction.ts              # WPV_COST — LLM token usage and cost
-│   ├── wpvGreenlightAction.ts        # WPV_GREENLIGHT — today's verified projects
-│   └── wpvAlertsAction.ts            # WPV_ALERTS — flagged projects
-│
+├── db/                               # Drizzle ORM on Supabase PostgreSQL
+├── actions/                          # 6 Eliza action handlers
 └── utils/
-    ├── logger.ts                     # Structured logger with logger.child()
-    └── safeSerialize.ts              # Cyclic-safe JSON serialization
 ```
 
 ### Pipeline Flow
 
 ```
 [1] DISCOVERY  →  [2] VERIFICATION  →  [3] DELIVERY
- Scan + Ingest      Analyze + Score      Serve via ACP + Butler
-
-BaseChainListener        StructuralAnalyzer (L1)       JobRouter
-       ↓                         ↓                         ↓
-AcpMetadataEnricher       ClaimExtractor (L2)         5 Paid Offerings
-       ↓                         ↓                    2 Free Resources
-CryptoContentResolver     ClaimEvaluator (L3)              ↓
-       ↓                         ↓                    AcpWrapper (on-chain)
-WhitepaperSelector        ScoreAggregator
-       ↓                         ↓
-ForkDetector              ReportGenerator
-       ↓                    (tiered JSON)
-MarketTractionAnalyzer
-       ↓
-DiscoveryCron
-  (daily cron)
+                                         JobRouter
+                                            ↓
+                                      plugin-acp (AcpService)
+                                            ↓
+                                      @virtuals-protocol/acp-node
+                                            ↓
+                                      ACP Marketplace (on-chain)
 ```
 
-### Three-Layer Verification
+### Verdict Enum
 
-| Layer | Component | LLM | Cost/WP | Output |
-|-------|-----------|-----|---------|--------|
-| L1 | StructuralAnalyzer | No | $0.02 | Quick filter score (1–5), hype/tech ratio |
-| L2 | ClaimExtractor | Claude Sonnet | $0.08–$0.15 | Categorized claims with evidence |
-| L3 | ClaimEvaluator | Claude Sonnet | $0.20–$0.40 | Per-claim evaluations → confidence score (1–100) → verdict |
-
-Full pipeline: $0.29–$0.57 per whitepaper.
+```typescript
+enum Verdict {
+  PASS = 'PASS',
+  CONDITIONAL = 'CONDITIONAL',
+  FAIL = 'FAIL',
+  INSUFFICIENT_DATA = 'INSUFFICIENT_DATA',
+  NOT_IN_DATABASE = 'NOT_IN_DATABASE',  // Cache-only tiers, project not cached
+}
+```
 
 ### ACP Service Interface
 
-**Role:** Provider / Evaluator
+**Role:** Provider
 
-**5 Paid Offerings:**
-
-| offering_id | Display Name | Price | Pipeline |
-|-------------|-------------|-------|----------|
-| project_legitimacy_scan | Project Legitimacy Scan | $0.25 | L1 cached |
-| tokenomics_sustainability_audit | Tokenomics Sustainability Audit | $1.50 | L1+L2 cached |
-| verify_project_whitepaper | Verify Project Whitepaper | $2.00 | L1+L2 live (flywheel) |
-| full_technical_verification | Full Technical Verification | $3.00 | L1+L2+L3 |
-| daily_technical_briefing | Daily Technical Briefing | $8.00 | Cron summary |
+| offering_id | Price | Pipeline | SLA |
+|-------------|-------|----------|-----|
+| project_legitimacy_scan | $0.25 | Cache-only | 2s |
+| tokenomics_sustainability_audit | $1.50 | Cache-only | 2s |
+| verify_project_whitepaper | $2.00 | Cache or live L1+L2 | 10min |
+| full_technical_verification | $3.00 | Cache or live L1+L2+L3 | 15min |
+| daily_technical_briefing | $8.00 | Cron summary | 5s |
 
 **2 Free Resources:** Daily Greenlight List, Scam Alert Feed
 
-### WpvService — Dependency Container
+**Input:** `token_address` required, `project_name` optional on all offerings.
 
-`WpvService` extends Eliza's `Service` class and holds all WPV dependencies. Actions resolve it from the runtime via `runtime.getService('wpv')` and access subsystems through typed getters. This avoids passing 13 constructor dependencies to each action.
+**Cache-only tiers ($0.25, $1.50):** Never run live pipeline. Return flat shape with `verdict: NOT_IN_DATABASE` and zeroed fields if uncached. All declared deliverables always present.
 
-### Relationship with plugin-autognostic
-
-`plugin-autognostic` is an **optional** peer dependency. When available, WPV uses:
-- `ContentResolver` — URL→text pipeline (content-type routing, PDF magic bytes, HTML quality gate)
-- `ScientificSectionDetector` — Section detection for structural analysis
-- `ScientificPaperDetector` — DOI/Crossref verification for citation checks
-- `SemanticScholarService` — Citation graph for L3 claim evaluation
-
-When not available, WPV falls back to its own `CryptoContentResolver` for PDF fetching and text extraction.
-
-### Database Schema (Supabase Pro — PostgreSQL + pgvector)
-
-```sql
-wpv_whitepapers           -- Discovered/ingested WPs: project_name, token_address, chain, status, selection_score
-wpv_claims                -- Extracted claims: category, claim_text, evidence, evaluation_json, claim_score
-wpv_verifications         -- Results: structural_score, confidence_score, hype_tech_ratio, verdict, report_json
-```
-
-**Key indexes:** Composite on (project_name, chain). GIN on evaluation_json. Partial on verdict='PASS' (Greenlight). Partial on verdict='FAIL' AND hype_tech_ratio > 3.0 (Scam Alerts).
-
----
-
-## Development Commands
-
-```bash
-# Build plugin
-cd C:\Users\kidco\dev\eliza\plugin-wpv
-bun run build
-
-# Run all tests
-bun run test
-
-# Run single test file
-npx vitest run tests/JobRouter.test.ts
-
-# Run tests in watch mode
-bun run test:watch
-```
-
----
-
-## Testing
-
-Tests live in `tests/` (23 files, 304 tests). All external APIs are mocked (ACP SDK, Anthropic, Base RPC). Eliza `@elizaos/core` is mocked in `tests/setup.ts`.
-
-| File | What it covers |
-|------|---------------|
-| `BaseChainListener.test.ts` | Base chain event polling, dedup, graceful errors |
-| `BaseChainListener.live.test.ts` | Live Base RPC integration (real chain queries) |
-| `AcpMetadataEnricher.test.ts` | ACP registry queries via IAcpClient, PDF/IPFS URL extraction |
-| `WhitepaperSelector.test.ts` | Weighted scoring, PDF required gate, configurable threshold |
-| `CryptoContentResolver.test.ts` | IPFS fallback, image-only detection, password detection |
-| `DiscoveryCron.test.ts` | Daily orchestrator, batch error tolerance |
-| `TieredDocumentDiscovery.test.ts` | Multi-tier WP discovery (website → search → composed) |
-| `ForkDetector.test.ts` | Clone/fork detection via similarity + name patterns |
-| `MarketTractionAnalyzer.test.ts` | On-chain graduation time, transfer activity signals |
-| `StructuralAnalyzer.test.ts` | 6 structural checks, quick filter score, hype/tech ratio |
-| `ClaimExtractor.test.ts` | Anthropic tool_use extraction, cost tracking |
-| `ClaimEvaluator.test.ts` | 5 evaluation methods, batch consistency |
-| `ScoreAggregator.test.ts` | Weighted scores, verdict thresholds, INSUFFICIENT_DATA |
-| `CostTracker.test.ts` | Token usage + compute cost tracking, per-stage breakdown |
-| `ReportGenerator.test.ts` | 3 tiered reports + daily briefing, superset rule |
-| `AcpWrapper.test.ts` | IAcpClient implementation, init validation |
-| `ResourceHandlers.test.ts` | Greenlight list, scam alert feed |
-| `JobRouter.test.ts` | 5 offering routes, cached/live pipeline, flywheel |
-| `RateLimiter.test.ts` | Sequential queue, wait time, cancellation |
-| `wpvActions.test.ts` | 6 action handlers validate + handler + callback |
-| `wpvSchema.test.ts` | Schema creation, CRUD, indexes, FK constraints |
-| `MicaCompliance.test.ts` | MiCA regulatory compliance checks |
-| `pdfAudit.test.ts` | PDF robustness audit — 20-WP corpus, image-only tracking |
-| `integration.test.ts` | Full pipeline e2e: discovery → verification → delivery |
+**focusAreaScores keys:** lowercase (`tokenomics`, `performance`, `consensus`, `scientific`). Internal ScoreAggregator uses uppercase ClaimCategory enum; ReportGenerator transforms to lowercase at the output boundary.
 
 ---
 
 ## Environment Variables
 
 ```bash
-# LLM (required for L2/L3 verification)
 ANTHROPIC_API_KEY=sk-ant-...
-
-# WPV Model (default: claude-sonnet-4-20250514)
 WPV_MODEL=claude-sonnet-4-20250514
-
-# ACP Integration (Virtuals Protocol)
 ACP_WALLET_PRIVATE_KEY=0x...
-ACP_SESSION_ENTITY_KEY_ID=your-key-id
+ACP_SESSION_ENTITY_KEY_ID=...
 ACP_AGENT_WALLET_ADDRESS=0x...
-
-# Base Chain
-BASE_RPC_URL=https://mainnet.base.org
-VIRTUALS_FACTORY_CONTRACT=0x...
-
-# Supabase (production — $25/mo Pro plan)
+BASE_RPC_URL=https://base-mainnet.g.alchemy.com/v2/your-key
+VIRTUALS_FACTORY_CONTRACT=0xF66DeA7b3e897cD44A5a231c61B6B4423d613259
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SECRET_KEY=sb_secret_...
-WPV_DATABASE_URL=postgresql://postgres:password@db.your-project.supabase.co:5432/postgres
+WPV_DATABASE_URL=postgresql://...
 ```
 
 ---
@@ -254,43 +161,39 @@ WPV_DATABASE_URL=postgresql://postgres:password@db.your-project.supabase.co:5432
 ### DO
 - Always call `callback()` before returning from action handlers
 - Destructure results to primitive fields in `ActionResult.data`
-- Build plugin with `bun run build`
-- Mock ALL external APIs in tests (ACP SDK, Anthropic, Base RPC)
-- Use `logger.child()` for component-specific logging
+- Build with `bun run build`, test with `bun run test`
+- Mock ALL external APIs in tests
 - Update heartbeat after every session
 
 ### DON'T
-- Spread opaque objects into `ActionResult.data` (causes cyclic serialization)
-- Skip `callback` in handlers (ElizaOS falls back to sendMessage → infinite loop)
-- Put API keys in source files or committed configs
-- Make tests depend on live API calls — everything must be mockable
-- Skip COC/V tracking — critical business metric
+- Spread opaque objects into `ActionResult.data` (cyclic serialization)
+- Skip `callback` in handlers (infinite loop)
+- Put API keys in source files
+- Make tests depend on live API calls
+- Skip COC/V tracking
 
 ---
 
-## Scripts (Operational)
+## Scripts
 
 ```
 scripts/
-├── seedIngest.ts        # Seed ingestion: search WPs, run L1+L2, store in Supabase
-├── seedL2.ts            # Targeted L2 extraction for tokens with known documentation
-└── run66Test.ts         # Pre-launch certification: 66 tokens × 7 endpoints vs DELIVERABLE_SPECS
+├── seedIngest.ts        # Seed ingestion: L1+L2, Supabase storage
+├── seedL2.ts            # Targeted L2 extraction
+└── run66Test.ts         # Pre-launch certification: 66 tokens × 7 endpoints
 ```
-
-Run on VPS: `cd /opt/grey/plugin-wpv && bun run scripts/seedIngest.ts`
-66 Test: `bun run scripts/run66Test.ts` (local or VPS — results to `scripts/66test_results.json`)
 
 ---
 
 ## Related Documentation
 
-- `heartbeat.md` — Live session state, build/test status, next actions
-- `BUILD DOCS and DATA/WPV_Agent_Technical_Architecture_v1.3.md` — Full architecture spec
-- `BUILD DOCS and DATA/WPV_Kovsky_Instruction_Set.md` — Phase A→B→C build specification
-- `BUILD DOCS and DATA/WPV_Strategic_Analysis_Report_final.md` — Market intelligence and pricing
-- `BUILD DOCS and DATA/Butler_Intelligence.md` — Butler scan results
-- `README.md` — Setup and usage guide
+- `heartbeat.md` — Live session state
+- `BUILD DOCS and DATA/Grey_Kovsky_Execution.md` — Current execution plan (includes plugin-acp build spec)
+- `BUILD DOCS and DATA/Grey_PreLaunch_Checklist.md` — Forces tasks
+- `BUILD DOCS and DATA/Grey_50_Test_Regimen.md` — 66 Test specification
+- `BUILD DOCS and DATA/WPV_Agent_Technical_Architecture_v1.3.md` — Full architecture
+- `README.md` — Setup and usage
 
 ---
 
-*Last updated: 2026-03-22*
+*Last updated: 2026-03-24*

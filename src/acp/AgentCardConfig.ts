@@ -29,7 +29,7 @@ export interface DeliverableSpec {
 
 export const AGENT_CARD = {
   name: 'Whitepaper Grey',
-  role: 'Provider / Evaluator',
+  role: 'Provider',
   category: 'Research & Verification',
   shortDescription: 'Grey — Autonomous Whitepaper Verifier. Scam detection, MiCA compliance, and math proof for DeFi.',
   fullDescription:
@@ -55,9 +55,14 @@ export const AGENT_CARD = {
 
 // ── Deliverable Schemas (ACP v2 Evaluation Specs) ─────────
 // Defined before OFFERINGS since they are referenced in the offering configs.
+//
+// NOTE: structuralScore min is 0 (not 1). A score of 0 means "not analyzed"
+// and accompanies verdict=NOT_IN_DATABASE on cache-only tiers. Real scores
+// range 1–5. This ensures a single flat response shape — all declared fields
+// are always present regardless of whether the project is cached.
 
 const LEGITIMACY_SCAN_FIELDS: FieldSpec[] = [
-  { path: 'structuralScore', type: 'number', min: 1, max: 5, required: true },
+  { path: 'structuralScore', type: 'number', min: 0, max: 5, required: true },
   { path: 'hypeTechRatio', type: 'number', min: 0, required: true },
   { path: 'claimCount', type: 'number', min: 0, required: true },
   { path: 'claimsMicaCompliance', type: 'string', enum_values: ['YES', 'NO', 'NOT_MENTIONED'], required: true },
@@ -65,7 +70,7 @@ const LEGITIMACY_SCAN_FIELDS: FieldSpec[] = [
   { path: 'micaSummary', type: 'string', required: true },
   { path: 'generatedAt', type: 'string', required: true },
   { path: 'projectName', type: 'string', required: true },
-  { path: 'verdict', type: 'string', enum_values: ['PASS', 'CONDITIONAL', 'FAIL', 'INSUFFICIENT_DATA'], required: true },
+  { path: 'verdict', type: 'string', enum_values: ['PASS', 'CONDITIONAL', 'FAIL', 'INSUFFICIENT_DATA', 'NOT_IN_DATABASE'], required: true },
 ];
 
 const LEGITIMACY_SCAN_SPEC: DeliverableSpec = {
@@ -87,7 +92,8 @@ const TOKENOMICS_AUDIT_SPEC: DeliverableSpec = {
 
 const VERIFY_WHITEPAPER_SPEC: DeliverableSpec = {
   offering_id: 'verify_project_whitepaper',
-  max_response_time_ms: 2000,
+  // SLA: 10 minutes (cached: 2s, live pipeline: 3-8 min)
+  max_response_time_ms: 600000,
   inherits_from: 'tokenomics_sustainability_audit',
   required_fields: [
     ...TOKENOMICS_AUDIT_SPEC.required_fields,
@@ -97,7 +103,8 @@ const VERIFY_WHITEPAPER_SPEC: DeliverableSpec = {
 
 const FULL_VERIFICATION_SPEC: DeliverableSpec = {
   offering_id: 'full_technical_verification',
-  max_response_time_ms: 2000,
+  // SLA: 15 minutes (cached: 2s, live pipeline: 3-10 min)
+  max_response_time_ms: 900000,
   inherits_from: 'verify_project_whitepaper',
   required_fields: [
     ...VERIFY_WHITEPAPER_SPEC.required_fields,
@@ -165,13 +172,14 @@ export const OFFERINGS: OfferingConfig[] = [
     id: 'project_legitimacy_scan',
     displayName: 'Project Legitimacy Scan',
     price: 0.25,
-    description: 'Returns JSON with: structural_score (1-5), hype_tech_ratio (float), mica_compliance object (claims_mica_compliance, mica_compliant, mica_summary), section_count, citation_count, document_source. Cached results in under 2 seconds. Live analysis for uncached projects may take 30-60 seconds.',
+    description: 'Cache-only lookup. Returns structured JSON with verdict (PASS/CONDITIONAL/FAIL/INSUFFICIENT_DATA/NOT_IN_DATABASE), structural_score (0-5, 0=not analyzed), hype_tech_ratio, mica_compliance, claim_count. Under 2 seconds. Same response shape always returned — check verdict field for status. Use verify_project_whitepaper ($2.00) for on-demand verification of uncached projects.',
     inputSchema: {
       type: 'object',
       properties: {
-        project_name: { type: 'string' },
         token_address: { type: 'string' },
+        project_name: { type: 'string' },
       },
+      required: ['token_address'],
     },
     deliverableSchema: LEGITIMACY_SCAN_SPEC,
   },
@@ -179,13 +187,14 @@ export const OFFERINGS: OfferingConfig[] = [
     id: 'tokenomics_sustainability_audit',
     displayName: 'Tokenomics Sustainability Audit',
     price: 1.50,
-    description: 'Returns JSON with: L1 structural analysis + L2 claim extraction. Includes categorized claims array (TOKENOMICS, PERFORMANCE, CONSENSUS, SCIENTIFIC) with claim_text, stated_evidence, and claim_score for each. MiCA compliance included. Cached results in under 2 seconds.',
+    description: 'Cache-only lookup. Returns structured JSON with verdict, structural analysis, categorized claims array (TOKENOMICS/PERFORMANCE/CONSENSUS/SCIENTIFIC/REGULATORY) with claim_text, stated_evidence, claim_score, plus MiCA compliance and logic summary. Under 2 seconds. Same response shape always returned — check verdict field for status. Use verify_project_whitepaper ($2.00) for on-demand verification of uncached projects.',
     inputSchema: {
       type: 'object',
       properties: {
-        project_name: { type: 'string' },
         token_address: { type: 'string' },
+        project_name: { type: 'string' },
       },
+      required: ['token_address'],
     },
     deliverableSchema: TOKENOMICS_AUDIT_SPEC,
   },
@@ -193,14 +202,15 @@ export const OFFERINGS: OfferingConfig[] = [
     id: 'verify_project_whitepaper',
     displayName: 'Verify Project Whitepaper',
     price: 2.00,
-    description: 'Accepts project_name, token_address, or document_url. Returns L1+L2 verification report. If project is in database, returns cached results. If not, runs live verification (3-8 minutes). Returns INSUFFICIENT_DATA if no whitepaper or document source can be found.',
+    description: 'On-demand verification. Returns cached results instantly if project is in database. If not, runs live L1+L2 verification pipeline. Returns structured JSON with verdict, structural analysis, claims, MiCA compliance, token address. Returns verdict=INSUFFICIENT_DATA if no whitepaper or document source can be found. Verified projects are cached permanently for future lookups.',
     inputSchema: {
       type: 'object',
       properties: {
-        document_url: { type: 'string' },
+        token_address: { type: 'string' },
         project_name: { type: 'string' },
+        document_url: { type: 'string' },
       },
-      required: ['document_url', 'project_name'],
+      required: ['token_address'],
     },
     deliverableSchema: VERIFY_WHITEPAPER_SPEC,
   },
@@ -208,13 +218,15 @@ export const OFFERINGS: OfferingConfig[] = [
     id: 'full_technical_verification',
     displayName: 'Full Technical Verification',
     price: 3.00,
-    description: 'Returns JSON with: L1 structural analysis, L2 claim extraction, L3 claim evaluation, confidence_score (1-100), verdict (PASS/CONDITIONAL/FAIL/INSUFFICIENT_DATA), focus_area_scores, hype_tech_ratio, total_claims, verified_claims, MiCA compliance, compute_cost_usd.',
+    description: 'Deepest analysis. Runs full L1+L2+L3 pipeline including claim-by-claim evaluation against mathematical validity, benchmark plausibility, citation verification, originality, and internal consistency. Returns structured JSON with verdict, confidence_score (0-100), focus_area_scores, per-claim evaluations, MiCA compliance, compute cost. Runs live pipeline if not cached.',
     inputSchema: {
       type: 'object',
       properties: {
-        document_url: { type: 'string' },
+        token_address: { type: 'string' },
         project_name: { type: 'string' },
+        document_url: { type: 'string' },
       },
+      required: ['token_address'],
     },
     deliverableSchema: FULL_VERIFICATION_SPEC,
   },
@@ -222,7 +234,7 @@ export const OFFERINGS: OfferingConfig[] = [
     id: 'daily_technical_briefing',
     displayName: 'Daily Technical Briefing',
     price: 8.00,
-    description: 'Returns today\'s verification batch summary. Includes: projects_verified_count, greenlight_list (PASS verdicts), alert_list (FAIL verdicts), average_confidence, mica_compliance_summary. If no verifications ran today, returns empty batch with timestamp.',
+    description: 'Returns today\'s verification batch summary. Includes: projects_verified_count, greenlight entries (PASS verdicts), alert entries (FAIL verdicts), and per-project verification summaries. If no verifications ran today, returns empty batch with timestamp.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -256,4 +268,3 @@ export const RESOURCES: ResourceConfig[] = [
     deliverableSchema: SCAM_ALERT_SPEC,
   },
 ];
-
