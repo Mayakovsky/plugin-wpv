@@ -1,5 +1,5 @@
 {
-  "date": "2026-03-23T01:11:00.921Z",
+  "date": "2026-03-25T16:50:31.088Z",
   "tokensCount": 66,
   "totalTests": 267,
   "pass": 267,
@@ -8,12 +8,12 @@
   "failures": [],
   "responseTimeP95": {
     "project_legitimacy_scan": 0,
-    "tokenomics_sustainability_audit": 1,
+    "tokenomics_sustainability_audit": 2,
     "verify_project_whitepaper": 0,
     "full_technical_verification": 0,
-    "daily_greenlight_list": 112,
-    "scam_alert_feed": 108,
-    "pipeline_status": 218
+    "daily_greenlight_list": 118,
+    "scam_alert_feed": 120,
+    "pipeline_status": 243
   },
   "results": [
     {
@@ -23,7 +23,7 @@
       "tokenAddress": "0x622b6330f226bf08427dcad49c9ea9694604bf2d",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 9
+      "responseTimeMs": 10
     },
     {
       "testId": "T2:7AΩ∞",
@@ -356,7 +356,7 @@
       "tokenAddress": "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 0
+      "responseTimeMs": 1
     },
     {
       "testId": "T3:BTCB",
@@ -536,7 +536,7 @@
       "tokenAddress": "DriFtupJYLTosbwoN8koMbEYSx54aFAVLddWsbksjwg7",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 1
+      "responseTimeMs": 0
     },
     {
       "testId": "T3:DRIFT",
@@ -590,7 +590,7 @@
       "tokenAddress": "0xac23b90a79504865d52b49b327328411a23d4db2",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 0
+      "responseTimeMs": 1
     },
     {
       "testId": "T1:GAME",
@@ -716,7 +716,7 @@
       "tokenAddress": "hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 0
+      "responseTimeMs": 2
     },
     {
       "testId": "T3:HNT",
@@ -824,7 +824,7 @@
       "tokenAddress": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 1
+      "responseTimeMs": 0
     },
     {
       "testId": "T3:JUP",
@@ -1040,7 +1040,7 @@
       "tokenAddress": "0xeb51d9a39ad5eef215dc0bf39a8821ff804a0f01",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 0
+      "responseTimeMs": 2
     },
     {
       "testId": "T3:LGNS",
@@ -1220,7 +1220,7 @@
       "tokenAddress": "0x534b7aad1cdb6f02ec48cabe428f0d9131e40b07",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 0
+      "responseTimeMs": 2
     },
     {
       "testId": "T3:MINI",
@@ -1328,7 +1328,7 @@
       "tokenAddress": "nosXBVoaCTtYdLvKY6Csb4AC8JCdQKKAaWYtx2ZMoo7",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 2
+      "responseTimeMs": 0
     },
     {
       "testId": "T3:NOS",
@@ -1472,7 +1472,7 @@
       "tokenAddress": "HZ1J9yv2Veb961XU1kR2qC97Xv1Xv1Xv1Xv1Xv1Xv1",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 2
+      "responseTimeMs": 0
     },
     {
       "testId": "T3:PYTH",
@@ -1517,7 +1517,7 @@
       "tokenAddress": "0x6c3ea9036406852006290770bedfcaba0e23a0e8",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 0
+      "responseTimeMs": 1
     },
     {
       "testId": "T4:PYUSD",
@@ -1544,7 +1544,7 @@
       "tokenAddress": "0x4fa7c69a7b69f8bc48233024d546bc299d6b03bf",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 0
+      "responseTimeMs": 2
     },
     {
       "testId": "T3:quq",
@@ -1580,7 +1580,7 @@
       "tokenAddress": "0xfca59cd816ab1ead66534d82bc21e7515ce441cf",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 0
+      "responseTimeMs": 1
     },
     {
       "testId": "T3:RARI",
@@ -2336,7 +2336,7 @@
       "tokenAddress": "0x68749665ff8d2d112fa859aa293f07a622782f38",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 1
+      "responseTimeMs": 0
     },
     {
       "testId": "T3:XAUt",
@@ -2372,7 +2372,7 @@
       "tokenAddress": "ZETAxsqBizA5AAbijtoNrDoxQW6iNtaNt9Y2eMkKPn3",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 0
+      "responseTimeMs": 2
     },
     {
       "testId": "T3:ZETA",
@@ -2397,21 +2397,21 @@
       "offering": "daily_greenlight_list",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 112
+      "responseTimeMs": 118
     },
     {
       "testId": "T6:scam_alerts",
       "offering": "scam_alert_feed",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 108
+      "responseTimeMs": 120
     },
     {
       "testId": "T7:pipeline_status",
       "offering": "pipeline_status",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 218
+      "responseTimeMs": 243
     }
   ]
 }
