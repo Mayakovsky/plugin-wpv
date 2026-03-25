@@ -39,6 +39,9 @@ export class JobRouter {
   async handleJob(offeringId: OfferingId, input: Record<string, unknown>): Promise<unknown> {
     log.info('Routing job', { offeringId });
 
+    // Reset cost tracker for this job — prevents cross-contamination between concurrent jobs
+    this.deps.costTracker.reset();
+
     switch (offeringId) {
       case 'project_legitimacy_scan':
         return this.handleLegitimacyScan(input);
@@ -147,11 +150,25 @@ export class JobRouter {
   }
 
   private async handleVerifyWhitepaper(input: Record<string, unknown>) {
-    const documentUrl = input.document_url as string | undefined;
-    const projectName = input.project_name as string | undefined;
+    const documentUrl = (input.document_url as string | undefined)?.trim();
+    const projectName = (input.project_name as string | undefined)?.trim();
 
     if (!documentUrl || !projectName) {
       return { error: 'missing_input', message: 'document_url and project_name are required' };
+    }
+
+    // Validate URL format — reject file://, javascript:, or malformed URLs
+    try {
+      const parsed = new URL(documentUrl);
+      if (!['http:', 'https:', 'ipfs:'].includes(parsed.protocol)) {
+        return { error: 'invalid_url', message: `Unsupported URL protocol: ${parsed.protocol}` };
+      }
+    } catch {
+      return { error: 'invalid_url', message: 'document_url is not a valid URL' };
+    }
+
+    if (documentUrl.length > 2048) {
+      return { error: 'invalid_url', message: 'document_url exceeds maximum length (2048)' };
     }
 
     const { resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = await this.runL1L2(documentUrl, projectName);
@@ -243,10 +260,20 @@ export class JobRouter {
     }
 
     // No cached result — check if we have a URL for live L1+L2+L3
-    const documentUrl = input.document_url as string | undefined;
-    const projectName = input.project_name as string | undefined;
+    const documentUrl = (input.document_url as string | undefined)?.trim();
+    const projectName = (input.project_name as string | undefined)?.trim();
     if (!documentUrl || !projectName) {
       return this.notInDatabase();
+    }
+
+    // Validate URL
+    try {
+      const parsed = new URL(documentUrl);
+      if (!['http:', 'https:', 'ipfs:'].includes(parsed.protocol)) {
+        return { error: 'invalid_url', message: `Unsupported URL protocol: ${parsed.protocol}` };
+      }
+    } catch {
+      return { error: 'invalid_url', message: 'document_url is not a valid URL' };
     }
 
     // Run L1+L2
