@@ -41,6 +41,7 @@ export class WpvService extends Service {
   capabilityDescription = 'Whitepaper Verification Pipeline — crypto whitepaper analysis and verification';
 
   private deps: WpvServiceDeps | null = null;
+  private acpRegistered = false;
 
   constructor() {
     super();
@@ -70,8 +71,13 @@ export class WpvService extends Service {
       } as WpvServiceDeps);
       logger.info(`WpvService: Initialized with database repos (hasWhitepaperRepo=${!!this.whitepaperRepo}, depsSet=${!!this.deps})`);
 
-      // Register offering handlers with AcpService if available
+      // Register offering handlers with AcpService if available.
+      // AcpService may not be ready yet (depends on plugin load order),
+      // so retry after a short delay if initial attempt fails.
       this.registerWithAcp(runtime);
+      if (!this.acpRegistered) {
+        setTimeout(() => this.registerWithAcp(runtime), 3000);
+      }
     } catch (err) {
       logger.warn(`WpvService: Init failed — ${(err as Error).message}`);
     }
@@ -117,6 +123,7 @@ export class WpvService extends Service {
    * If AcpService is not loaded (e.g., no ACP credentials), this is a no-op.
    */
   private registerWithAcp(runtime: IAgentRuntime): void {
+    if (this.acpRegistered) return;
     try {
       const acpService = runtime.getService('acp') as {
         registerOfferingHandler?: (id: string, handler: (input: { requirement: Record<string, unknown> }) => Promise<unknown>) => void;
@@ -160,6 +167,7 @@ export class WpvService extends Service {
         });
       }
 
+      this.acpRegistered = true;
       logger.info(`WpvService: Registered ${offerings.length} offering handlers with AcpService`);
     } catch (err) {
       logger.warn(`WpvService: ACP registration failed — ${(err as Error).message}`);
