@@ -140,6 +140,22 @@ export class WpvService extends Service {
           if (!this.deps?.jobRouter) {
             return { error: 'wpv_not_ready', message: 'WPV JobRouter not initialized' };
           }
+
+          // Validate token_address before processing (all offerings except daily_technical_briefing)
+          if (offeringId !== 'daily_technical_briefing') {
+            const tokenAddress = input.requirement?.token_address;
+            if (tokenAddress !== undefined && tokenAddress !== null) {
+              if (typeof tokenAddress !== 'string' ||
+                  !tokenAddress.startsWith('0x') ||
+                  tokenAddress.length !== 42 ||
+                  !/^0x[0-9a-fA-F]{40}$/.test(tokenAddress)) {
+                const err = new Error(`Invalid token_address: expected 0x-prefixed 42-char hex address, got '${String(tokenAddress).slice(0, 50)}'`);
+                err.name = 'InputValidationError';
+                throw err;
+              }
+            }
+          }
+
           return this.deps.jobRouter.handleJob(offeringId, input.requirement);
         });
       }
