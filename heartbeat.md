@@ -1,8 +1,8 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-03-24 (Virtuals registration complete, plugin-acp plan created)
-> Updated by: Claude Opus 4.6 — Forces session, registration + ACP bridge planning
-> Session label: Agent registered, plugin-acp needed for ACP marketplace connection
-> Staleness gate: 2026-03-24 — if today is >3 days past this,
+> Last updated: 2026-03-26 (plugin-acp built + wired + hardened, awaiting ACP credentials)
+> Updated by: Claude Opus 4.6 — Kovsky session
+> Session label: plugin-acp complete, security hardened, blocked on ACP credentials from Forces
+> Staleness gate: 2026-03-26 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
 ## Focus (1-3 goals, testable)
@@ -15,37 +15,40 @@
 - [x] **ACP v2 schema hardening** — NOT_IN_DATABASE verdict, structuralScore min 0, flat response shape, cache-only tiers, token_address required, focusAreaScores lowercase
 - [x] **Virtuals registration** — Provider, 5 offerings, wallet created
 - [x] **Pre-graduation tweets** — 5 tweets posted/scheduled
-- [ ] **plugin-acp** — ElizaOS ↔ ACP bridge plugin (Kovsky building). Wraps @virtuals-protocol/acp-node SDK. Standalone, generic, releasable to ElizaOS plugin repo.
-- [ ] **Wire plugin-wpv to plugin-acp** — replace stubbed AcpWrapper with real SDK connection via AcpService
+- [x] **plugin-acp built** — ElizaOS ↔ ACP bridge (37 tests). AcpService + 3 actions (BROWSE, JOBS, WALLET). Pushed to github.com/Mayakovsky/plugin-acp
+- [x] **plugin-wpv wired to plugin-acp** — WpvService registers 5 offering handlers via AcpService. Standalone mode if ACP unavailable.
+- [x] **Security hardening** — guarded JSON.parse, NaN validation, empty offeringId rejection, CostTracker reset per job, URL protocol whitelist on live pipeline
+- [ ] **ACP credentials** — blocked on Forces sharing wallet keys + funding USDC
 - [ ] **Sandbox graduation** — 10 test transactions, submit graduation request
 - [ ] **LAUNCH** — fire outreach, pinned thread, monitor
 
 ## What Works (verified)
-- ✅ Build (`bun run build`) — 0 errors — verified 2026-03-23
-- ✅ Tests (`bun run test`) — 304/304 pass across 23 test files — verified 2026-03-23
-- ✅ **66 Test certified** — 267/267 pass (local + VPS), 100% evaluator readiness — verified 2026-03-23
+- ✅ Build (`bun run build`) — 0 errors — verified 2026-03-25
+- ✅ Tests (`bun run test`) — 304/304 pass across 23 test files — verified 2026-03-25
+- ✅ **66 Test certified** — 267/267 pass (local + VPS), 100% evaluator readiness — verified 2026-03-25
 - ✅ Plugin registration: 6 actions + WpvService registered via Eliza Plugin interface
 - ✅ VPS deployed: AWS Lightsail us-west-2, Grey running 24/7 via PM2, reboot recovery tested
 - ✅ Virtuals agent registered: Provider role, 5 job offerings, wallet whitelisted
+- ✅ **plugin-acp** — 37/37 tests, AcpService + 3 actions, security hardened (2026-03-25)
+- ✅ **plugin-wpv ↔ plugin-acp wired** — 5 offering handlers registered via AcpService (2026-03-25)
+- ✅ **wpv-agent** — 13/13 tests, load order: sql → ollama → anthropic → knowledge → autognostic → acp → wpv → bootstrap (2026-03-25)
 
 ## What's Broken
-- ⚠️ **AcpWrapper.ts is entirely stubbed** — Grey cannot receive or fulfill ACP jobs. This is the critical blocker. plugin-acp replaces it.
-- ⚠️ types.ts + AgentCardConfig.ts + ReportGenerator.ts updated (Verdict enum, structuralScore min, focusAreaScores lowercase) but **not yet built/tested** — Kovsky must rebuild + retest + re-run 66 Test
+- ⚠️ **AcpWrapper.ts is still a stub** — retained for IAcpClient interface (used by AcpMetadataEnricher tests). Production ACP goes through plugin-acp.
+- ⚠️ **ACP credentials not yet in .env** — blocked on Forces. Grey connects to ACP marketplace only when credentials are present; standalone mode otherwise.
 - ⚠️ Image-only PDF detection limited (deferred Phase 2)
 - ⚠️ OCR gap — scanned PDFs return INSUFFICIENT_DATA (deferred Phase 2)
 
 ## Test Count
-- **304 tests across 23 test files, 0 failures** (pre-schema-hardening)
+- **304 tests across 23 test files, 0 failures** (post-hardening, verified 2026-03-25)
 
 ## Next Actions (ordered)
-1. **Kovsky: rebuild + retest** after types.ts/AgentCardConfig.ts/ReportGenerator.ts changes
-2. **Kovsky: build plugin-acp** — new repo, wraps @virtuals-protocol/acp-node, AcpService + actions
-3. **Kovsky: wire plugin-wpv** — register offering handlers via AcpService, remove stubbed AcpWrapper
-4. **Forces: share ACP credentials** with Kovsky for .env
-5. **Forces: fund agent wallet** with USDC
-6. **Kovsky: build buyer test agent** — 10 sandbox transactions
-7. **Sandbox graduation** → Virtuals review 24–48hr
-8. **GRADUATION DAY** — outreach + pinned thread
+1. **Forces: share ACP credentials** (ACP_WALLET_PRIVATE_KEY, ACP_SESSION_ENTITY_KEY_ID, ACP_AGENT_WALLET_ADDRESS)
+2. **Forces: fund agent wallet** with USDC
+3. **Kovsky: update .env** (local + VPS) with ACP credentials, run Smoke Test 8/8
+4. **Kovsky: build buyer test agent** — 10 sandbox transactions
+5. **Sandbox graduation** → Virtuals review 24–48hr
+6. **GRADUATION DAY** — outreach + pinned thread
 
 ## ACP Registration Context
 - **Role:** Provider
@@ -64,13 +67,15 @@
 - token_address required, project_name optional
 - focusAreaScores: lowercase keys in reports (internal ScoreAggregator stays uppercase)
 
-## plugin-acp Architecture (Planned)
-- **Package:** `@elizaos/plugin-acp` or `@scigent/plugin-acp`
-- **Dependency:** `@virtuals-protocol/acp-node`
-- **AcpService** extends Eliza Service — lifecycle, handler registry, WebSocket management
-- **Offering handler registry** — plugins register handlers for offering IDs, AcpService dispatches
+## plugin-acp (Built — 2026-03-25)
+- **Package:** `@elizaos/plugin-acp` — github.com/Mayakovsky/plugin-acp
+- **Dependency:** `@virtuals-protocol/acp-node` v0.3.0-beta.39
+- **AcpService** extends Eliza Service — lifecycle, handler registry, WebSocket connection
+- **Offering handler registry** — plugins register `(offeringId, handler)` pairs, AcpService dispatches incoming jobs
 - **Actions:** ACP_BROWSE, ACP_JOBS, ACP_WALLET
 - **Plugin load order:** `acp` loads before `wpv` so WpvService can find AcpService
+- **37 tests, all passing**
+- **Security hardened:** guarded JSON.parse (reject before accept), NaN config validation, empty offeringId rejection, bounded browseAgents params, error delivery wrapped in try-catch
 - **Generic, releasable** — any ElizaOS agent can use it, not WPV-specific
 
 ## Session Log
@@ -84,6 +89,7 @@
 | 2026-03-23 | Claude Opus 4.6 | 66 Test evaluator built + certified | 267/267 pass |
 | 2026-03-23 | Claude Opus 4.6 (Forces) | Instruction sets rewritten, role confirmed Provider, tweets posted | Docs current |
 | 2026-03-24 | Claude Opus 4.6 (Forces) | ACP schema hardening, Virtuals registration completed, plugin-acp plan created | Agent live on Virtuals, awaiting ACP bridge |
+| 2026-03-25 | Claude Opus 4.6 (Kovsky) | plugin-acp built (37 tests), wired to plugin-wpv, security audit + hardening, 66 Test re-certified | All 3 repos pushed, blocked on ACP credentials |
 
 ## Quick Commands
 ```bash

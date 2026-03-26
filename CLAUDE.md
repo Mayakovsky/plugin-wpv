@@ -17,19 +17,19 @@
 | **Database** | Supabase Pro (PostgreSQL + pgvector, $25/mo) |
 | **Package Manager** | `bun` (required) |
 | **Test Framework** | Vitest (304 tests, 23 files) |
-| **Peer Dependencies** | `@elizaos/plugin-autognostic` (optional), `plugin-acp` (required — ACP marketplace connection) |
+| **Peer Dependencies** | `@elizaos/plugin-autognostic` (optional), `@elizaos/plugin-acp` (optional — ACP marketplace connection) |
 | **LLM** | Claude Sonnet via Anthropic API (claim extraction + evaluation) |
 | **Chain** | Base (Virtuals Protocol) |
 
 ---
 
-## CRITICAL: AcpWrapper.ts Is a Stub
+## ACP Marketplace Connection
 
-**The current `src/acp/AcpWrapper.ts` is entirely stubbed.** Every method logs and returns empty. The `@virtuals-protocol/acp-node` SDK has never been wired in. Grey cannot receive or fulfill ACP jobs.
+**`plugin-acp`** (github.com/Mayakovsky/plugin-acp) bridges ElizaOS ↔ Virtuals ACP. `WpvService.start()` finds `AcpService` via `runtime.getService('acp')` and registers all 5 offering handlers. When ACP credentials are absent, Grey operates in standalone mode.
 
-**Resolution:** A standalone `plugin-acp` is being built to bridge ElizaOS ↔ Virtuals ACP. When complete, `plugin-wpv` will register offering handlers via `runtime.getService('acp')` and the stubbed AcpWrapper will be removed. See `BUILD DOCS and DATA/Grey_Kovsky_Execution.md` Phase 2A for the full plan.
+**`AcpWrapper.ts` is a legacy stub** — retained only because `AcpMetadataEnricher` tests mock `IAcpClient`. Not used in production code paths.
 
-**Plugin load order (when plugin-acp is ready):**
+**Plugin load order:**
 ```
 sql → ollama → anthropic → knowledge → autognostic → acp → wpv → bootstrap
 ```
@@ -81,7 +81,7 @@ src/
 │   └── CostTracker.ts               # Per-stage breakdown
 │
 ├── acp/                              # Stage 3: ACP service interface
-│   ├── AcpWrapper.ts                 # ⚠️ STUB — being replaced by plugin-acp
+│   ├── AcpWrapper.ts                 # Legacy stub (IAcpClient interface for tests only)
 │   ├── AgentCardConfig.ts            # 5 offerings, 2 resources, ACP v2 deliverable schemas
 │   ├── JobRouter.ts                  # Routes offering_id → pipeline depth (cached vs. live)
 │   ├── ResourceHandlers.ts           # Greenlight List + Scam Alert Feed
@@ -196,4 +196,4 @@ scripts/
 
 ---
 
-*Last updated: 2026-03-24*
+*Last updated: 2026-03-26*
