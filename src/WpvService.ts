@@ -7,16 +7,17 @@ import { Service, type IAgentRuntime } from '@elizaos/core';
 import { WpvWhitepapersRepo } from './db/wpvWhitepapersRepo';
 import { WpvClaimsRepo } from './db/wpvClaimsRepo';
 import { WpvVerificationsRepo } from './db/wpvVerificationsRepo';
-import type { StructuralAnalyzer } from './verification/StructuralAnalyzer';
+import { StructuralAnalyzer } from './verification/StructuralAnalyzer';
 import type { ClaimExtractor } from './verification/ClaimExtractor';
 import type { ClaimEvaluator } from './verification/ClaimEvaluator';
-import type { ScoreAggregator } from './verification/ScoreAggregator';
-import type { ReportGenerator } from './verification/ReportGenerator';
-import type { CostTracker } from './verification/CostTracker';
+import { ScoreAggregator } from './verification/ScoreAggregator';
+import { ReportGenerator } from './verification/ReportGenerator';
+import { CostTracker } from './verification/CostTracker';
 import type { CryptoContentResolver } from './discovery/CryptoContentResolver';
 import type { DiscoveryCron } from './discovery/DiscoveryCron';
-import type { JobRouter } from './acp/JobRouter';
-import type { ResourceHandlers } from './acp/ResourceHandlers';
+import { JobRouter } from './acp/JobRouter';
+import { ResourceHandlers } from './acp/ResourceHandlers';
+import { LLM_PRICING } from './constants';
 import type { DrizzleDbLike, OfferingId } from './types';
 import { logger } from './utils/logger';
 
@@ -64,11 +65,42 @@ export class WpvService extends Service {
       const whitepaperRepo = new WpvWhitepapersRepo(db);
       const claimsRepo = new WpvClaimsRepo(db);
       const verificationsRepo = new WpvVerificationsRepo(db);
+
+      // Initialize pipeline components for cached lookups via ACP/HTTP
+      const reportGenerator = new ReportGenerator();
+      const costTracker = new CostTracker(LLM_PRICING.inputPerToken, LLM_PRICING.outputPerToken);
+      const structuralAnalyzer = new StructuralAnalyzer({});
+      const scoreAggregator = new ScoreAggregator();
+      const resourceHandlers = new ResourceHandlers(verificationsRepo, whitepaperRepo);
+
+      const jobRouter = new JobRouter({
+        whitepaperRepo,
+        verificationsRepo,
+        claimsRepo,
+        structuralAnalyzer,
+        claimExtractor: null as never,  // L2/L3 only — not needed for cached lookups
+        claimEvaluator: null as never,  // L2/L3 only
+        scoreAggregator,
+        reportGenerator,
+        costTracker,
+        cryptoResolver: null as never,  // Live pipeline only
+      });
+
       this.setDeps({
         whitepaperRepo,
         claimsRepo,
         verificationsRepo,
-      } as WpvServiceDeps);
+        structuralAnalyzer,
+        claimExtractor: null as never,
+        claimEvaluator: null as never,
+        scoreAggregator,
+        reportGenerator,
+        costTracker,
+        cryptoResolver: null as never,
+        discoveryCron: null as never,
+        jobRouter,
+        resourceHandlers,
+      });
       logger.info(`WpvService: Initialized with database repos (hasWhitepaperRepo=${!!this.whitepaperRepo}, depsSet=${!!this.deps})`);
 
       // Register offering handlers with AcpService if available.
