@@ -74,7 +74,7 @@ export class WpvVerificationsRepo {
       .from(wpvVerifications)
       .where(and(
         gte(wpvVerifications.verifiedAt, dayStart),
-        sql`${wpvVerifications.verifiedAt} < ${dayEnd}`,
+        sql`${wpvVerifications.verifiedAt} < ${dayEnd.toISOString()}::timestamptz`,
       ));
   }
 
