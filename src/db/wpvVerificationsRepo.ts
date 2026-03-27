@@ -78,6 +78,15 @@ export class WpvVerificationsRepo {
       ));
   }
 
+  /** Get the N most recent verifications regardless of date */
+  async getMostRecent(limit: number): Promise<WpvVerificationRow[]> {
+    return this.db
+      .select()
+      .from(wpvVerifications)
+      .orderBy(desc(wpvVerifications.verifiedAt))
+      .limit(limit);
+  }
+
   /** List all verifications with associated whitepaper info */
   async listByVerdict(verdict: string): Promise<WpvVerificationRow[]> {
     return this.db

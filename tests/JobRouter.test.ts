@@ -19,6 +19,7 @@ function createMockDeps(): JobRouterDeps {
         focusAreaScores: {},
       }),
       getLatestDailyBatch: vi.fn().mockResolvedValue([]),
+      getMostRecent: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockResolvedValue({ id: 'v-1' }),
     } as never,
     claimsRepo: {

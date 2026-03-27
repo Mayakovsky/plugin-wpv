@@ -327,13 +327,27 @@ export class JobRouter {
   }
 
   private async handleDailyBriefing(_input: Record<string, unknown>) {
-    const fullBatch = await this.deps.verificationsRepo.getLatestDailyBatch();
-    if (fullBatch.length === 0) {
-      return this.deps.reportGenerator.generateDailyBriefing([]);
+    const MAX_BRIEFING_SIZE = 10;
+
+    let batch = await this.deps.verificationsRepo.getLatestDailyBatch();
+
+    // If today's batch is short, backfill with most recent verifications
+    if (batch.length < MAX_BRIEFING_SIZE) {
+      const recent = await this.deps.verificationsRepo.getMostRecent(MAX_BRIEFING_SIZE);
+      const seen = new Set(batch.map((v) => v.id));
+      for (const v of recent) {
+        if (!seen.has(v.id)) {
+          batch.push(v);
+          if (batch.length >= MAX_BRIEFING_SIZE) break;
+        }
+      }
     }
 
-    // Cap at 20 most recent to keep response size reasonable
-    const batch = fullBatch.slice(0, 20);
+    batch = batch.slice(0, MAX_BRIEFING_SIZE);
+
+    if (batch.length === 0) {
+      return this.deps.reportGenerator.generateDailyBriefing([]);
+    }
 
     const reports = [];
     for (const v of batch) {
