@@ -1,5 +1,5 @@
 {
-  "date": "2026-03-26T22:16:15.240Z",
+  "date": "2026-03-27T22:42:29.873Z",
   "tokensCount": 66,
   "totalTests": 267,
   "pass": 267,
@@ -11,9 +11,9 @@
     "tokenomics_sustainability_audit": 1,
     "verify_project_whitepaper": 0,
     "full_technical_verification": 0,
-    "daily_greenlight_list": 112,
-    "scam_alert_feed": 104,
-    "pipeline_status": 210
+    "daily_greenlight_list": 116,
+    "scam_alert_feed": 116,
+    "pipeline_status": 216
   },
   "results": [
     {
@@ -23,7 +23,7 @@
       "tokenAddress": "0x622b6330f226bf08427dcad49c9ea9694604bf2d",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 0
+      "responseTimeMs": 1
     },
     {
       "testId": "T2:7AΩ∞",
@@ -176,7 +176,7 @@
       "tokenAddress": "0xf895783b2931c919955e18b5e3343e7c7c456ba3",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 1
+      "responseTimeMs": 0
     },
     {
       "testId": "T3:BLUEAGENT",
@@ -311,7 +311,7 @@
       "tokenAddress": "0x595deaad1eb5476ff1e649fdb7efc36f1e4679cc",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 0
+      "responseTimeMs": 1
     },
     {
       "testId": "T2:BSB",
@@ -356,7 +356,7 @@
       "tokenAddress": "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 1
+      "responseTimeMs": 0
     },
     {
       "testId": "T3:BTCB",
@@ -635,7 +635,7 @@
       "tokenAddress": "Grass7B4RdKfBCjTKgSqnXkqjwiGvQyFbuSCUJr3XXjs",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 1
+      "responseTimeMs": 0
     },
     {
       "testId": "T2:GRASS",
@@ -860,7 +860,7 @@
       "tokenAddress": "0x366bdb034443ea8c09d7e331eaf0ca2e6a9e1926",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 2
+      "responseTimeMs": 0
     },
     {
       "testId": "T3:KAT",
@@ -968,7 +968,7 @@
       "tokenAddress": "0xe6df05ce8c8301223373cf5b969afcb1498c5528",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 0
+      "responseTimeMs": 1
     },
     {
       "testId": "T3:KOGE",
@@ -1040,7 +1040,7 @@
       "tokenAddress": "0xeb51d9a39ad5eef215dc0bf39a8821ff804a0f01",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 1
+      "responseTimeMs": 0
     },
     {
       "testId": "T3:LGNS",
@@ -1112,7 +1112,7 @@
       "tokenAddress": "0x55cd6469f597452b5a7536e2cd98fde4c1247ee4",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 0
+      "responseTimeMs": 1
     },
     {
       "testId": "T3:LUNA",
@@ -1148,7 +1148,7 @@
       "tokenAddress": "MEW1gQWJ3nEXg2qgERiKu7FAFj79PHvQVREQUzScPP5",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 0
+      "responseTimeMs": 1
     },
     {
       "testId": "T3:MEW",
@@ -1220,7 +1220,7 @@
       "tokenAddress": "0x534b7aad1cdb6f02ec48cabe428f0d9131e40b07",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 1
+      "responseTimeMs": 0
     },
     {
       "testId": "T3:MINI",
@@ -1238,7 +1238,7 @@
       "tokenAddress": "0x534b7aad1cdb6f02ec48cabe428f0d9131e40b07",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 1
+      "responseTimeMs": 0
     },
     {
       "testId": "T1:MOLT",
@@ -1247,7 +1247,7 @@
       "tokenAddress": "0xb695559b26bb2c9703ef1935c37aeae9526bab07",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 1
+      "responseTimeMs": 0
     },
     {
       "testId": "T2:MOLT",
@@ -1328,7 +1328,7 @@
       "tokenAddress": "nosXBVoaCTtYdLvKY6Csb4AC8JCdQKKAaWYtx2ZMoo7",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 0
+      "responseTimeMs": 2
     },
     {
       "testId": "T3:NOS",
@@ -1445,7 +1445,7 @@
       "tokenAddress": "7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 0
+      "responseTimeMs": 1
     },
     {
       "testId": "T4:POPCAT",
@@ -1724,7 +1724,7 @@
       "tokenAddress": "0x82d4d6d2c13c52ff38c5b416b40011377aa44444",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 1
+      "responseTimeMs": 0
     },
     {
       "testId": "T3:SFA",
@@ -2048,7 +2048,7 @@
       "tokenAddress": "0xdc035d45d973e3ec169d2276ddab16f1e407384f",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 0
+      "responseTimeMs": 1
     },
     {
       "testId": "T3:USDS",
@@ -2084,7 +2084,7 @@
       "tokenAddress": "0x820c137fa70c8691f0e44dc420a5e53c168921dc",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 1
+      "responseTimeMs": 0
     },
     {
       "testId": "T3:USDS (Base)",
@@ -2264,7 +2264,7 @@
       "tokenAddress": "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 1
+      "responseTimeMs": 0
     },
     {
       "testId": "T3:WIF",
@@ -2397,21 +2397,21 @@
       "offering": "daily_greenlight_list",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 112
+      "responseTimeMs": 116
     },
     {
       "testId": "T6:scam_alerts",
       "offering": "scam_alert_feed",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 104
+      "responseTimeMs": 116
     },
     {
       "testId": "T7:pipeline_status",
       "offering": "pipeline_status",
       "pass": true,
       "failures": [],
-      "responseTimeMs": 210
+      "responseTimeMs": 216
     }
   ]
 }
