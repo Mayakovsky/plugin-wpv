@@ -25,9 +25,13 @@
 
 ## ACP Marketplace Connection
 
-**`plugin-acp`** (github.com/Mayakovsky/plugin-acp) bridges ElizaOS ↔ Virtuals ACP. `WpvService.start()` finds `AcpService` via `runtime.getService('acp')` and registers all 5 offering handlers. When ACP credentials are absent, Grey operates in standalone mode.
+**`plugin-acp`** (github.com/Mayakovsky/plugin-acp) bridges ElizaOS ↔ Virtuals ACP. Dual interface:
+- **HTTP job handler** (port 3001) — Virtuals sends POST `{job_id, offering_id, arguments}`, Grey returns `{status, deliverable}`. Used for Breakbot testing and sandbox graduation.
+- **WebSocket SDK** — `@virtuals-protocol/acp-node` `onNewTask` callback for production job dispatch.
 
-**`AcpWrapper.ts` is a legacy stub** — retained only because `AcpMetadataEnricher` tests mock `IAcpClient`. Not used in production code paths.
+`WpvService.start()` registers all 5 offering handlers with AcpService (retries after 3s if AcpService loads later). WpvService connects directly to Supabase via `WPV_DATABASE_URL` (not ElizaOS PGlite).
+
+**`AcpWrapper.ts` is a legacy stub** — retained for `IAcpClient` interface in tests. Not used in production.
 
 **Plugin load order:**
 ```
@@ -196,4 +200,4 @@ scripts/
 
 ---
 
-*Last updated: 2026-03-26*
+*Last updated: 2026-03-26 (Breakbot tests passed, graduation submission sent)*
