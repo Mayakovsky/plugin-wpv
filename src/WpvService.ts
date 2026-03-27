@@ -20,6 +20,8 @@ import { ResourceHandlers } from './acp/ResourceHandlers';
 import { LLM_PRICING } from './constants';
 import type { DrizzleDbLike, OfferingId } from './types';
 import { logger } from './utils/logger';
+import postgres from 'postgres';
+import { drizzle } from 'drizzle-orm/postgres-js';
 
 export interface WpvServiceDeps {
   whitepaperRepo: WpvWhitepapersRepo;
@@ -62,6 +64,7 @@ export class WpvService extends Service {
         logger.warn('WpvService: Could not resolve database — repos will not be initialized');
         return;
       }
+      logger.info('WpvService: Database resolved');
       const whitepaperRepo = new WpvWhitepapersRepo(db);
       const claimsRepo = new WpvClaimsRepo(db);
       const verificationsRepo = new WpvVerificationsRepo(db);
@@ -116,9 +119,25 @@ export class WpvService extends Service {
   }
 
   private async resolveDb(runtime: IAgentRuntime): Promise<DrizzleDbLike | null> {
+    // Prefer direct Supabase connection via WPV_DATABASE_URL — this is where WPV data lives.
+    // The ElizaOS adapter resolves to PGlite (local), which doesn't have the autognostic schema.
+    const dbUrl = runtime.getSetting('WPV_DATABASE_URL');
+    if (dbUrl) {
+      try {
+        const sql = postgres(dbUrl);
+        const db = drizzle(sql);
+        // Quick connectivity test
+        await sql`SELECT 1`;
+        logger.info('WpvService: Connected to Supabase via WPV_DATABASE_URL');
+        return db as unknown as DrizzleDbLike;
+      } catch (err) {
+        logger.warn(`WpvService: WPV_DATABASE_URL connection failed — ${(err as Error).message}`);
+      }
+    }
+
+    // Fallback: try ElizaOS runtime adapter
     const rt = runtime as unknown as Record<string, unknown>;
 
-    // Try runtime.adapter.db (ElizaOS 1.6.x pattern)
     if (rt.adapter) {
       const adapter = rt.adapter as Record<string, unknown>;
       if (adapter.db && typeof (adapter.db as Record<string, unknown>).select === 'function') {
@@ -126,7 +145,6 @@ export class WpvService extends Service {
       }
     }
 
-    // Try runtime.databaseAdapter.db
     if (rt.databaseAdapter) {
       const adapter = rt.databaseAdapter as Record<string, unknown>;
       if (adapter.db && typeof (adapter.db as Record<string, unknown>).select === 'function') {
@@ -134,7 +152,6 @@ export class WpvService extends Service {
       }
     }
 
-    // Try runtime.getService('sql')
     if (typeof rt.getService === 'function') {
       for (const key of ['sql', 'db', 'database']) {
         try {
