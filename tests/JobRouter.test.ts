@@ -111,13 +111,16 @@ describe('JobRouter', () => {
     );
   });
 
-  it('not-in-database returns suggestion for verify_project_whitepaper', async () => {
+  it('not-in-database returns flat shape with verdict NOT_IN_DATABASE', async () => {
     (deps.whitepaperRepo.findByProjectName as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (deps.verificationsRepo.findByWhitepaperId as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
     const result = await router.handleJob('project_legitimacy_scan', { project_name: 'Unknown' }) as Record<string, unknown>;
-    expect(result.error).toBe('not_in_database');
-    expect(result.suggestion).toContain('verify_project_whitepaper');
+    expect(result.verdict).toBe('NOT_IN_DATABASE');
+    expect(result.projectName).toBe('Unknown');
+    expect(result.structuralScore).toBe(0);
+    expect(result.claims).toEqual([]);
+    expect(result.logicSummary).toContain('not in database');
   });
 
   it('unknown offering_id returns error', async () => {

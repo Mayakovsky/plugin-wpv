@@ -60,10 +60,10 @@ export class JobRouter {
 
   private async handleLegitimacyScan(input: Record<string, unknown>) {
     const wp = await this.findWhitepaper(input);
-    if (!wp) return this.notInDatabase();
+    if (!wp) return this.notInDatabase(input);
 
     const verification = await this.deps.verificationsRepo.findByWhitepaperId(wp.id);
-    if (!verification) return this.notInDatabase();
+    if (!verification) return this.notInDatabase(input);
 
     const analysis = this.extractStructuralAnalysis(verification);
 
@@ -76,10 +76,10 @@ export class JobRouter {
 
   private async handleTokenomicsAudit(input: Record<string, unknown>) {
     const wp = await this.findWhitepaper(input);
-    if (!wp) return this.notInDatabase();
+    if (!wp) return this.notInDatabase(input);
 
     const verification = await this.deps.verificationsRepo.findByWhitepaperId(wp.id);
-    if (!verification) return this.notInDatabase();
+    if (!verification) return this.notInDatabase(input);
 
     const claims = await this.deps.claimsRepo.findByWhitepaperId(wp.id);
     const analysis = this.extractStructuralAnalysis(verification);
@@ -263,7 +263,7 @@ export class JobRouter {
     const documentUrl = (input.document_url as string | undefined)?.trim();
     const projectName = (input.project_name as string | undefined)?.trim();
     if (!documentUrl || !projectName) {
-      return this.notInDatabase();
+      return this.notInDatabase(input);
     }
 
     // Validate URL
@@ -377,11 +377,35 @@ export class JobRouter {
     return null;
   }
 
-  private notInDatabase() {
-    return {
-      error: 'not_in_database',
-      suggestion: 'Submit via verify_project_whitepaper ($2.00) to add this project.',
+  /**
+   * Return a flat response with all expected fields zeroed/empty.
+   * Virtuals evaluators check that the response matches the offering's deliverable schema.
+   * A bare `{ error: "not_in_database" }` gets flagged as "unrelated to the requested audit."
+   */
+  private notInDatabase(input?: Record<string, unknown>) {
+    const base = {
+      projectName: (input?.project_name as string) ?? 'Unknown',
+      tokenAddress: (input?.token_address as string) ?? null,
+      structuralScore: 0,
+      verdict: 'NOT_IN_DATABASE' as const,
+      hypeTechRatio: 0,
+      claimCount: 0,
+      claimsMicaCompliance: 'NOT_MENTIONED' as const,
+      micaCompliant: 'NOT_APPLICABLE' as const,
+      micaSummary: 'Project not in database.',
+      generatedAt: new Date().toISOString(),
+      // TokenomicsAuditReport fields
+      claims: [],
+      claimScores: {},
+      logicSummary: 'Project not in database. Submit via verify_project_whitepaper ($2.00) to add this project.',
+      // FullVerificationReport fields
+      confidenceScore: 0,
+      evaluations: [],
+      focusAreaScores: {},
+      llmTokensUsed: 0,
+      computeCostUsd: 0,
     };
+    return base;
   }
 
   private verificationRowToResult(v: Record<string, unknown>) {
