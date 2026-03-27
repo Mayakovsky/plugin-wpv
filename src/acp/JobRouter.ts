@@ -327,10 +327,13 @@ export class JobRouter {
   }
 
   private async handleDailyBriefing(_input: Record<string, unknown>) {
-    const batch = await this.deps.verificationsRepo.getLatestDailyBatch();
-    if (batch.length === 0) {
+    const fullBatch = await this.deps.verificationsRepo.getLatestDailyBatch();
+    if (fullBatch.length === 0) {
       return this.deps.reportGenerator.generateDailyBriefing([]);
     }
+
+    // Cap at 20 most recent to keep response size reasonable
+    const batch = fullBatch.slice(0, 20);
 
     const reports = [];
     for (const v of batch) {
