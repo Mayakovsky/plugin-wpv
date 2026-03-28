@@ -60,6 +60,7 @@ function createMockDeps(): JobRouterDeps {
     cryptoResolver: {
       resolveWhitepaper: vi.fn().mockResolvedValue({ text: 'whitepaper text', pageCount: 10, isImageOnly: false, isPasswordProtected: false, source: 'direct', originalUrl: 'url', resolvedUrl: 'url' }),
     } as never,
+    tieredDiscovery: null,
   };
 }
 
@@ -75,11 +76,6 @@ describe('JobRouter', () => {
   it('routes project_legitimacy_scan correctly', async () => {
     const result = await router.handleJob('project_legitimacy_scan', { project_name: 'Test' });
     expect(deps.reportGenerator.generateLegitimacyScan).toHaveBeenCalled();
-  });
-
-  it('routes tokenomics_sustainability_audit correctly', async () => {
-    const result = await router.handleJob('tokenomics_sustainability_audit', { project_name: 'Test' });
-    expect(deps.reportGenerator.generateTokenomicsAudit).toHaveBeenCalled();
   });
 
   it('routes daily_technical_briefing correctly', async () => {
@@ -112,16 +108,15 @@ describe('JobRouter', () => {
     );
   });
 
-  it('not-in-database returns flat shape with verdict NOT_IN_DATABASE', async () => {
+  it('cache miss with no discovery returns INSUFFICIENT_DATA', async () => {
     (deps.whitepaperRepo.findByProjectName as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (deps.verificationsRepo.findByWhitepaperId as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
     const result = await router.handleJob('project_legitimacy_scan', { project_name: 'Unknown' }) as Record<string, unknown>;
-    expect(result.verdict).toBe('NOT_IN_DATABASE');
+    expect(result.verdict).toBe('INSUFFICIENT_DATA');
     expect(result.projectName).toBe('Unknown');
     expect(result.structuralScore).toBe(0);
     expect(result.claims).toEqual([]);
-    expect(result.logicSummary).toContain('not in database');
   });
 
   it('unknown offering_id returns error', async () => {

@@ -284,7 +284,6 @@ export interface AcpJob {
 
 export type OfferingId =
   | 'project_legitimacy_scan'
-  | 'tokenomics_sustainability_audit'
   | 'verify_project_whitepaper'
   | 'full_technical_verification'
   | 'daily_technical_briefing';

@@ -15,7 +15,9 @@ import type { ScoreAggregator } from '../verification/ScoreAggregator';
 import type { ReportGenerator } from '../verification/ReportGenerator';
 import type { CostTracker } from '../verification/CostTracker';
 import type { CryptoContentResolver } from '../discovery/CryptoContentResolver';
-import { Verdict } from '../types';
+import type { TieredDocumentDiscovery } from '../discovery/TieredDocumentDiscovery';
+import { Verdict, ClaimCategory } from '../types';
+import type { ProjectMetadata } from '../types';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger({ operation: 'JobRouter' });
@@ -31,6 +33,7 @@ export interface JobRouterDeps {
   reportGenerator: ReportGenerator;
   costTracker: CostTracker;
   cryptoResolver: CryptoContentResolver;
+  tieredDiscovery: TieredDocumentDiscovery | null;
 }
 
 export class JobRouter {
@@ -45,8 +48,6 @@ export class JobRouter {
     switch (offeringId) {
       case 'project_legitimacy_scan':
         return this.handleLegitimacyScan(input);
-      case 'tokenomics_sustainability_audit':
-        return this.handleTokenomicsAudit(input);
       case 'verify_project_whitepaper':
         return this.handleVerifyWhitepaper(input);
       case 'full_technical_verification':
@@ -59,62 +60,98 @@ export class JobRouter {
   }
 
   private async handleLegitimacyScan(input: Record<string, unknown>) {
+    // Try cache first
     const wp = await this.findWhitepaper(input);
-    if (!wp) return this.notInDatabase(input);
-
-    const verification = await this.deps.verificationsRepo.findByWhitepaperId(wp.id);
-    if (!verification) return this.notInDatabase(input);
-
-    const analysis = this.extractStructuralAnalysis(verification);
-
-    const report = this.deps.reportGenerator.generateLegitimacyScan(
-      this.verificationRowToResult(verification),
-      analysis,
-      wp as never,
-    );
-
-    // Always return the REQUESTED token_address, not the cached one.
-    // The DB may store a different chain's address (e.g., Base vs Ethereum).
-    const requestedAddress = input.token_address as string | undefined;
-    if (requestedAddress) {
-      report.tokenAddress = requestedAddress;
+    if (wp) {
+      const verification = await this.deps.verificationsRepo.findByWhitepaperId(wp.id);
+      if (verification) {
+        const analysis = this.extractStructuralAnalysis(verification);
+        const report = this.deps.reportGenerator.generateLegitimacyScan(
+          this.verificationRowToResult(verification),
+          analysis,
+          wp as never,
+        );
+        const requestedAddress = input.token_address as string | undefined;
+        if (requestedAddress) {
+          report.tokenAddress = requestedAddress;
+        }
+        return report;
+      }
     }
 
-    return report;
-  }
+    // Cache miss — run live L1 if discovery stack is available
+    const projectName = (input.project_name as string | undefined)?.trim() ?? 'Unknown';
+    const tokenAddress = (input.token_address as string | undefined)?.trim() ?? '';
 
-  private async handleTokenomicsAudit(input: Record<string, unknown>) {
-    const wp = await this.findWhitepaper(input);
-    if (!wp) return this.notInDatabase(input);
+    if (this.deps.tieredDiscovery) {
+      try {
+        const metadata: ProjectMetadata = {
+          agentName: projectName,
+          entityId: null,
+          description: null,
+          linkedUrls: [],
+          category: null,
+          graduationStatus: null,
+        };
+        const discovered = await this.deps.tieredDiscovery.discover(metadata, tokenAddress);
+        if (discovered) {
+          // L1: Structural analysis
+          this.deps.costTracker.reset();
+          this.deps.costTracker.startStage('l1');
+          const analysis = await this.deps.structuralAnalyzer.analyze(
+            discovered.resolved.text,
+            discovered.resolved.pageCount,
+          );
+          const structuralScore = this.deps.structuralAnalyzer.computeQuickFilterScore(analysis);
+          const hypeTechRatio = this.deps.structuralAnalyzer.computeHypeTechRatio(discovered.resolved.text);
+          this.deps.costTracker.endStage('l1', 0, 0);
 
-    const verification = await this.deps.verificationsRepo.findByWhitepaperId(wp.id);
-    if (!verification) return this.notInDatabase(input);
+          // Cache the result
+          const newWp = await this.deps.whitepaperRepo.create({
+            projectName,
+            tokenAddress,
+            documentUrl: discovered.documentUrl,
+            chain: tokenAddress.startsWith('0x') ? 'base' : 'solana',
+            pageCount: discovered.resolved.pageCount,
+            status: 'VERIFIED',
+            selectionScore: 0,
+          });
 
-    const claims = await this.deps.claimsRepo.findByWhitepaperId(wp.id);
-    const analysis = this.extractStructuralAnalysis(verification);
+          const verdict = structuralScore >= 3 ? Verdict.PASS
+            : structuralScore >= 2 ? Verdict.CONDITIONAL
+            : Verdict.FAIL;
 
-    const report = this.deps.reportGenerator.generateTokenomicsAudit(
-      this.verificationRowToResult(verification),
-      claims.map((c) => ({
-        claimId: c.id,
-        category: c.category as never,
-        claimText: c.claimText,
-        statedEvidence: c.statedEvidence,
-        mathematicalProofPresent: c.mathProofPresent,
-        sourceSection: c.sourceSection,
-        regulatoryRelevance: (c.evaluationJson as Record<string, unknown>)?.regulatoryRelevance === true,
-      })),
-      wp as never,
-      undefined,
-      analysis,
-    );
+          await this.deps.verificationsRepo.create({
+            whitepaperId: newWp.id,
+            structuralScore,
+            confidenceScore: 0,
+            hypeTechRatio,
+            verdict,
+            totalClaims: 0,
+            verifiedClaims: 0,
+            llmTokensUsed: 0,
+            computeCostUsd: 0,
+            structuralAnalysisJson: analysis as unknown as Record<string, unknown>,
+            triggerSource: 'acp_live_l1',
+            cacheHit: false,
+          });
 
-    const requestedAddress = input.token_address as string | undefined;
-    if (requestedAddress) {
-      report.tokenAddress = requestedAddress;
+          const report = this.deps.reportGenerator.generateLegitimacyScan(
+            { structuralScore, confidenceScore: 0, hypeTechRatio, verdict, focusAreaScores: { [ClaimCategory.TOKENOMICS]: 0, [ClaimCategory.PERFORMANCE]: 0, [ClaimCategory.CONSENSUS]: 0, [ClaimCategory.SCIENTIFIC]: 0 }, totalClaims: 0, verifiedClaims: 0, llmTokensUsed: 0, computeCostUsd: 0 },
+            analysis,
+            newWp as never,
+          );
+          if (tokenAddress) report.tokenAddress = tokenAddress;
+          log.info('Live L1 scan completed', { projectName, structuralScore, verdict });
+          return report;
+        }
+      } catch (err) {
+        log.warn('Live L1 discovery failed — returning INSUFFICIENT_DATA', { projectName, error: (err as Error).message });
+      }
     }
 
-    return report;
+    // Discovery unavailable or failed — return INSUFFICIENT_DATA
+    return this.insufficientData(input);
   }
 
   /**
@@ -422,6 +459,29 @@ export class JobRouter {
    * Virtuals evaluators check that the response matches the offering's deliverable schema.
    * A bare `{ error: "not_in_database" }` gets flagged as "unrelated to the requested audit."
    */
+  private insufficientData(input?: Record<string, unknown>) {
+    return {
+      projectName: (input?.project_name as string) ?? 'Unknown',
+      tokenAddress: (input?.token_address as string) ?? null,
+      structuralScore: 0,
+      verdict: 'INSUFFICIENT_DATA' as const,
+      hypeTechRatio: 0,
+      claimCount: 0,
+      claimsMicaCompliance: 'NOT_MENTIONED' as const,
+      micaCompliant: 'NOT_APPLICABLE' as const,
+      micaSummary: 'No documentation found for this project.',
+      generatedAt: new Date().toISOString(),
+      claims: [],
+      claimScores: {},
+      logicSummary: 'No whitepaper or documentation could be discovered for this project.',
+      confidenceScore: 0,
+      evaluations: [],
+      focusAreaScores: {},
+      llmTokensUsed: 0,
+      computeCostUsd: 0,
+    };
+  }
+
   private notInDatabase(input?: Record<string, unknown>) {
     const base = {
       projectName: (input?.project_name as string) ?? 'Unknown',
@@ -437,7 +497,7 @@ export class JobRouter {
       // TokenomicsAuditReport fields
       claims: [],
       claimScores: {},
-      logicSummary: 'Project not in database. Submit via verify_project_whitepaper ($2.00) to add this project.',
+      logicSummary: 'Project not found in verification database.',
       // FullVerificationReport fields
       confidenceScore: 0,
       evaluations: [],

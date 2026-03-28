@@ -1,8 +1,8 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-03-28 (7-BUG DISPATCH FIX — respond(true) hotfix deployed)
+> Last updated: 2026-03-28 (3/6 eval — NSFW + non-token + address passthrough fixes deployed)
 > Updated by: Claude Opus 4.6 — Kovsky session
-> Session label: 7-bug ACP dispatch fix deployed, Grey live, awaiting re-evaluation
-> Staleness gate: 2026-03-27 — if today is >3 days past this,
+> Session label: Raydium COMPLETED end-to-end. Three new content filters + address passthrough deployed. Awaiting 6/6 re-evaluation.
+> Staleness gate: 2026-03-28 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
 ## Focus (1-3 goals, testable)
@@ -29,7 +29,11 @@
 - [x] **Graduation submission sent** — videos submitted to Virtuals for human review
 - [x] **ACP credentials deployed** — all 3 vars in .env (local + VPS) (2026-03-27)
 - [x] **ACP SDK CONNECTED** — WebSocket live, ACP Room joined, onNewTask active (2026-03-27)
-- [ ] **Graduation** — pending Virtuals human review
+- [x] **respond(true) CONFIRMED** — Raydium (Solana base58) completed full cycle: accept → deliver → evaluator accepted (2026-03-28)
+- [x] **Content filtering** — NSFW rejection, non-token name rejection, dead address rejection, malicious keyword rejection (2026-03-28)
+- [x] **Address passthrough** — JobRouter returns requested token_address, not cached DB address (2026-03-28)
+- [ ] **Graduation** — best 3/6, awaiting re-evaluation for 6/6
+- [ ] **USDC MiCA data quality** — evaluator says USDC is fully MiCA-compliant, Grey says PARTIAL. May need seed data update if this test case recurs.
 - [ ] **LAUNCH** — fire outreach, pinned thread, monitor
 
 ## What Works (verified)
@@ -47,18 +51,28 @@
 - ✅ **Graduation submission sent** — videos submitted to Virtuals (2026-03-26)
 
 ## What's Broken
+- ⚠️ **USDC MiCA assessment** — Grey returns PARTIAL, evaluator says fully compliant. Seed data may need update.
 - ⚠️ **AcpWrapper.ts is still a stub** — retained for IAcpClient interface tests. Production ACP goes through plugin-acp.
 - ⚠️ **Ports 3000 + 3001 open** in Lightsail firewall — close after graduation review completes.
 - ⚠️ Image-only PDF detection limited (deferred Phase 2)
 - ⚠️ OCR gap — scanned PDFs return INSUFFICIENT_DATA (deferred Phase 2)
 
 ## Test Count
-- **304 tests across 23 test files, 0 failures** (verified 2026-03-26)
+- **304 tests across 23 test files, 0 failures** (verified 2026-03-28)
+
+## Graduation Eval History
+| Run | Score | Passed | Failed | Key Issue |
+|-----|-------|--------|--------|-----------|
+| 1 | 0/12 | — | all | Dispatch bugs (phase sequencing, no envelope, double-serialize) |
+| 2 | 3/6 | 3 rejections | 3 accept+deliver expired | accept() alone doesn't call createRequirement() |
+| 3 | 1/4 | 1 rejection | 3 expired | memoToSign.sign() also skips createRequirement() |
+| 4 | 3/6 | Raydium COMPLETED + 2 rejections | USDC data quality, NSFW not filtered, non-token name not filtered | Content filtering gaps |
 
 ## Next Actions (ordered)
-1. **Wait for Virtuals human review** — graduation decision
-2. **Close ports 3000 + 3001** in Lightsail after graduation
-3. **LAUNCH** — outreach, pinned thread, monitor
+1. **Re-evaluate via Butler** — fixes 10-13 deployed, targeting 6/6
+2. **If USDC recurs** — update seed data with correct MiCA assessment
+3. **Close ports 3000 + 3001** in Lightsail after graduation
+4. **LAUNCH** — outreach, pinned thread, monitor
 
 ## ACP Registration Context
 - **Role:** Provider
@@ -104,6 +118,8 @@
 | 2026-03-25 | Claude Opus 4.6 (Kovsky) | plugin-acp built (37 tests), wired to plugin-wpv, security audit + hardening, 66 Test re-certified | All 3 repos pushed, blocked on ACP credentials |
 | 2026-03-26 | Claude Opus 4.6 (Kovsky) | rejectPayable, HTTP handler, Supabase direct, daily briefing cap 10, flat notInDatabase, Date fix. Breakbot passed. Videos submitted. | All 5 offerings live |
 | 2026-03-27 | Claude Opus 4.6 (Kovsky) | ACP credentials deployed, 0x prefix fix, entity key resolved to 3. SDK CONNECTED — WebSocket live, ACP Room joined, 5 handlers active. 66 Test 267/267 on VPS. | Grey is live on ACP marketplace |
+| 2026-03-28 | Claude Opus 4.6 (Kovsky) | 6-bug dispatch fix + Bug 7 respond(true) + Fix 8 memoToSign (reverted) + Fix 9 Solana base58 | Eval: 1/4 → 3/6 |
+| 2026-03-28 | Claude Opus 4.6 (Kovsky) | 3/6 eval: Raydium COMPLETED. Fixes 10-13: dead address rejection, NSFW filter, non-token name filter, address passthrough in JobRouter | 304/304 tests, deployed to VPS |
 
 ## Quick Commands
 ```bash

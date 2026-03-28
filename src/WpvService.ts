@@ -13,7 +13,12 @@ import type { ClaimEvaluator } from './verification/ClaimEvaluator';
 import { ScoreAggregator } from './verification/ScoreAggregator';
 import { ReportGenerator } from './verification/ReportGenerator';
 import { CostTracker } from './verification/CostTracker';
-import type { CryptoContentResolver } from './discovery/CryptoContentResolver';
+import { CryptoContentResolver } from './discovery/CryptoContentResolver';
+import { FetchContentResolver } from './discovery/FetchContentResolver';
+import { TieredDocumentDiscovery } from './discovery/TieredDocumentDiscovery';
+import { WebsiteScraper } from './discovery/WebsiteScraper';
+import { WebSearchFallback } from './discovery/WebSearchFallback';
+import { SyntheticWhitepaperComposer } from './discovery/SyntheticWhitepaperComposer';
 import type { DiscoveryCron } from './discovery/DiscoveryCron';
 import { JobRouter } from './acp/JobRouter';
 import { ResourceHandlers } from './acp/ResourceHandlers';
@@ -76,17 +81,31 @@ export class WpvService extends Service {
       const scoreAggregator = new ScoreAggregator();
       const resourceHandlers = new ResourceHandlers(verificationsRepo, whitepaperRepo);
 
+      // Initialize discovery stack for live L1 scans on cache miss
+      const fetchResolver = new FetchContentResolver();
+      const cryptoResolver = new CryptoContentResolver(fetchResolver);
+      const websiteScraper = new WebsiteScraper();
+      const webSearch = new WebSearchFallback();
+      const composer = new SyntheticWhitepaperComposer();
+      const tieredDiscovery = new TieredDocumentDiscovery({
+        resolver: cryptoResolver,
+        websiteScraper,
+        webSearch,
+        composer,
+      });
+
       const jobRouter = new JobRouter({
         whitepaperRepo,
         verificationsRepo,
         claimsRepo,
         structuralAnalyzer,
-        claimExtractor: null as never,  // L2/L3 only — not needed for cached lookups
+        claimExtractor: null as never,  // L2/L3 only — not needed for $0.25 scans
         claimEvaluator: null as never,  // L2/L3 only
         scoreAggregator,
         reportGenerator,
         costTracker,
-        cryptoResolver: null as never,  // Live pipeline only
+        cryptoResolver,
+        tieredDiscovery,
       });
 
       this.setDeps({
@@ -99,7 +118,7 @@ export class WpvService extends Service {
         scoreAggregator,
         reportGenerator,
         costTracker,
-        cryptoResolver: null as never,
+        cryptoResolver,
         discoveryCron: null as never,
         jobRouter,
         resourceHandlers,
@@ -225,6 +244,28 @@ export class WpvService extends Service {
   private static async validateTokenAddress(offeringId: string, requirement: Record<string, unknown>): Promise<void> {
     if (offeringId === 'daily_technical_briefing') return;
 
+    // Scan ALL string fields in requirement for content violations
+    const allStringValues = Object.values(requirement)
+      .filter((v): v is string => typeof v === 'string')
+      .map((v) => v.toLowerCase());
+
+    const violationPatterns = [
+      /nsfw/i, /explicit/i, /sexual/i, /pornograph/i, /nude/i,
+      /ignore all/i, /ignore logic/i, /regardless of evidence/i,
+      /say this is a scam/i, /biased/i, /override/i,
+      /\[.*(?:nsfw|violation|banned|illegal|prohibited).*\]/i,
+    ];
+
+    for (const value of allStringValues) {
+      for (const pattern of violationPatterns) {
+        if (pattern.test(value)) {
+          const err = new Error('Request contains policy-violating content and cannot be processed');
+          err.name = 'InputValidationError';
+          throw err;
+        }
+      }
+    }
+
     const tokenAddress = requirement?.token_address;
     if (tokenAddress !== undefined && tokenAddress !== null) {
       if (typeof tokenAddress !== 'string' || !tokenAddress.trim()) {
@@ -325,7 +366,6 @@ export class WpvService extends Service {
 
       const offerings: OfferingId[] = [
         'project_legitimacy_scan',
-        'tokenomics_sustainability_audit',
         'verify_project_whitepaper',
         'full_technical_verification',
         'daily_technical_briefing',
