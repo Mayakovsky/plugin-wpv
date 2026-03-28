@@ -171,11 +171,35 @@ export class WpvService extends Service {
    * Called during init if AcpService is available.
    * If AcpService is not loaded (e.g., no ACP credentials), this is a no-op.
    */
+  /**
+   * Validate token_address format. Shared between pre-accept validator and handler.
+   * Throws InputValidationError for invalid addresses.
+   */
+  private static validateTokenAddress(offeringId: string, requirement: Record<string, unknown>): void {
+    if (offeringId === 'daily_technical_briefing') return;
+
+    const tokenAddress = requirement?.token_address;
+    if (tokenAddress !== undefined && tokenAddress !== null) {
+      if (typeof tokenAddress !== 'string' ||
+          !tokenAddress.startsWith('0x') ||
+          tokenAddress.length !== 42 ||
+          !/^0x[0-9a-fA-F]{40}$/.test(tokenAddress)) {
+        const err = new Error(`Invalid token_address: expected 0x-prefixed 42-char hex address, got '${String(tokenAddress).slice(0, 50)}'`);
+        err.name = 'InputValidationError';
+        throw err;
+      }
+    }
+  }
+
   private registerWithAcp(runtime: IAgentRuntime): void {
     if (this.acpRegistered) return;
     try {
       const acpService = runtime.getService('acp') as {
-        registerOfferingHandler?: (id: string, handler: (input: { requirement: Record<string, unknown> }) => Promise<unknown>) => void;
+        registerOfferingHandler?: (
+          id: string,
+          handler: (input: { requirement: Record<string, unknown> }) => Promise<unknown>,
+          validator?: (input: { requirement: Record<string, unknown> }) => void,
+        ) => void;
       } | null;
 
       if (!acpService?.registerOfferingHandler) {
@@ -192,32 +216,27 @@ export class WpvService extends Service {
       ];
 
       for (const offeringId of offerings) {
-        acpService.registerOfferingHandler(offeringId, async (input) => {
+        // Bug 3: Pre-accept input validator — runs before accept() in phase 0
+        const validator = (input: { requirement: Record<string, unknown> }) => {
+          WpvService.validateTokenAddress(offeringId, input.requirement);
+        };
+
+        const handler = async (input: { requirement: Record<string, unknown> }) => {
           if (!this.deps?.jobRouter) {
             return { error: 'wpv_not_ready', message: 'WPV JobRouter not initialized' };
           }
 
-          // Validate token_address before processing (all offerings except daily_technical_briefing)
-          if (offeringId !== 'daily_technical_briefing') {
-            const tokenAddress = input.requirement?.token_address;
-            if (tokenAddress !== undefined && tokenAddress !== null) {
-              if (typeof tokenAddress !== 'string' ||
-                  !tokenAddress.startsWith('0x') ||
-                  tokenAddress.length !== 42 ||
-                  !/^0x[0-9a-fA-F]{40}$/.test(tokenAddress)) {
-                const err = new Error(`Invalid token_address: expected 0x-prefixed 42-char hex address, got '${String(tokenAddress).slice(0, 50)}'`);
-                err.name = 'InputValidationError';
-                throw err;
-              }
-            }
-          }
+          // Validate again in handler (defense in depth — also covers HTTP path)
+          WpvService.validateTokenAddress(offeringId, input.requirement);
 
           return this.deps.jobRouter.handleJob(offeringId, input.requirement);
-        });
+        };
+
+        acpService.registerOfferingHandler(offeringId, handler, validator);
       }
 
       this.acpRegistered = true;
-      logger.info(`WpvService: Registered ${offerings.length} offering handlers with AcpService`);
+      logger.info(`WpvService: Registered ${offerings.length} offering handlers with AcpService (with input validators)`);
     } catch (err) {
       logger.warn(`WpvService: ACP registration failed — ${(err as Error).message}`);
     }

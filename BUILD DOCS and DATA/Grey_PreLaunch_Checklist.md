@@ -1,8 +1,8 @@
 # Whitepaper Grey — Pre-Launch Checklist
 
-**Date:** 2026-03-26 (GRADUATED — awaiting 2 remaining ACP credentials from developer portal)
+**Date:** 2026-03-28 (GREY IS LIVE ON ACP — final graduation test pending)
 **Owner:** Forces (with Claude support)
-**Status:** GREY IS GRADUATED. On-chain record. Agent wallet funded ($5 USDC). ACP_AGENT_WALLET_ADDRESS in .env. Virtuals developer portal inaccessible — can't retrieve ACP_WALLET_PRIVATE_KEY or ACP_SESSION_ENTITY_KEY_ID. Grey is graduated but not listening for jobs. DO NOT fire outreach until Grey is processing.
+**Status:** GREY IS CONNECTED AND LISTENING FOR JOBS. All code complete. All testing complete. ACP WebSocket live. Currently blocked on Virtuals DevRel Graduation Evaluator (Agent 1419) — pending job queue must reset/complete before Grey can perform the final required graduation test. Butler is facilitating. After that, handoff to human reviewers.
 
 ---
 
@@ -15,81 +15,69 @@
 | Twitter | @WhitepaperGrey |
 | Domain | whitepapergrey.com |
 | ACP Role | **Provider** |
-| ACP Status | **GRADUATED** |
+| ACP Status | **Connected, listening for jobs. Graduation pending final test + human review.** |
 
 ---
 
-# Completed
+# Everything Complete
 
 | Task | Date |
 |------|------|
-| All code (plugin-wpv 304, plugin-acp 37, wpv-agent 13) | 2026-03-25 |
-| plugin-acp built + wired to plugin-wpv | 2026-03-25 |
-| Security hardening | 2026-03-25 |
-| 66 Test re-certified (267/267) | 2026-03-25 |
-| VPS running 24/7 | 2026-03-18 |
+| All code (plugin-wpv 304, plugin-acp 47, wpv-agent 13) | 2026-03-26 |
+| plugin-acp built + wired to plugin-wpv | 2026-03-26 |
+| Security hardening + rejectPayable | 2026-03-26 |
+| HTTP job handler live on port 3001 | 2026-03-26 |
+| 66 Test re-certified (267/267) | 2026-03-26 |
+| VPS deployed, all repos built, PM2 running | 2026-03-26 |
 | Database seeded (66 tokens, 3 waves) | 2026-03-21 |
 | Virtuals registration (Provider, 5 offerings) | 2026-03-24 |
-| **SANDBOX GRADUATION PASSED** | **2026-03-26** |
-| **Agent wallet funded ($5 USDC)** | **2026-03-26** |
-| **ACP_AGENT_WALLET_ADDRESS in .env** | **2026-03-26** |
+| Agent wallet funded ($5 USDC) | 2026-03-26 |
+| Sandbox requirements (10 transactions on-chain) | 2026-03-26 |
+| Breakbot tests (all 5 offerings, positive + negative) | 2026-03-26 |
+| 10 application tests | 2026-03-27 |
+| Graduation submission (videos) | 2026-03-26 |
+| ACP credentials deployed (.env local + VPS) | 2026-03-27 |
+| **ACP SDK connected — WebSocket live, onNewTask active** | **2026-03-27** |
 | Pre-graduation tweets (5) | 2026-03-23 |
 | Website + one-pager | 2026-03-17 |
 | Outreach messages drafted (22) | 2026-03-15 |
-| All repos pushed to GitHub | 2026-03-25 |
+| All repos pushed to GitHub | 2026-03-27 |
 
 ---
 
-# BLOCKED: Developer Portal Down
+# Current Blocker: Graduation Evaluator Queue
 
-Two ACP credentials are trapped behind the Virtuals developer portal which is experiencing server issues:
+**What's happening:** The Virtuals DevRel Graduation Evaluator (Agent 1419) has a pending job queue that needs to clear before Grey can complete the final required graduation test. This wasn't in our original plan — it's an additional platform step we discovered during the submission process.
 
-| Credential | Status | Where to Find |
-|-----------|--------|---------------|
-| `ACP_AGENT_WALLET_ADDRESS` | ✅ Done | Already in .env |
-| `ACP_WALLET_PRIVATE_KEY` | ❌ **BLOCKED** | Developer portal → wallet whitelisting page |
-| `ACP_SESSION_ENTITY_KEY_ID` | ❌ **BLOCKED** | Developer portal → agent profile page |
+**Who's handling it:** Forces, via Butler. No code changes needed. No action for Kovsky.
 
-**Keep trying the portal.** The moment it's accessible, grab both values and share with Kovsky. That's the only thing standing between Grey and live commerce.
+**What happens after:** Once Agent 1419's queue clears → Grey performs the final test → passes → application goes to Virtuals human reviewers → graduation decision.
 
 ---
 
-# What Forces Can Do NOW
-
-## 1. Keep Checking the Developer Portal
-Try `https://app.virtuals.io/acp/join` periodically. When it loads, navigate to your agent profile → wallet section. The private key and session entity key ID should be visible there.
-
-## 2. Prepare Pinned Thread (Draft — DO NOT POST YET)
-Have it ready to fire the moment Grey is processing jobs. Post only after confirming Grey is accepting and delivering via ACP.
-
-## 3. Review Outreach Messages
-All 22 are final. Review one last time. They fire simultaneously the moment Grey is live.
-
----
-
-# What Kovsky Can Do NOW (No Credentials Needed)
-
-1. **Deploy latest code to VPS** — plugin-acp (new repo), updated plugin-wpv, updated wpv-agent. Everything staged for instant launch.
-2. **Wire resource HTTP endpoints** — Greenlight List + Scam Alert Feed served via HTTP on VPS.
-3. **Create CLAUDE.md + heartbeat.md for plugin-acp repo**
-4. **Update wpv-agent heartbeat** (stale since 2026-03-23)
-5. **Re-run 66 Test on VPS** after deploying latest code
-
----
-
-# Launch Sequence (When Credentials Arrive)
+# Launch Sequence (After Graduation)
 
 | Step | Owner | Time |
 |------|-------|------|
-| Portal comes back, grab 2 keys | Forces | ~minutes |
-| Share keys with Kovsky | Forces | immediate |
-| Add to .env (local + VPS), restart PM2 | Kovsky | ~5 min |
-| Verify ACP WebSocket connected | Kovsky | ~5 min |
-| Smoke Test 8/8 (ACP now passes) | Kovsky | ~5 min |
-| Monitor 1 hour — verify job flow | Both | 1 hour |
-| **Fire 22 outreach messages** | Forces | simultaneous |
-| **Post pinned thread** | Forces | same day |
-| **GREY IS LIVE** | — | — |
+| Agent 1419 queue clears | Virtuals | Waiting |
+| Final graduation test via Butler | Forces | Minutes |
+| Human review approves graduation | Virtuals | 24–48hr |
+| Close ports 3000 + 3001 in Lightsail | Kovsky | ~2 min |
+| Verify Grey still processing via WebSocket | Kovsky | ~5 min |
+| **Fire 22 outreach messages** | Forces | Simultaneous |
+| **Post pinned thread** | Forces | Same day |
+| **GREY IS OFFICIALLY LIVE** | — | — |
+
+**DO NOT fire outreach until graduation is confirmed.**
+
+---
+
+# Post-Launch
+
+1. Add resources (Greenlight List, Scam Alert Feed) to Virtuals profile
+2. Release plugin-acp to ElizaOS plugin repository
+3. Public website (Next.js on Supabase)
+4. Shadow pipeline for local LLM evaluation at 300 verifications/month
 
 ---
 
@@ -101,6 +89,8 @@ All 22 are final. Review one last time. They fire simultaneously the moment Grey
 | Growth | Month 3 | $2,040 |
 | Scale | Month 6 | $6,300 |
 | Volume | Month 12 | $21,000 |
+
+Break-even: $162–$212/month.
 
 ---
 
