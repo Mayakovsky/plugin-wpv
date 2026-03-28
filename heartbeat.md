@@ -1,7 +1,7 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-03-28 (3/6 eval — NSFW + non-token + address passthrough fixes deployed)
+> Last updated: 2026-03-28 (Option A restructure: 4 offerings, live L1, content filtering)
 > Updated by: Claude Opus 4.6 — Kovsky session
-> Session label: Raydium COMPLETED end-to-end. Three new content filters + address passthrough deployed. Awaiting 6/6 re-evaluation.
+> Session label: Restructured to 4 offerings. Live L1 for cache miss. All-field content filtering. Deployed. Awaiting re-evaluation.
 > Staleness gate: 2026-03-28 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
@@ -32,7 +32,8 @@
 - [x] **respond(true) CONFIRMED** — Raydium (Solana base58) completed full cycle: accept → deliver → evaluator accepted (2026-03-28)
 - [x] **Content filtering** — NSFW rejection, non-token name rejection, dead address rejection, malicious keyword rejection (2026-03-28)
 - [x] **Address passthrough** — JobRouter returns requested token_address, not cached DB address (2026-03-28)
-- [ ] **Graduation** — best 3/6, awaiting re-evaluation for 6/6
+- [x] **Option A restructure** — 4 offerings (killed tokenomics_sustainability_audit), live L1 on cache miss, all-field content filtering (2026-03-28)
+- [ ] **Graduation** — targeting 6/6 with restructure. Live L1 addresses NOT_IN_DATABASE failures.
 - [ ] **USDC MiCA data quality** — evaluator says USDC is fully MiCA-compliant, Grey says PARTIAL. May need seed data update if this test case recurs.
 - [ ] **LAUNCH** — fire outreach, pinned thread, monitor
 
@@ -58,7 +59,7 @@
 - ⚠️ OCR gap — scanned PDFs return INSUFFICIENT_DATA (deferred Phase 2)
 
 ## Test Count
-- **304 tests across 23 test files, 0 failures** (verified 2026-03-28)
+- **303 tests across 23 test files, 0 failures** (verified 2026-03-28, post-restructure)
 
 ## Graduation Eval History
 | Run | Score | Passed | Failed | Key Issue |
