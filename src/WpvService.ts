@@ -175,7 +175,54 @@ export class WpvService extends Service {
    * Validate token_address format. Shared between pre-accept validator and handler.
    * Throws InputValidationError for invalid addresses.
    */
-  private static validateTokenAddress(offeringId: string, requirement: Record<string, unknown>): void {
+  /**
+   * Check if an EVM address has contract bytecode on Base or Ethereum mainnet.
+   * EOA wallets return "0x" (empty). Returns true if contract found on either chain.
+   * On RPC failure, returns true (don't block jobs due to RPC issues).
+   */
+  private static async isContractAddress(address: string): Promise<boolean> {
+    if (!address.startsWith('0x')) return true; // Solana — can't check, allow through
+
+    const baseRpcUrl = process.env.BASE_RPC_URL ?? 'https://mainnet.base.org';
+    // Use both Base and a public Ethereum RPC to cover cross-chain addresses
+    const rpcUrls = [baseRpcUrl, 'https://ethereum-rpc.publicnode.com'];
+
+    for (const rpcUrl of rpcUrls) {
+      try {
+        const response = await fetch(rpcUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'eth_getCode',
+            params: [address, 'latest'],
+          }),
+          signal: AbortSignal.timeout(3000),
+        });
+        const data = await response.json() as { result?: string; error?: unknown };
+        if (data.error) continue; // RPC error response — try next
+        const code = data?.result;
+        if (!code || code === '0x' || code === '0x0') continue; // No bytecode on this chain
+
+        // Has bytecode — but is it a token contract or a personal smart wallet?
+        // ERC-4337 account abstraction proxies start with 0xef0100 and are short (~48 chars).
+        // Real token contracts (ERC-20) are much longer (thousands of chars).
+        if (code.startsWith('0xef0100') && code.length < 100) {
+          continue; // Smart wallet proxy (e.g., Vitalik's ERC-4337) — not a token
+        }
+
+        return true; // Real contract bytecode found
+      } catch {
+        continue; // Network error — try next RPC
+      }
+    }
+
+    // No real contract bytecode found on any chain → likely EOA or smart wallet
+    return false;
+  }
+
+  private static async validateTokenAddress(offeringId: string, requirement: Record<string, unknown>): Promise<void> {
     if (offeringId === 'daily_technical_briefing') return;
 
     const tokenAddress = requirement?.token_address;
@@ -204,7 +251,14 @@ export class WpvService extends Service {
           err.name = 'InputValidationError';
           throw err;
         }
-        // Format valid — pass through to handler
+        // eth_getCode check — reject EOA wallets (no bytecode)
+        const isContract = await WpvService.isContractAddress(trimmed);
+        if (!isContract) {
+          const err = new Error(`Invalid token_address: address is not a contract (EOA wallet) — '${trimmed.slice(0, 50)}'`);
+          err.name = 'InputValidationError';
+          throw err;
+        }
+        // Format valid + contract check passed — allow through
         return;
       }
 
@@ -260,7 +314,7 @@ export class WpvService extends Service {
         registerOfferingHandler?: (
           id: string,
           handler: (input: { requirement: Record<string, unknown> }) => Promise<unknown>,
-          validator?: (input: { requirement: Record<string, unknown> }) => void,
+          validator?: (input: { requirement: Record<string, unknown> }) => void | Promise<void>,
         ) => void;
       } | null;
 
@@ -279,8 +333,8 @@ export class WpvService extends Service {
 
       for (const offeringId of offerings) {
         // Bug 3: Pre-accept input validator — runs before accept() in phase 0
-        const validator = (input: { requirement: Record<string, unknown> }) => {
-          WpvService.validateTokenAddress(offeringId, input.requirement);
+        const validator = async (input: { requirement: Record<string, unknown> }) => {
+          await WpvService.validateTokenAddress(offeringId, input.requirement);
         };
 
         const handler = async (input: { requirement: Record<string, unknown> }) => {
@@ -289,7 +343,7 @@ export class WpvService extends Service {
           }
 
           // Validate again in handler (defense in depth — also covers HTTP path)
-          WpvService.validateTokenAddress(offeringId, input.requirement);
+          await WpvService.validateTokenAddress(offeringId, input.requirement);
 
           return this.deps.jobRouter.handleJob(offeringId, input.requirement);
         };
