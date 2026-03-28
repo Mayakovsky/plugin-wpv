@@ -1,7 +1,7 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-03-28 (6-BUG DISPATCH FIX DEPLOYED)
+> Last updated: 2026-03-28 (7-BUG DISPATCH FIX — respond(true) hotfix deployed)
 > Updated by: Claude Opus 4.6 — Kovsky session
-> Session label: ACP job dispatch 6-bug fix deployed to VPS, Grey live, awaiting re-evaluation
+> Session label: 7-bug ACP dispatch fix deployed, Grey live, awaiting re-evaluation
 > Staleness gate: 2026-03-27 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
