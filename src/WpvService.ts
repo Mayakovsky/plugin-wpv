@@ -180,11 +180,29 @@ export class WpvService extends Service {
 
     const tokenAddress = requirement?.token_address;
     if (tokenAddress !== undefined && tokenAddress !== null) {
-      if (typeof tokenAddress !== 'string' ||
-          !tokenAddress.startsWith('0x') ||
-          tokenAddress.length !== 42 ||
-          !/^0x[0-9a-fA-F]{40}$/.test(tokenAddress)) {
-        const err = new Error(`Invalid token_address: expected 0x-prefixed 42-char hex address, got '${String(tokenAddress).slice(0, 50)}'`);
+      if (typeof tokenAddress !== 'string' || !tokenAddress.trim()) {
+        const err = new Error(`Invalid token_address: expected non-empty string, got '${String(tokenAddress).slice(0, 50)}'`);
+        err.name = 'InputValidationError';
+        throw err;
+      }
+
+      const trimmed = tokenAddress.trim();
+
+      // EVM: must be 0x + 40 hex chars = 42 total
+      if (trimmed.startsWith('0x')) {
+        if (!/^0x[0-9a-fA-F]{40}$/.test(trimmed)) {
+          const err = new Error(`Invalid token_address: expected 0x-prefixed 42-char hex address, got '${trimmed.slice(0, 50)}'`);
+          err.name = 'InputValidationError';
+          throw err;
+        }
+        return;
+      }
+
+      // Solana/other chains: alphanumeric only (base58), 26-50 chars
+      // Rejects underscores, hyphens, spaces — catches garbage strings
+      // Accepts valid Solana base58 addresses like JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN
+      if (!/^[a-zA-Z0-9]{26,50}$/.test(trimmed)) {
+        const err = new Error(`Invalid token_address: expected valid crypto address (EVM hex or base58), got '${trimmed.slice(0, 50)}'`);
         err.name = 'InputValidationError';
         throw err;
       }
