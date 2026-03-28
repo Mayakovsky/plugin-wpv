@@ -1,7 +1,7 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-03-27 (ACP SDK CONNECTED — Grey is live on the marketplace)
+> Last updated: 2026-03-28 (6-BUG DISPATCH FIX DEPLOYED)
 > Updated by: Claude Opus 4.6 — Kovsky session
-> Session label: Grey connected to ACP via WebSocket, listening for jobs, graduation pending review
+> Session label: ACP job dispatch 6-bug fix deployed to VPS, Grey live, awaiting re-evaluation
 > Staleness gate: 2026-03-27 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
@@ -15,7 +15,8 @@
 - [x] **ACP v2 schema hardening** — NOT_IN_DATABASE verdict, structuralScore min 0, flat response shape, cache-only tiers, token_address required, focusAreaScores lowercase
 - [x] **Virtuals registration** — Provider, 5 offerings, wallet created
 - [x] **Pre-graduation tweets** — 5 tweets posted/scheduled
-- [x] **plugin-acp built** — ElizaOS ↔ ACP bridge (47 tests). AcpService + HTTP job handler + 3 actions. github.com/Mayakovsky/plugin-acp
+- [x] **plugin-acp built** — ElizaOS ↔ ACP bridge (59 tests). AcpService + HTTP job handler + 3 actions. github.com/Mayakovsky/plugin-acp
+- [x] **ACP dispatch 6-bug fix** — phase split, dedup, envelope {type,value}, no double-serialize, SDK constants, pre-accept InputValidator. WpvService registers validators alongside handlers.
 - [x] **plugin-wpv wired to plugin-acp** — WpvService registers 5 offering handlers via AcpService. Standalone mode if ACP unavailable.
 - [x] **Security hardening** — guarded JSON.parse, NaN validation, empty offeringId rejection, CostTracker reset per job, URL protocol whitelist on live pipeline
 - [x] **Virtuals best practice** — rejectPayable refund on post-acceptance failure, InputValidationError, token_address hex validation
