@@ -1,7 +1,7 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-03-27 (ACP credentials deployed, SDK wallet not whitelisted on-chain)
+> Last updated: 2026-03-27 (ACP SDK CONNECTED — Grey is live on the marketplace)
 > Updated by: Claude Opus 4.6 — Kovsky session
-> Session label: ACP credentials in .env, HTTP handler active, SDK blocked on on-chain wallet whitelisting
+> Session label: Grey connected to ACP via WebSocket, listening for jobs, graduation pending review
 > Staleness gate: 2026-03-27 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
@@ -27,8 +27,8 @@
 - [x] **Breakbot tests passed** — all 5 offerings tested (positive + negative), all passed (2026-03-26)
 - [x] **Graduation submission sent** — videos submitted to Virtuals for human review
 - [x] **ACP credentials deployed** — all 3 vars in .env (local + VPS) (2026-03-27)
-- [ ] **ACP SDK WebSocket** — BLOCKED. `AcpError: no whitelisted wallet registered on-chain for entity id 40675`. Forces must whitelist wallet `0x48A5...` in Virtuals portal.
-- [ ] **Graduation** — NOT YET. Pending Virtuals human review.
+- [x] **ACP SDK CONNECTED** — WebSocket live, ACP Room joined, onNewTask active (2026-03-27)
+- [ ] **Graduation** — pending Virtuals human review
 - [ ] **LAUNCH** — fire outreach, pinned thread, monitor
 
 ## What Works (verified)
@@ -47,8 +47,7 @@
 
 ## What's Broken
 - ⚠️ **AcpWrapper.ts is still a stub** — retained for IAcpClient interface tests. Production ACP goes through plugin-acp.
-- ⚠️ **ACP SDK WebSocket not connected** — wallet `0x48A5...` not whitelisted on-chain for entity ID `40675`. Grey serves jobs via HTTP handler (port 3001) in the meantime.
-- ⚠️ **Ports 3000 + 3001 open** in Lightsail firewall — must close after SDK connects or review completes.
+- ⚠️ **Ports 3000 + 3001 open** in Lightsail firewall — close after graduation review completes.
 - ⚠️ Image-only PDF detection limited (deferred Phase 2)
 - ⚠️ OCR gap — scanned PDFs return INSUFFICIENT_DATA (deferred Phase 2)
 
@@ -56,11 +55,9 @@
 - **304 tests across 23 test files, 0 failures** (verified 2026-03-26)
 
 ## Next Actions (ordered)
-1. **Forces: whitelist wallet on-chain** — entity ID `40675` + wallet `0x48A5...` in Virtuals portal
-2. **Kovsky: pm2 restart grey** → verify "Connected to ACP marketplace" in logs
-3. **Wait for Virtuals human review** — graduation decision
-4. **Close ports 3000 + 3001** in Lightsail after SDK connects
-5. **LAUNCH** — outreach, pinned thread, monitor
+1. **Wait for Virtuals human review** — graduation decision
+2. **Close ports 3000 + 3001** in Lightsail after graduation
+3. **LAUNCH** — outreach, pinned thread, monitor
 
 ## ACP Registration Context
 - **Role:** Provider
@@ -105,7 +102,7 @@
 | 2026-03-24 | Claude Opus 4.6 (Forces) | ACP schema hardening, Virtuals registration completed, plugin-acp plan created | Agent live on Virtuals, awaiting ACP bridge |
 | 2026-03-25 | Claude Opus 4.6 (Kovsky) | plugin-acp built (37 tests), wired to plugin-wpv, security audit + hardening, 66 Test re-certified | All 3 repos pushed, blocked on ACP credentials |
 | 2026-03-26 | Claude Opus 4.6 (Kovsky) | rejectPayable, HTTP handler, Supabase direct, daily briefing cap 10, flat notInDatabase, Date fix. Breakbot passed. Videos submitted. | All 5 offerings live |
-| 2026-03-27 | Claude Opus 4.6 (Kovsky) | ACP credentials deployed (local + VPS), 0x prefix fix, SDK failed: wallet not whitelisted on-chain. HTTP handler active. 66 Test 267/267 on VPS. | Blocked on Forces whitelisting wallet |
+| 2026-03-27 | Claude Opus 4.6 (Kovsky) | ACP credentials deployed, 0x prefix fix, entity key resolved to 3. SDK CONNECTED — WebSocket live, ACP Room joined, 5 handlers active. 66 Test 267/267 on VPS. | Grey is live on ACP marketplace |
 
 ## Quick Commands
 ```bash
