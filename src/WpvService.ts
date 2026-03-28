@@ -218,10 +218,30 @@ export class WpvService extends Service {
       }
     }
 
-    // Reject obviously malicious project names
+    // Content-based rejection on project_name
     const projectName = requirement?.project_name;
     if (typeof projectName === 'string') {
       const lower = projectName.toLowerCase();
+
+      // Reject NSFW / policy violation markers (e.g., "[NSFW_VIOLATION_CONTENT]")
+      if (/\[.*(?:nsfw|violation|banned|illegal|prohibited).*\]/i.test(projectName) ||
+          /nsfw|pornograph|xxx/i.test(projectName)) {
+        const err = new Error(`Rejected: project name '${projectName.slice(0, 50)}' contains policy-violating content`);
+        err.name = 'InputValidationError';
+        throw err;
+      }
+
+      // Reject names that explicitly indicate non-token / non-project inputs
+      const invalidNamePatterns = ['not a token', 'not a contract', 'not a project', 'personal wallet', 'test wallet'];
+      for (const pattern of invalidNamePatterns) {
+        if (lower.includes(pattern)) {
+          const err = new Error(`Rejected: project name '${projectName.slice(0, 50)}' indicates invalid input — '${pattern}'`);
+          err.name = 'InputValidationError';
+          throw err;
+        }
+      }
+
+      // Reject obviously malicious project names
       const maliciousKeywords = ['hack', 'exploit', 'phish', 'scam', 'malware', 'ransomware', 'rugpull', 'rug pull', 'ponzi'];
       for (const keyword of maliciousKeywords) {
         if (lower.includes(keyword)) {

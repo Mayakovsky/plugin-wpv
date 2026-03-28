@@ -67,11 +67,20 @@ export class JobRouter {
 
     const analysis = this.extractStructuralAnalysis(verification);
 
-    return this.deps.reportGenerator.generateLegitimacyScan(
+    const report = this.deps.reportGenerator.generateLegitimacyScan(
       this.verificationRowToResult(verification),
       analysis,
       wp as never,
     );
+
+    // Always return the REQUESTED token_address, not the cached one.
+    // The DB may store a different chain's address (e.g., Base vs Ethereum).
+    const requestedAddress = input.token_address as string | undefined;
+    if (requestedAddress) {
+      report.tokenAddress = requestedAddress;
+    }
+
+    return report;
   }
 
   private async handleTokenomicsAudit(input: Record<string, unknown>) {
@@ -84,7 +93,7 @@ export class JobRouter {
     const claims = await this.deps.claimsRepo.findByWhitepaperId(wp.id);
     const analysis = this.extractStructuralAnalysis(verification);
 
-    return this.deps.reportGenerator.generateTokenomicsAudit(
+    const report = this.deps.reportGenerator.generateTokenomicsAudit(
       this.verificationRowToResult(verification),
       claims.map((c) => ({
         claimId: c.id,
@@ -99,6 +108,13 @@ export class JobRouter {
       undefined,
       analysis,
     );
+
+    const requestedAddress = input.token_address as string | undefined;
+    if (requestedAddress) {
+      report.tokenAddress = requestedAddress;
+    }
+
+    return report;
   }
 
   /**
@@ -240,7 +256,7 @@ export class JobRouter {
       if (verification) {
         const claims = await this.deps.claimsRepo.findByWhitepaperId(wp.id);
         const analysis = this.extractStructuralAnalysis(verification);
-        return this.deps.reportGenerator.generateFullVerification(
+        const fullReport = this.deps.reportGenerator.generateFullVerification(
           this.verificationRowToResult(verification),
           claims.map((c) => ({
             claimId: c.id,
@@ -256,6 +272,13 @@ export class JobRouter {
           undefined,
           analysis,
         );
+
+        const reqAddr = input.token_address as string | undefined;
+        if (reqAddr) {
+          fullReport.tokenAddress = reqAddr;
+        }
+
+        return fullReport;
       }
     }
 
