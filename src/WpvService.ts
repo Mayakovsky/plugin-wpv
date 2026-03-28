@@ -195,6 +195,16 @@ export class WpvService extends Service {
           err.name = 'InputValidationError';
           throw err;
         }
+        // Reject known dead/null/burn addresses — not real token contracts
+        const lower = trimmed.toLowerCase();
+        if (/^0x(0{40}|dead(beef)?[0-9a-f]*(dead|beef)[0-9a-f]*|f{40})$/.test(lower) ||
+            /^0x(.)\1{39}$/.test(lower) ||
+            /^0x([0-9a-f]{2})\1{19}$/.test(lower)) {
+          const err = new Error(`Invalid token_address: burn/null address rejected — '${trimmed.slice(0, 50)}'`);
+          err.name = 'InputValidationError';
+          throw err;
+        }
+        // Format valid — pass through to handler
         return;
       }
 
@@ -205,6 +215,20 @@ export class WpvService extends Service {
         const err = new Error(`Invalid token_address: expected valid crypto address (EVM hex or base58), got '${trimmed.slice(0, 50)}'`);
         err.name = 'InputValidationError';
         throw err;
+      }
+    }
+
+    // Reject obviously malicious project names
+    const projectName = requirement?.project_name;
+    if (typeof projectName === 'string') {
+      const lower = projectName.toLowerCase();
+      const maliciousKeywords = ['hack', 'exploit', 'phish', 'scam', 'malware', 'ransomware', 'rugpull', 'rug pull', 'ponzi'];
+      for (const keyword of maliciousKeywords) {
+        if (lower.includes(keyword)) {
+          const err = new Error(`Rejected: project name '${projectName.slice(0, 50)}' contains suspicious keyword '${keyword}'`);
+          err.name = 'InputValidationError';
+          throw err;
+        }
       }
     }
   }
