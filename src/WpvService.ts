@@ -37,6 +37,7 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 const NSFW_PATTERNS: RegExp[] = [
   /\bnsfw\b/i,
   /\bsexual\b/i,
+  /\bporn\b/i,
   /\bpornograph/i,
   /\bnude/i,
   /\bnudity\b/i,
@@ -545,7 +546,13 @@ export class WpvService extends Service {
             err.name = 'InputValidationError';
             throw err;
           }
-        } catch (e) { if (e instanceof Error && e.name === 'InputValidationError') throw e; }
+        } catch (e) {
+          if (e instanceof Error && e.name === 'InputValidationError') throw e;
+          // Network error (DNS failure, connection refused, timeout) — also reject
+          const netErr = new Error('Invalid document_url: URL is not reachable');
+          (netErr as { name: string }).name = 'InputValidationError';
+          throw netErr;
+        }
       }
     }
 

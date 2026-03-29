@@ -266,29 +266,31 @@ export class JobRouter {
     // Store verification with structural analysis + cost metrics
     const tokens = this.deps.costTracker.getTotalTokens();
     const stageMetrics = this.deps.costTracker.getStageMetrics();
-    await this.deps.verificationsRepo.create({
-      whitepaperId: wp.id,
-      structuralScore,
-      confidenceScore: aggregate.confidenceScore,
-      hypeTechRatio,
-      verdict: aggregate.verdict,
-      totalClaims: claims.length,
-      verifiedClaims: evaluations.length,
-      llmTokensUsed: tokens.input + tokens.output,
-      computeCostUsd: this.deps.costTracker.getTotalCostUsd(),
-      structuralAnalysisJson: analysis as unknown as Record<string, unknown>,
-      triggerSource: (input._triggerSource as string) ?? 'manual',
-      cacheHit: false,
-      l1DurationMs: stageMetrics.l1.durationMs,
-      l2InputTokens: stageMetrics.l2.inputTokens,
-      l2OutputTokens: stageMetrics.l2.outputTokens,
-      l2CostUsd: stageMetrics.l2.costUsd,
-      l2DurationMs: stageMetrics.l2.durationMs,
-      l3InputTokens: stageMetrics.l3.inputTokens,
-      l3OutputTokens: stageMetrics.l3.outputTokens,
-      l3CostUsd: stageMetrics.l3.costUsd,
-      l3DurationMs: stageMetrics.l3.durationMs,
-    });
+    if (!wp.id.startsWith('tmp-')) {
+      await this.deps.verificationsRepo.create({
+        whitepaperId: wp.id,
+        structuralScore,
+        confidenceScore: aggregate.confidenceScore,
+        hypeTechRatio,
+        verdict: aggregate.verdict,
+        totalClaims: claims.length,
+        verifiedClaims: evaluations.length,
+        llmTokensUsed: tokens.input + tokens.output,
+        computeCostUsd: this.deps.costTracker.getTotalCostUsd(),
+        structuralAnalysisJson: analysis as unknown as Record<string, unknown>,
+        triggerSource: (input._triggerSource as string) ?? 'manual',
+        cacheHit: false,
+        l1DurationMs: stageMetrics.l1.durationMs,
+        l2InputTokens: stageMetrics.l2.inputTokens,
+        l2OutputTokens: stageMetrics.l2.outputTokens,
+        l2CostUsd: stageMetrics.l2.costUsd,
+        l2DurationMs: stageMetrics.l2.durationMs,
+        l3InputTokens: stageMetrics.l3.inputTokens,
+        l3OutputTokens: stageMetrics.l3.outputTokens,
+        l3CostUsd: stageMetrics.l3.costUsd,
+        l3DurationMs: stageMetrics.l3.durationMs,
+      });
+    }
 
     const report = this.deps.reportGenerator.generateTokenomicsAudit(
       {
@@ -320,8 +322,12 @@ export class JobRouter {
     const reqAddr = input.token_address as string | undefined;
     const reqName = (input.project_name as string | undefined)?.trim();
 
+    const hasDocumentUrl = !!(input.document_url as string | undefined)?.trim();
+
+    // When document_url is provided, skip cache — analyze the SPECIFIC document
+    // (evaluator may send Aave v1 URL but cache has Aave v3 — must use provided doc)
     // ── BUG-B FIX: Use findBestWhitepaper which prefers entries WITH claims ──
-    const wp = await this.findBestWhitepaper(input);
+    const wp = hasDocumentUrl ? null : await this.findBestWhitepaper(input);
     if (wp) {
       const wpId = wp.id as string;
       const wpName = (wp.projectName as string) ?? 'Unknown';
@@ -530,19 +536,21 @@ export class JobRouter {
 
     // Store verification with structural analysis (includes MiCA data)
     const tokens = this.deps.costTracker.getTotalTokens();
-    await this.deps.verificationsRepo.create({
-      whitepaperId: newWp.id,
-      structuralScore,
-      confidenceScore: aggregate.confidenceScore,
-      hypeTechRatio,
-      verdict: aggregate.verdict,
-      totalClaims: claims.length,
-      verifiedClaims: evaluations.length,
-      llmTokensUsed: tokens.input + tokens.output,
-      computeCostUsd: this.deps.costTracker.getTotalCostUsd(),
-      focusAreaScores: aggregate.focusAreaScores,
-      structuralAnalysisJson: analysis as unknown as Record<string, unknown>,
-    });
+    if (!newWp.id.startsWith('tmp-')) {
+      await this.deps.verificationsRepo.create({
+        whitepaperId: newWp.id,
+        structuralScore,
+        confidenceScore: aggregate.confidenceScore,
+        hypeTechRatio,
+        verdict: aggregate.verdict,
+        totalClaims: claims.length,
+        verifiedClaims: evaluations.length,
+        llmTokensUsed: tokens.input + tokens.output,
+        computeCostUsd: this.deps.costTracker.getTotalCostUsd(),
+        focusAreaScores: aggregate.focusAreaScores,
+        structuralAnalysisJson: analysis as unknown as Record<string, unknown>,
+      });
+    }
 
     return this.deps.reportGenerator.generateFullVerification(
       {
