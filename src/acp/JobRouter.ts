@@ -314,25 +314,51 @@ export class JobRouter {
     const reqAddr = input.token_address as string | undefined;
     const reqName = (input.project_name as string | undefined)?.trim();
 
-    // Check for cached result first
-    const wp = await this.findWhitepaper(input);
+    // ── BUG-B FIX: Use findBestWhitepaper which prefers entries WITH claims ──
+    const wp = await this.findBestWhitepaper(input);
     if (wp) {
-      const verification = await this.deps.verificationsRepo.findByWhitepaperId(wp.id);
+      const wpId = wp.id as string;
+      const wpName = (wp.projectName as string) ?? 'Unknown';
+      const verification = await this.deps.verificationsRepo.findByWhitepaperId(wpId);
       if (verification) {
-        const claims = await this.deps.claimsRepo.findByWhitepaperId(wp.id);
+        const claims = await this.deps.claimsRepo.findByWhitepaperId(wpId);
         const totalClaims = (verification.totalClaims as number) ?? claims.length;
 
-        // Fix 1: If cached result has 0 claims (L1-only), enrich with L2+L3
+        // ── Cached result HAS claims → return it directly ──
+        if (totalClaims > 0 && claims.length > 0) {
+          log.info('Returning cached result with claims', { projectName: wpName, totalClaims });
+          const analysis = this.extractStructuralAnalysis(verification);
+          const fullReport = this.deps.reportGenerator.generateFullVerification(
+            this.verificationRowToResult(verification),
+            claims.map((c) => ({
+              claimId: c.id,
+              category: c.category as never,
+              claimText: c.claimText,
+              statedEvidence: c.statedEvidence,
+              mathematicalProofPresent: c.mathProofPresent,
+              sourceSection: c.sourceSection,
+              regulatoryRelevance: (c.evaluationJson as Record<string, unknown>)?.regulatoryRelevance === true,
+            })),
+            [],
+            wp as never,
+            undefined,
+            analysis,
+          );
+          if (reqAddr) fullReport.tokenAddress = reqAddr;
+          return fullReport;
+        }
+
+        // ── Cached result has 0 claims (L1-only) → try to enrich with L2+L3 ──
         if (totalClaims === 0 && this.deps.claimExtractor && this.deps.cryptoResolver) {
           const docUrl = (wp as Record<string, unknown>).documentUrl as string | undefined;
           if (docUrl) {
             try {
-              log.info('Enriching cached L1 result with L2+L3', { projectName: wp.projectName, docUrl: docUrl.slice(0, 60) });
+              log.info('Enriching cached L1 result with L2+L3', { projectName: wpName, docUrl: docUrl.slice(0, 80) });
               const resolved = await this.deps.cryptoResolver.resolveWhitepaper(docUrl);
               if (resolved.text.length > 100) {
                 this.deps.costTracker.reset();
                 this.deps.costTracker.startStage('l2');
-                const newClaims = await this.deps.claimExtractor.extractClaims(resolved.text, wp.projectName);
+                const newClaims = await this.deps.claimExtractor.extractClaims(resolved.text, wpName);
                 this.deps.costTracker.endStage('l2', 0, 0);
 
                 // L3 if available
@@ -347,10 +373,10 @@ export class JobRouter {
                 }
 
                 // Store enriched claims
-                if (!JobRouter.hasViolationKeywords(wp.projectName)) {
+                if (!JobRouter.hasViolationKeywords(wpName)) {
                   for (const claim of newClaims) {
                     await this.deps.claimsRepo.create({
-                      whitepaperId: wp.id,
+                      whitepaperId: wpId,
                       category: claim.category,
                       claimText: claim.claimText,
                       statedEvidence: claim.statedEvidence,
@@ -361,59 +387,77 @@ export class JobRouter {
                   }
                 }
 
-                const claimScores = newClaims.map((c) => ({
-                  category: c.category as never,
-                  score: scores.get(c.claimId) ?? 50,
-                }));
-                const aggregate = this.deps.scoreAggregator.aggregate(claimScores);
-                const analysis = this.extractStructuralAnalysis(verification);
+                if (newClaims.length > 0) {
+                  const claimScores = newClaims.map((c) => ({
+                    category: c.category as never,
+                    score: scores.get(c.claimId) ?? 50,
+                  }));
+                  const aggregate = this.deps.scoreAggregator.aggregate(claimScores);
+                  const analysis = this.extractStructuralAnalysis(verification);
 
-                const enrichedReport = this.deps.reportGenerator.generateFullVerification(
-                  { ...this.verificationRowToResult(verification), totalClaims: newClaims.length, verdict: aggregate.verdict, confidenceScore: aggregate.confidenceScore, focusAreaScores: aggregate.focusAreaScores },
-                  newClaims,
-                  evaluations as never,
-                  wp as never,
-                  scores,
-                  analysis,
-                );
-                if (reqAddr) enrichedReport.tokenAddress = reqAddr;
-                log.info('L2+L3 enrichment complete', { projectName: wp.projectName, claims: newClaims.length });
-                return enrichedReport;
+                  const enrichedReport = this.deps.reportGenerator.generateFullVerification(
+                    { ...this.verificationRowToResult(verification), totalClaims: newClaims.length, verdict: aggregate.verdict, confidenceScore: aggregate.confidenceScore, focusAreaScores: aggregate.focusAreaScores },
+                    newClaims,
+                    evaluations as never,
+                    wp as never,
+                    scores,
+                    analysis,
+                  );
+                  if (reqAddr) enrichedReport.tokenAddress = reqAddr;
+                  log.info('L2+L3 enrichment complete', { projectName: wpName, claims: newClaims.length });
+                  return enrichedReport;
+                }
+                // L2 returned 0 claims even with text — fall through to discovery
+                log.warn('L2 enrichment returned 0 claims despite text — falling through to discovery', { projectName: wpName });
               }
             } catch (err) {
-              log.warn('L2+L3 enrichment failed — returning cached L1', { error: (err as Error).message });
+              // ── BUG-C FIX: Log the docUrl that failed ──
+              log.warn('L2+L3 enrichment failed — falling through to discovery', {
+                projectName: wpName,
+                docUrl: wp.documentUrl,
+                error: (err as Error).message,
+              });
             }
+          } else {
+            log.warn('Cached L1 entry has no documentUrl — falling through to discovery', { projectName: wpName });
           }
         }
 
-        // Return cached result (has claims, or enrichment failed)
-        const analysis = this.extractStructuralAnalysis(verification);
-        const fullReport = this.deps.reportGenerator.generateFullVerification(
-          this.verificationRowToResult(verification),
-          claims.map((c) => ({
-            claimId: c.id,
-            category: c.category as never,
-            claimText: c.claimText,
-            statedEvidence: c.statedEvidence,
-            mathematicalProofPresent: c.mathProofPresent,
-            sourceSection: c.sourceSection,
-            regulatoryRelevance: (c.evaluationJson as Record<string, unknown>)?.regulatoryRelevance === true,
-          })),
-          [],
-          wp as never,
-          undefined,
-          analysis,
-        );
-
-        if (reqAddr) {
-          fullReport.tokenAddress = reqAddr;
+        // ── BUG-A FIX: If we're here with 0 claims, DO NOT return the empty
+        // cached result. Fall through to the discovery pipeline below instead
+        // of returning an empty report that matches the $0.25 scan. ──
+        if (totalClaims > 0) {
+          // Has claims but enrichment wasn't needed — return cached
+          const analysis = this.extractStructuralAnalysis(verification);
+          const fullReport = this.deps.reportGenerator.generateFullVerification(
+            this.verificationRowToResult(verification),
+            claims.map((c) => ({
+              claimId: c.id,
+              category: c.category as never,
+              claimText: c.claimText,
+              statedEvidence: c.statedEvidence,
+              mathematicalProofPresent: c.mathProofPresent,
+              sourceSection: c.sourceSection,
+              regulatoryRelevance: (c.evaluationJson as Record<string, unknown>)?.regulatoryRelevance === true,
+            })),
+            [],
+            wp as never,
+            undefined,
+            analysis,
+          );
+          if (reqAddr) fullReport.tokenAddress = reqAddr;
+          return fullReport;
         }
 
-        return fullReport;
+        log.info('Cached result has 0 claims and enrichment failed/skipped — trying live discovery', {
+          projectName: wpName,
+          tokenAddress: reqAddr,
+        });
+        // Fall through to discovery pipeline below ↓
       }
     }
 
-    // No cached result — try live pipeline
+    // ── No usable cached result — try live pipeline ──
     const documentUrl = (input.document_url as string | undefined)?.trim();
     const projectName = reqName || 'Unknown';
 
@@ -595,6 +639,10 @@ export class JobRouter {
     return /\bscam\b|\bfraud\b|\brug\s*pull\b|\bnsfw\b|\bexplicit\b|\bporn\b|\bhack\b|\bexploit\b|\bphish\b/.test(lower);
   }
 
+  /**
+   * Find a whitepaper by project_name or token_address.
+   * Used by handleLegitimacyScan and handleDailyBriefing where any cached entry is fine.
+   */
   private async findWhitepaper(input: Record<string, unknown>) {
     const projectName = input.project_name as string | undefined;
     const tokenAddress = input.token_address as string | undefined;
@@ -608,6 +656,53 @@ export class JobRouter {
       if (results.length > 0) return results[0];
     }
     return null;
+  }
+
+  /**
+   * BUG-B FIX: Find the BEST whitepaper for a token — preferring entries WITH claims.
+   * When multiple DB entries exist for the same project (e.g., "Uniswap" from L1 scan
+   * and "Uniswap v3" from L2 verify_project_whitepaper), this returns the one with
+   * the most claims rather than whichever was inserted first.
+   *
+   * Used by handleFullVerification where we need the richest cached data.
+   */
+  private async findBestWhitepaper(input: Record<string, unknown>) {
+    const projectName = input.project_name as string | undefined;
+    const tokenAddress = input.token_address as string | undefined;
+
+    // Collect ALL candidate entries from both name and address lookups
+    const candidates: Array<{ wp: Record<string, unknown>; claimCount: number }> = [];
+
+    if (projectName) {
+      const byName = await this.deps.whitepaperRepo.findByProjectName(projectName);
+      for (const wp of byName) {
+        const claims = await this.deps.claimsRepo.findByWhitepaperId(wp.id);
+        candidates.push({ wp: wp as Record<string, unknown>, claimCount: claims.length });
+      }
+    }
+
+    if (tokenAddress) {
+      const byAddr = await this.deps.whitepaperRepo.findByTokenAddress(tokenAddress);
+      for (const wp of byAddr) {
+        // Avoid duplicates from the name lookup
+        if (candidates.some((c) => (c.wp as { id: string }).id === wp.id)) continue;
+        const claims = await this.deps.claimsRepo.findByWhitepaperId(wp.id);
+        candidates.push({ wp: wp as Record<string, unknown>, claimCount: claims.length });
+      }
+    }
+
+    if (candidates.length === 0) return null;
+
+    // Sort by claimCount descending — prefer entries with the most claims
+    candidates.sort((a, b) => b.claimCount - a.claimCount);
+
+    log.info('findBestWhitepaper candidates', {
+      total: candidates.length,
+      best: (candidates[0].wp as { projectName: string }).projectName,
+      bestClaims: candidates[0].claimCount,
+    });
+
+    return candidates[0].wp;
   }
 
   /**
