@@ -589,8 +589,16 @@ export class WpvService extends Service {
           throw err;
         }
         // eth_getCode check — reject EOA wallets (no bytecode)
+        // BUT only hard-reject when token_address is the SOLE identifying field.
+        // If project_name or document_url are also present, log warning and strip the bad address.
         const isContract = await WpvService.isContractAddress(trimmed);
         if (!isContract) {
+          const hasOtherFields = !!(requirement.project_name || requirement.document_url);
+          if (hasOtherFields) {
+            // Soft fail: strip bad address, proceed with other fields
+            delete requirement.token_address;
+            return;
+          }
           const err = new Error(`Invalid token_address: address is not a contract (EOA wallet) — '${trimmed.slice(0, 50)}'`);
           err.name = 'InputValidationError';
           throw err;
