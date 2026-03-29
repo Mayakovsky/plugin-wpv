@@ -29,6 +29,85 @@ import { logger } from './utils/logger';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 
+// ── Shared Content Filtering ─────────────────
+// Single source of truth for all content violation checks.
+// Used by both the daily briefing validator and the general all-field scanner.
+
+/** NSFW and sexual content patterns */
+const NSFW_PATTERNS: RegExp[] = [
+  /\bnsfw\b/i,
+  /\bsexual\b/i,
+  /\bpornograph/i,
+  /\bnude/i,
+  /\bnudity\b/i,
+  /\bhentai\b/i,
+  /\berotic/i,
+  /\bxxx\b/i,
+];
+
+/** Prompt injection and manipulation patterns — intent-based, not phrase-specific */
+const INJECTION_PATTERNS: RegExp[] = [
+  /\b(?:ignore|disregard|bypass|skip|forget|override)\b.*\b(?:all|logic|rules|instructions|evidence|safety|filters|guidelines|checks)\b/i,
+  /\b(?:say|claim|report|conclude|state)\b.*\b(?:is a scam|is fraudulent|is fake|regardless)\b/i,
+  /\b(?:pretend|act as if|assume)\b.*\b(?:scam|fraud|fake|malicious|legitimate)\b/i,
+  /\binclude\b.*\b(?:explicit|inappropriate|offensive|vulgar)\b.*\b(?:content|material|language)\b/i,
+  /\b(?:jailbreak|prompt inject)/i,
+];
+
+/** Bracket-tagged violation markers (e.g., [NSFW_VIOLATION_CONTENT]) */
+const BRACKET_PATTERNS: RegExp[] = [
+  /\[.*(?:nsfw|violation|banned|illegal|prohibited|explicit|adult|offensive).*\]/i,
+];
+
+/** Scam, fraud, and malicious intent keywords — used in all-field scan */
+const MALICIOUS_CONTENT_PATTERNS: RegExp[] = [
+  /\bscam\b/i,
+  /\bfraud(?:ulent)?\b/i,
+  /\brug\s*pull\b/i,
+  /\bponzi\b/i,
+  /\bhoneypot\b/i,
+  /\bpyramid\s*scheme\b/i,
+  /\bmoney\s*launder/i,
+  /\bpump\s*(?:and|&)\s*dump\b/i,
+];
+
+/** Combined violation patterns — all-field content scanner */
+const ALL_FIELD_VIOLATION_PATTERNS: RegExp[] = [
+  ...NSFW_PATTERNS,
+  ...INJECTION_PATTERNS,
+  ...BRACKET_PATTERNS,
+  ...MALICIOUS_CONTENT_PATTERNS,
+];
+
+/** Malicious keywords for project_name specific checks — broader than the all-field scan */
+const MALICIOUS_PROJECT_NAME_KEYWORDS: string[] = [
+  'hack', 'exploit', 'phish', 'scam', 'malware', 'ransomware',
+  'rugpull', 'rug pull', 'ponzi', 'honeypot', 'drainer',
+  'stealer', 'pyramid', 'laundering', 'money launder',
+  'pump and dump', 'pump & dump',
+];
+
+/** Invalid project name patterns — indicate non-token/non-project inputs */
+const INVALID_NAME_PATTERNS: string[] = [
+  'not a token', 'not a contract', 'not a project',
+  'personal wallet', 'test wallet', 'my wallet', 'my address',
+];
+
+/** NSFW domains — checked against URL hostname */
+const NSFW_DOMAIN_KEYWORDS: string[] = [
+  'porn', 'xxx', 'xvideos', 'pornhub', 'xhamster', 'redtube',
+  'youporn', 'tube8', 'spankbang', 'hentai', 'onlyfans',
+  'chaturbate', 'livejasmin', 'stripchat', 'brazzers', 'fapello',
+];
+
+/** Generic NSFW terms that need word-boundary matching on hostname */
+const NSFW_HOSTNAME_PATTERNS: RegExp[] = [
+  /\b(?:adult|nude|nsfw|sexcam)\b/,
+];
+
+// ── End Shared Content Filtering ─────────────
+
+
 export interface WpvServiceDeps {
   whitepaperRepo: WpvWhitepapersRepo;
   claimsRepo: WpvClaimsRepo;
@@ -200,14 +279,58 @@ export class WpvService extends Service {
   }
 
   /**
-   * Register WPV offering handlers with AcpService (plugin-acp).
-   * Called during init if AcpService is available.
-   * If AcpService is not loaded (e.g., no ACP credentials), this is a no-op.
+   * Shared content violation scanner. Scans all string values in a requirement
+   * object against the shared violation pattern set. Throws InputValidationError
+   * if any field matches. Used by both daily briefing and general validators.
    */
+  private static scanForViolations(requirement: Record<string, unknown>): void {
+    const allStringValues = Object.values(requirement)
+      .filter((v): v is string => typeof v === 'string');
+
+    for (const value of allStringValues) {
+      for (const pattern of ALL_FIELD_VIOLATION_PATTERNS) {
+        if (pattern.test(value)) {
+          const err = new Error('Request contains policy-violating content and cannot be processed');
+          err.name = 'InputValidationError';
+          throw err;
+        }
+      }
+    }
+  }
+
   /**
-   * Validate token_address format. Shared between pre-accept validator and handler.
-   * Throws InputValidationError for invalid addresses.
+   * Validate document_url for NSFW domains. Extracts hostname and checks
+   * against known NSFW domains and patterns. Uses hostname parsing to
+   * avoid false positives (e.g., "sussex.ac.uk" won't match "sex").
    */
+  private static validateUrlDomain(trimmedUrl: string): void {
+    let hostname: string;
+    try {
+      hostname = new URL(trimmedUrl).hostname.toLowerCase();
+    } catch {
+      // URL parsing failed — already caught by format check above
+      return;
+    }
+
+    // Check known NSFW domain keywords against hostname
+    for (const domain of NSFW_DOMAIN_KEYWORDS) {
+      if (hostname.includes(domain)) {
+        const err = new Error('Invalid document_url: URL contains policy-violating content');
+        err.name = 'InputValidationError';
+        throw err;
+      }
+    }
+
+    // Check generic NSFW terms with word boundaries on hostname
+    for (const pattern of NSFW_HOSTNAME_PATTERNS) {
+      if (pattern.test(hostname)) {
+        const err = new Error('Invalid document_url: URL contains policy-violating content');
+        err.name = 'InputValidationError';
+        throw err;
+      }
+    }
+  }
+
   /**
    * Check if an EVM address has contract bytecode on Base or Ethereum mainnet.
    * EOA wallets return "0x" (empty). Returns true if contract found on either chain.
@@ -289,48 +412,13 @@ export class WpvService extends Service {
         err.name = 'InputValidationError';
         throw err;
       }
-      // Content filtering still applies for daily briefing
-      const allStringValues = Object.values(requirement)
-        .filter((v): v is string => typeof v === 'string')
-        .map((v) => v.toLowerCase());
-      const violationPatterns = [
-        /nsfw/i, /explicit/i, /sexual/i, /pornograph/i,
-        /\[.*(?:nsfw|violation|banned|illegal|prohibited).*\]/i,
-      ];
-      for (const value of allStringValues) {
-        for (const pattern of violationPatterns) {
-          if (pattern.test(value)) {
-            const err2 = new Error('Request contains policy-violating content');
-            err2.name = 'InputValidationError';
-            throw err2;
-          }
-        }
-      }
+      // Content filtering still applies for daily briefing — uses shared patterns
+      WpvService.scanForViolations(requirement);
       return;
     }
 
-    // Scan ALL string fields in requirement for content violations
-    const allStringValues = Object.values(requirement)
-      .filter((v): v is string => typeof v === 'string')
-      .map((v) => v.toLowerCase());
-
-    const violationPatterns = [
-      /nsfw/i, /explicit/i, /sexual/i, /pornograph/i, /nude/i,
-      /ignore all/i, /ignore logic/i, /regardless of evidence/i,
-      /say this is a scam/i, /biased/i, /override/i,
-      /\[.*(?:nsfw|violation|banned|illegal|prohibited).*\]/i,
-      /\bscam\b/i, /\bfraud\b/i, /\brug\s*pull\b/i,
-    ];
-
-    for (const value of allStringValues) {
-      for (const pattern of violationPatterns) {
-        if (pattern.test(value)) {
-          const err = new Error('Request contains policy-violating content and cannot be processed');
-          err.name = 'InputValidationError';
-          throw err;
-        }
-      }
-    }
+    // Scan ALL string fields in requirement for content violations — shared patterns
+    WpvService.scanForViolations(requirement);
 
     // WS3: document_url validation for verify_project_whitepaper
     if (offeringId === 'verify_project_whitepaper') {
@@ -342,16 +430,10 @@ export class WpvService extends Service {
           err.name = 'InputValidationError';
           throw err;
         }
+        // NSFW domain check — uses hostname parsing to avoid false positives
+        WpvService.validateUrlDomain(trimmedUrl);
+        // Reject non-document file types
         const lowerUrl = trimmedUrl.toLowerCase();
-        // NSFW domain check
-        const nsfwDomains = ['porn', 'xxx', 'adult', 'sex', 'nude', 'nsfw', 'hentai', 'xvideos', 'pornhub', 'xhamster', 'redtube'];
-        for (const domain of nsfwDomains) {
-          if (lowerUrl.includes(domain)) {
-            const err = new Error('Invalid document_url: URL contains policy-violating content');
-            err.name = 'InputValidationError';
-            throw err;
-          }
-        }
         if (/\.(png|jpg|jpeg|gif|svg|ico|webp|bmp|mp4|mp3|avi|mov)(\?.*)?$/.test(lowerUrl)) {
           const err = new Error('Invalid document_url: must point to a document, not an image or media file');
           err.name = 'InputValidationError';
@@ -418,16 +500,23 @@ export class WpvService extends Service {
       const lower = projectName.toLowerCase();
 
       // Reject NSFW / policy violation markers (e.g., "[NSFW_VIOLATION_CONTENT]")
-      if (/\[.*(?:nsfw|violation|banned|illegal|prohibited).*\]/i.test(projectName) ||
-          /nsfw|pornograph|xxx/i.test(projectName)) {
+      if (/\[.*(?:nsfw|violation|banned|illegal|prohibited|explicit|adult|offensive).*\]/i.test(projectName)) {
         const err = new Error(`Rejected: project name '${projectName.slice(0, 50)}' contains policy-violating content`);
         err.name = 'InputValidationError';
         throw err;
       }
 
+      // NSFW keywords in project name
+      for (const pattern of NSFW_PATTERNS) {
+        if (pattern.test(projectName)) {
+          const err = new Error(`Rejected: project name '${projectName.slice(0, 50)}' contains policy-violating content`);
+          err.name = 'InputValidationError';
+          throw err;
+        }
+      }
+
       // Reject names that explicitly indicate non-token / non-project inputs
-      const invalidNamePatterns = ['not a token', 'not a contract', 'not a project', 'personal wallet', 'test wallet'];
-      for (const pattern of invalidNamePatterns) {
+      for (const pattern of INVALID_NAME_PATTERNS) {
         if (lower.includes(pattern)) {
           const err = new Error(`Rejected: project name '${projectName.slice(0, 50)}' indicates invalid input — '${pattern}'`);
           err.name = 'InputValidationError';
@@ -436,8 +525,7 @@ export class WpvService extends Service {
       }
 
       // Reject obviously malicious project names
-      const maliciousKeywords = ['hack', 'exploit', 'phish', 'scam', 'malware', 'ransomware', 'rugpull', 'rug pull', 'ponzi'];
-      for (const keyword of maliciousKeywords) {
+      for (const keyword of MALICIOUS_PROJECT_NAME_KEYWORDS) {
         if (lower.includes(keyword)) {
           const err = new Error(`Rejected: project name '${projectName.slice(0, 50)}' contains suspicious keyword '${keyword}'`);
           err.name = 'InputValidationError';
