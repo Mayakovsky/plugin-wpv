@@ -355,7 +355,33 @@ export class JobRouter {
       return { error: 'invalid_url', message: 'document_url exceeds maximum length (2048)' };
     }
 
-    const { resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = await this.runL1L2(documentUrl, projectName, requestedTokenAddress);
+    let { resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = await this.runL1L2(documentUrl, projectName, requestedTokenAddress);
+
+    // If provided document_url yielded 0 claims (e.g. JavaScript SPA, empty page),
+    // try discovery as fallback before giving up
+    if (claims.length === 0 && this.deps.tieredDiscovery && projectName !== 'Unknown') {
+      try {
+        log.info('document_url yielded 0 claims — trying discovery fallback', { projectName, documentUrl: documentUrl.slice(0, 80) });
+        const metadata: ProjectMetadata = {
+          agentName: projectName,
+          entityId: null,
+          description: null,
+          linkedUrls: [],
+          category: null,
+          graduationStatus: null,
+        };
+        const discovered = await this.deps.tieredDiscovery.discover(metadata, requestedTokenAddress ?? '');
+        if (discovered && discovered.documentUrl !== documentUrl) {
+          const fallback = await this.runL1L2(discovered.documentUrl, projectName, requestedTokenAddress);
+          if (fallback.claims.length > 0) {
+            log.info('Discovery fallback succeeded', { projectName, discoveredUrl: discovered.documentUrl.slice(0, 80), claims: fallback.claims.length });
+            ({ resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = fallback);
+          }
+        }
+      } catch (err) {
+        log.warn('Discovery fallback failed', { projectName, error: (err as Error).message });
+      }
+    }
 
     // L3: Claim evaluation (timed)
     this.deps.costTracker.startStage('l3');
