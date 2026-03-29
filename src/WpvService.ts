@@ -332,6 +332,68 @@ export class WpvService extends Service {
   }
 
   /**
+   * Convert GitHub blob URLs to raw.githubusercontent.com URLs.
+   * GitHub blob pages return HTML with a PDF viewer — not the actual PDF.
+   * e.g., https://github.com/aave/aave-protocol/blob/master/docs/Whitepaper.pdf
+   *     → https://raw.githubusercontent.com/aave/aave-protocol/master/docs/Whitepaper.pdf
+   */
+  static normalizeGitHubUrl(url: string): string {
+    const blobMatch = url.match(
+      /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/(.+)$/
+    );
+    if (blobMatch) {
+      return `https://raw.githubusercontent.com/${blobMatch[1]}/${blobMatch[2]}/${blobMatch[3]}`;
+    }
+    return url;
+  }
+
+  /**
+   * Scan ALL string values in a requirement for embedded URLs, token addresses,
+   * and project names. Mutates the requirement object to populate standard fields
+   * (document_url, token_address, project_name) from non-standard fields like
+   * "verification_request". Called before Fix 5 to avoid rejecting valid requests
+   * that use non-standard field names.
+   */
+  private static extractFromUnknownFields(requirement: Record<string, unknown>): void {
+    // Skip if standard fields already exist
+    const hasStandard = requirement.token_address || requirement.project_name || requirement.document_url;
+    if (hasStandard) return;
+
+    // Scan all string values for extractable data
+    const allStrings = Object.entries(requirement)
+      .filter(([key, v]) => typeof v === 'string' && key !== 'token_address' && key !== 'project_name' && key !== 'document_url')
+      .map(([, v]) => v as string);
+
+    for (const text of allStrings) {
+      // Extract URL (https://...)
+      if (!requirement.document_url) {
+        const urlMatch = text.match(/https?:\/\/[^\s"'<>]+/i);
+        if (urlMatch) {
+          requirement.document_url = urlMatch[0].replace(/[.,;:!?)]+$/, ''); // trim trailing punctuation
+        }
+      }
+
+      // Extract 0x token address
+      if (!requirement.token_address) {
+        const addrMatch = text.match(/\b(0x[0-9a-fA-F]{20,42})\b/);
+        if (addrMatch) {
+          requirement.token_address = addrMatch[1];
+        }
+      }
+
+      // Extract known protocol names
+      if (!requirement.project_name) {
+        const projectMatch = text.match(
+          /\b(Uniswap|Aave|Compound|MakerDAO|Curve|Synthetix|SushiSwap|Balancer|Yearn|Chainlink|Lido|Rocket\s*Pool|Frax|Convex|Euler|Morpho|Radiant|Pendle|GMX|dYdX|Virtuals\s*Protocol)\s*(v\d+)?\b/i
+        );
+        if (projectMatch) {
+          requirement.project_name = projectMatch[0].trim();
+        }
+      }
+    }
+  }
+
+  /**
    * Check if an EVM address has contract bytecode on Base or Ethereum mainnet.
    * EOA wallets return "0x" (empty). Returns true if contract found on either chain.
    * On RPC failure, returns true (don't block jobs due to RPC issues).
@@ -420,6 +482,12 @@ export class WpvService extends Service {
     // Scan ALL string fields in requirement for content violations — shared patterns
     WpvService.scanForViolations(requirement);
 
+    // Extract data from non-standard fields (e.g., "verification_request" → document_url + project_name)
+    // Must run BEFORE Fix 5 check so that extracted fields prevent false rejections
+    if (!isPlainText) {
+      WpvService.extractFromUnknownFields(requirement);
+    }
+
     // Fix 5: Reject JSON requirements missing all identifying fields
     if (!isPlainText) {
       const hasTokenAddress = requirement?.token_address !== undefined && requirement?.token_address !== null;
@@ -430,6 +498,11 @@ export class WpvService extends Service {
         err.name = 'InputValidationError';
         throw err;
       }
+    }
+
+    // Normalize GitHub blob URLs → raw.githubusercontent.com (all offerings)
+    if (typeof requirement?.document_url === 'string') {
+      requirement.document_url = WpvService.normalizeGitHubUrl(requirement.document_url as string);
     }
 
     // WS3: document_url validation for verify_project_whitepaper

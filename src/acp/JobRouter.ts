@@ -22,6 +22,12 @@ import { createLogger } from '../utils/logger';
 
 const log = createLogger({ operation: 'JobRouter' });
 
+/** Convert GitHub blob URLs to raw.githubusercontent.com */
+function normalizeGitHubUrl(url: string): string {
+  const m = url.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/(.+)$/);
+  return m ? `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}` : url;
+}
+
 export interface JobRouterDeps {
   whitepaperRepo: WpvWhitepapersRepo;
   verificationsRepo: WpvVerificationsRepo;
@@ -170,7 +176,7 @@ export class JobRouter {
    */
   private async runL1L2(documentUrl: string, projectName: string, tokenAddress?: string | null) {
     // Resolve the document
-    const resolved = await this.deps.cryptoResolver.resolveWhitepaper(documentUrl);
+    const resolved = await this.deps.cryptoResolver.resolveWhitepaper(normalizeGitHubUrl(documentUrl));
 
     // L1: Structural analysis (timed)
     this.deps.costTracker.startStage('l1');
@@ -354,7 +360,7 @@ export class JobRouter {
           if (docUrl) {
             try {
               log.info('Enriching cached L1 result with L2+L3', { projectName: wpName, docUrl: docUrl.slice(0, 80) });
-              const resolved = await this.deps.cryptoResolver.resolveWhitepaper(docUrl);
+              const resolved = await this.deps.cryptoResolver.resolveWhitepaper(normalizeGitHubUrl(docUrl));
               if (resolved.text.length > 100) {
                 this.deps.costTracker.reset();
                 this.deps.costTracker.startStage('l2');
