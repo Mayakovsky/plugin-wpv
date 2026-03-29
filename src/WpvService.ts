@@ -283,6 +283,12 @@ export class WpvService extends Service {
         err.name = 'InputValidationError';
         throw err;
       }
+      const MIN_DATE = new Date('2015-01-01T00:00:00Z');
+      if (parsed < MIN_DATE) {
+        const err = new Error(`Invalid date: '${dateStr}' predates relevant crypto history`);
+        err.name = 'InputValidationError';
+        throw err;
+      }
       // Content filtering still applies for daily briefing
       const allStringValues = Object.values(requirement)
         .filter((v): v is string => typeof v === 'string')
@@ -313,6 +319,7 @@ export class WpvService extends Service {
       /ignore all/i, /ignore logic/i, /regardless of evidence/i,
       /say this is a scam/i, /biased/i, /override/i,
       /\[.*(?:nsfw|violation|banned|illegal|prohibited).*\]/i,
+      /\bscam\b/i, /\bfraud\b/i, /\brug\s*pull\b/i,
     ];
 
     for (const value of allStringValues) {
@@ -336,6 +343,15 @@ export class WpvService extends Service {
           throw err;
         }
         const lowerUrl = trimmedUrl.toLowerCase();
+        // NSFW domain check
+        const nsfwDomains = ['porn', 'xxx', 'adult', 'sex', 'nude', 'nsfw', 'hentai', 'xvideos', 'pornhub', 'xhamster', 'redtube'];
+        for (const domain of nsfwDomains) {
+          if (lowerUrl.includes(domain)) {
+            const err = new Error('Invalid document_url: URL contains policy-violating content');
+            err.name = 'InputValidationError';
+            throw err;
+          }
+        }
         if (/\.(png|jpg|jpeg|gif|svg|ico|webp|bmp|mp4|mp3|avi|mov)(\?.*)?$/.test(lowerUrl)) {
           const err = new Error('Invalid document_url: must point to a document, not an image or media file');
           err.name = 'InputValidationError';
@@ -359,10 +375,10 @@ export class WpvService extends Service {
 
       const trimmed = tokenAddress.trim();
 
-      // EVM: must be 0x + 40 hex chars = 42 total
+      // EVM: must be 0x + 20-40 hex chars (some chains use shorter addresses)
       if (trimmed.startsWith('0x')) {
-        if (!/^0x[0-9a-fA-F]{40}$/.test(trimmed)) {
-          const err = new Error(`Invalid token_address: expected 0x-prefixed 42-char hex address, got '${trimmed.slice(0, 50)}'`);
+        if (!/^0x[0-9a-fA-F]{20,40}$/.test(trimmed)) {
+          const err = new Error(`Invalid token_address: expected 0x-prefixed hex address (22-42 chars), got '${trimmed.slice(0, 50)}'`);
           err.name = 'InputValidationError';
           throw err;
         }

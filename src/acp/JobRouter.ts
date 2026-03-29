@@ -106,23 +106,31 @@ export class JobRouter {
           const hypeTechRatio = this.deps.structuralAnalyzer.computeHypeTechRatio(discovered.resolved.text);
           this.deps.costTracker.endStage('l1', 0, 0);
 
-          // Cache the result
-          const newWp = await this.deps.whitepaperRepo.create({
-            projectName,
-            tokenAddress,
-            documentUrl: discovered.documentUrl,
-            chain: tokenAddress.startsWith('0x') ? 'base' : 'solana',
-            pageCount: discovered.resolved.pageCount,
-            status: 'VERIFIED',
-            selectionScore: 0,
-          });
+          // Cache the result — guard against violation keywords
+          let newWpId: string;
+          if (JobRouter.hasViolationKeywords(projectName)) {
+            newWpId = `tmp-${Date.now()}`;
+            log.warn('Skipping L1 cache write — violation keywords', { projectName });
+          } else {
+            const newWp = await this.deps.whitepaperRepo.create({
+              projectName,
+              tokenAddress,
+              documentUrl: discovered.documentUrl,
+              chain: tokenAddress.startsWith('0x') ? 'base' : 'solana',
+              pageCount: discovered.resolved.pageCount,
+              status: 'VERIFIED',
+              selectionScore: 0,
+            });
+            newWpId = newWp.id;
+          }
 
           const verdict = structuralScore >= 3 ? Verdict.PASS
             : structuralScore >= 2 ? Verdict.CONDITIONAL
             : Verdict.FAIL;
 
-          await this.deps.verificationsRepo.create({
-            whitepaperId: newWp.id,
+          if (!newWpId.startsWith('tmp-')) {
+            await this.deps.verificationsRepo.create({
+              whitepaperId: newWpId,
             structuralScore,
             confidenceScore: 0,
             hypeTechRatio,
@@ -135,11 +143,12 @@ export class JobRouter {
             triggerSource: 'acp_live_l1',
             cacheHit: false,
           });
+          }
 
           const report = this.deps.reportGenerator.generateLegitimacyScan(
             { structuralScore, confidenceScore: 0, hypeTechRatio, verdict, focusAreaScores: { [ClaimCategory.TOKENOMICS]: 0, [ClaimCategory.PERFORMANCE]: 0, [ClaimCategory.CONSENSUS]: 0, [ClaimCategory.SCIENTIFIC]: 0 }, totalClaims: 0, verifiedClaims: 0, llmTokensUsed: 0, computeCostUsd: 0 },
             analysis,
-            newWp as never,
+            { id: newWpId, projectName, tokenAddress } as never,
           );
           if (tokenAddress) report.tokenAddress = tokenAddress;
           log.info('Live L1 scan completed', { projectName, structuralScore, verdict });
@@ -159,7 +168,7 @@ export class JobRouter {
    * Shared by handleVerifyWhitepaper and handleFullVerification.
    * Returns intermediate results for further processing.
    */
-  private async runL1L2(documentUrl: string, projectName: string) {
+  private async runL1L2(documentUrl: string, projectName: string, tokenAddress?: string | null) {
     // Resolve the document
     const resolved = await this.deps.cryptoResolver.resolveWhitepaper(documentUrl);
 
@@ -176,27 +185,35 @@ export class JobRouter {
     // Note: ClaimExtractor calls costTracker.recordUsage() internally
     // We capture the delta via getStageMetrics() after the verification
 
-    // Store whitepaper
-    const wp = await this.deps.whitepaperRepo.create({
-      projectName,
-      documentUrl,
-      chain: 'base',
-      pageCount: resolved.pageCount,
-      status: 'VERIFIED',
-      selectionScore: 0,
-    });
-
-    // Store claims
-    for (const claim of claims) {
-      await this.deps.claimsRepo.create({
-        whitepaperId: wp.id,
-        category: claim.category,
-        claimText: claim.claimText,
-        statedEvidence: claim.statedEvidence,
-        sourceSection: claim.sourceSection,
-        mathProofPresent: claim.mathematicalProofPresent,
-        evaluationJson: claim.regulatoryRelevance ? { regulatoryRelevance: true } : undefined,
+    // Store whitepaper — guard against caching violation keywords
+    let wp: { id: string; projectName: string; tokenAddress?: string | null };
+    if (JobRouter.hasViolationKeywords(projectName)) {
+      // Don't persist poisoned entries — use a temporary in-memory record
+      wp = { id: `tmp-${Date.now()}`, projectName, tokenAddress: tokenAddress ?? null };
+      log.warn('Skipping cache write — project name contains violation keywords', { projectName });
+    } else {
+      wp = await this.deps.whitepaperRepo.create({
+        projectName,
+        tokenAddress: tokenAddress ?? undefined,
+        documentUrl,
+        chain: tokenAddress?.startsWith('0x') ? 'base' : 'unknown',
+        pageCount: resolved.pageCount,
+        status: 'VERIFIED',
+        selectionScore: 0,
       });
+
+      // Store claims
+      for (const claim of claims) {
+        await this.deps.claimsRepo.create({
+          whitepaperId: wp.id,
+          category: claim.category,
+          claimText: claim.claimText,
+          statedEvidence: claim.statedEvidence,
+          sourceSection: claim.sourceSection,
+          mathProofPresent: claim.mathematicalProofPresent,
+          evaluationJson: claim.regulatoryRelevance ? { regulatoryRelevance: true } : undefined,
+        });
+      }
     }
 
     return { resolved, analysis, structuralScore, hypeTechRatio, claims, wp };
@@ -204,7 +221,8 @@ export class JobRouter {
 
   private async handleVerifyWhitepaper(input: Record<string, unknown>) {
     const documentUrl = (input.document_url as string | undefined)?.trim();
-    const projectName = (input.project_name as string | undefined)?.trim() || (input.token_address as string | undefined)?.trim() || 'Unknown';
+    const requestedTokenAddress = (input.token_address as string | undefined)?.trim() ?? null;
+    const projectName = (input.project_name as string | undefined)?.trim() || 'Unknown';
 
     if (!documentUrl) {
       return { error: 'missing_input', message: 'document_url is required for verify_project_whitepaper' };
@@ -224,7 +242,7 @@ export class JobRouter {
       return { error: 'invalid_url', message: 'document_url exceeds maximum length (2048)' };
     }
 
-    const { resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = await this.runL1L2(documentUrl, projectName);
+    const { resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = await this.runL1L2(documentUrl, projectName, requestedTokenAddress);
 
     // L3: Claim evaluation (timed)
     this.deps.costTracker.startStage('l3');
@@ -266,7 +284,7 @@ export class JobRouter {
       l3DurationMs: stageMetrics.l3.durationMs,
     });
 
-    return this.deps.reportGenerator.generateTokenomicsAudit(
+    const report = this.deps.reportGenerator.generateTokenomicsAudit(
       {
         structuralScore,
         confidenceScore: aggregate.confidenceScore,
@@ -283,6 +301,13 @@ export class JobRouter {
       scores,
       analysis,
     );
+
+    // Ensure requested token_address is in the report
+    if (requestedTokenAddress) {
+      report.tokenAddress = requestedTokenAddress;
+    }
+
+    return report;
   }
 
   private async handleFullVerification(input: Record<string, unknown>) {
@@ -459,6 +484,12 @@ export class JobRouter {
     const briefing = this.deps.reportGenerator.generateDailyBriefing(finalReports);
     briefing.date = targetDate;
     return briefing;
+  }
+
+  /** Returns true if the name contains violation keywords — do not cache */
+  private static hasViolationKeywords(name: string): boolean {
+    const lower = name.toLowerCase();
+    return /\bscam\b|\bfraud\b|\brug\s*pull\b|\bnsfw\b|\bexplicit\b|\bporn\b|\bhack\b|\bexploit\b|\bphish\b/.test(lower);
   }
 
   private async findWhitepaper(input: Record<string, unknown>) {
