@@ -1,7 +1,7 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-03-29 (WS1-4: L2+L3 live, plain text parsing, doc URL validation, date handling)
+> Last updated: 2026-03-29 (10/18 hotfix: 5 fixes for 8 remaining failures)
 > Updated by: Claude Opus 4.6 — Kovsky session
-> Session label: All 4 offerings functional. ClaimExtractor + ClaimEvaluator initialized. project_legitimacy_scan 4/4 PERFECT. Targeting full graduation.
+> Session label: 10/18 → targeting 18/18. Hex validator loosened, scam filter, cache poison guard, doc_url path fixed, NSFW domains, min date.
 > Staleness gate: 2026-03-28 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
@@ -73,6 +73,7 @@
 | 3 | 1/4 | 1 rejection | 3 expired | memoToSign.sign() also skips createRequirement() |
 | 4 | 3/6 | Raydium COMPLETED + 2 rejections | USDC data quality, NSFW not filtered, non-token name not filtered | Content filtering gaps |
 | 5 | 4/4 (scan only) | project_legitimacy_scan PERFECT | Other 3 offerings: claimExtractor null, plain text rejected, date wrong | L2/L3 not wired, no text parsing |
+| 6 | 10/18 | 10 passed (all rejections + some accepts) | 8 failed: short hex addr, "scam" filter gap, poisoned cache, doc_url path, NSFW domain, min date | Edge cases in validators + code paths |
 
 ## Next Actions (ordered)
 1. **Re-evaluate via Butler** — fixes 10-13 deployed, targeting 6/6
@@ -128,6 +129,7 @@
 | 2026-03-28 | Claude Opus 4.6 (Kovsky) | 3/6 eval: Raydium COMPLETED. Fixes 10-13: dead address rejection, NSFW filter, non-token name filter, address passthrough in JobRouter | 304/304 tests, deployed to VPS |
 | 2026-03-28 | Claude Opus 4.6 (Kovsky) | Option A restructure: 4 offerings, live L1, all-field content filtering, eth_getCode | 303/303, deployed |
 | 2026-03-29 | Claude Opus 4.6 (Kovsky) | WS1-4: ClaimExtractor+ClaimEvaluator live (anthropicFetchClient), plain text parsing, doc URL validation, date handling. project_legitimacy_scan 4/4 PERFECT. | 303/303, deployed |
+| 2026-03-29 | Claude Opus 4.6 (Kovsky) | 10/18 hotfix: hex 20-40 chars, scam/fraud filter, cache poison guard, doc_url tokenAddress passthrough, NSFW domain check, min date 2015. Poisoned Supabase entry deleted. | 303/303, deployed |
 
 ## Quick Commands
 ```bash
