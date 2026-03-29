@@ -1,7 +1,7 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-03-28 (Option A restructure: 4 offerings, live L1, content filtering)
+> Last updated: 2026-03-29 (WS1-4: L2+L3 live, plain text parsing, doc URL validation, date handling)
 > Updated by: Claude Opus 4.6 — Kovsky session
-> Session label: Restructured to 4 offerings. Live L1 for cache miss. All-field content filtering. Deployed. Awaiting re-evaluation.
+> Session label: All 4 offerings functional. ClaimExtractor + ClaimEvaluator initialized. project_legitimacy_scan 4/4 PERFECT. Targeting full graduation.
 > Staleness gate: 2026-03-28 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
@@ -33,7 +33,11 @@
 - [x] **Content filtering** — NSFW rejection, non-token name rejection, dead address rejection, malicious keyword rejection (2026-03-28)
 - [x] **Address passthrough** — JobRouter returns requested token_address, not cached DB address (2026-03-28)
 - [x] **Option A restructure** — 4 offerings (killed tokenomics_sustainability_audit), live L1 on cache miss, all-field content filtering (2026-03-28)
-- [ ] **Graduation** — targeting 6/6 with restructure. Live L1 addresses NOT_IN_DATABASE failures.
+- [x] **WS1: L2+L3 pipeline live** — ClaimExtractor + ClaimEvaluator initialized via anthropicFetchClient. Confirmed in VPS stdout. (2026-03-29)
+- [x] **WS2: Plain text parsing** — AcpService.parseRequirement() extracts 0x from natural language. isPlainText skips format validator. (2026-03-29)
+- [x] **WS3: document_url validation** — rejects non-URLs, images/media at REQUEST phase. project_name optional. (2026-03-29)
+- [x] **WS4: Date handling** — YYYY-MM-DD validation, future date rejection, date passthrough, substantive content filtering. (2026-03-29)
+- [ ] **Graduation** — project_legitimacy_scan 4/4 PERFECT. Other 3 offerings now functional. Targeting full graduation.
 - [ ] **USDC MiCA data quality** — evaluator says USDC is fully MiCA-compliant, Grey says PARTIAL. May need seed data update if this test case recurs.
 - [ ] **LAUNCH** — fire outreach, pinned thread, monitor
 
@@ -68,6 +72,7 @@
 | 2 | 3/6 | 3 rejections | 3 accept+deliver expired | accept() alone doesn't call createRequirement() |
 | 3 | 1/4 | 1 rejection | 3 expired | memoToSign.sign() also skips createRequirement() |
 | 4 | 3/6 | Raydium COMPLETED + 2 rejections | USDC data quality, NSFW not filtered, non-token name not filtered | Content filtering gaps |
+| 5 | 4/4 (scan only) | project_legitimacy_scan PERFECT | Other 3 offerings: claimExtractor null, plain text rejected, date wrong | L2/L3 not wired, no text parsing |
 
 ## Next Actions (ordered)
 1. **Re-evaluate via Butler** — fixes 10-13 deployed, targeting 6/6
@@ -121,6 +126,8 @@
 | 2026-03-27 | Claude Opus 4.6 (Kovsky) | ACP credentials deployed, 0x prefix fix, entity key resolved to 3. SDK CONNECTED — WebSocket live, ACP Room joined, 5 handlers active. 66 Test 267/267 on VPS. | Grey is live on ACP marketplace |
 | 2026-03-28 | Claude Opus 4.6 (Kovsky) | 6-bug dispatch fix + Bug 7 respond(true) + Fix 8 memoToSign (reverted) + Fix 9 Solana base58 | Eval: 1/4 → 3/6 |
 | 2026-03-28 | Claude Opus 4.6 (Kovsky) | 3/6 eval: Raydium COMPLETED. Fixes 10-13: dead address rejection, NSFW filter, non-token name filter, address passthrough in JobRouter | 304/304 tests, deployed to VPS |
+| 2026-03-28 | Claude Opus 4.6 (Kovsky) | Option A restructure: 4 offerings, live L1, all-field content filtering, eth_getCode | 303/303, deployed |
+| 2026-03-29 | Claude Opus 4.6 (Kovsky) | WS1-4: ClaimExtractor+ClaimEvaluator live (anthropicFetchClient), plain text parsing, doc URL validation, date handling. project_legitimacy_scan 4/4 PERFECT. | 303/303, deployed |
 
 ## Quick Commands
 ```bash
