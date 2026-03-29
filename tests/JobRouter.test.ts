@@ -124,9 +124,9 @@ describe('JobRouter', () => {
     expect(result.error).toBe('unknown_offering');
   });
 
-  it('missing required input fields returns error', async () => {
+  it('missing required input fields returns INSUFFICIENT_DATA', async () => {
     const result = await router.handleJob('verify_project_whitepaper', {}) as Record<string, unknown>;
-    expect(result.error).toBe('missing_input');
+    expect(result.verdict).toBe('INSUFFICIENT_DATA');
   });
 
   it('full_technical_verification uses cached result when available', async () => {

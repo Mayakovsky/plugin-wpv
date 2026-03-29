@@ -230,8 +230,39 @@ export class JobRouter {
     const requestedTokenAddress = (input.token_address as string | undefined)?.trim() ?? null;
     const projectName = (input.project_name as string | undefined)?.trim() || 'Unknown';
 
+    // document_url is optional per schema — if missing, try discovery
     if (!documentUrl) {
-      return { error: 'missing_input', message: 'document_url is required for verify_project_whitepaper' };
+      if (this.deps.tieredDiscovery) {
+        try {
+          const metadata: ProjectMetadata = {
+            agentName: projectName,
+            entityId: null,
+            description: null,
+            linkedUrls: [],
+            category: null,
+            graduationStatus: null,
+          };
+          const discovered = await this.deps.tieredDiscovery.discover(metadata, requestedTokenAddress ?? '');
+          if (discovered) {
+            // Use discovered document URL for L1+L2+L3
+            const { resolved: discResolved, analysis: discAnalysis, structuralScore: discScore, hypeTechRatio: discHype, claims: discClaims, wp: discWp } = await this.runL1L2(discovered.documentUrl, projectName, requestedTokenAddress);
+            this.deps.costTracker.startStage('l3');
+            const { evaluations: discEvals, scores: discScores } = await this.deps.claimEvaluator.evaluateAll(discClaims, discResolved.text);
+            this.deps.costTracker.endStage('l3', 0, 0);
+            const discClaimScores = discClaims.map((c) => ({ category: c.category as never, score: discScores.get(c.claimId) ?? 50 }));
+            const discAggregate = this.deps.scoreAggregator.aggregate(discClaimScores);
+            const report = this.deps.reportGenerator.generateTokenomicsAudit(
+              { structuralScore: discScore, confidenceScore: discAggregate.confidenceScore, hypeTechRatio: discHype, verdict: discAggregate.verdict, focusAreaScores: discAggregate.focusAreaScores, totalClaims: discClaims.length, verifiedClaims: discEvals.length, llmTokensUsed: 0, computeCostUsd: 0 },
+              discClaims, discWp as never, discScores, discAnalysis,
+            );
+            if (requestedTokenAddress) report.tokenAddress = requestedTokenAddress;
+            return report;
+          }
+        } catch (err) {
+          log.warn('Discovery failed for verify_project_whitepaper (no document_url)', { projectName, error: (err as Error).message });
+        }
+      }
+      return this.insufficientData(input);
     }
 
     // Validate URL format — reject file://, javascript:, or malformed URLs

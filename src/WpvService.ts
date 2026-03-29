@@ -86,6 +86,7 @@ const MALICIOUS_PROJECT_NAME_KEYWORDS: string[] = [
   'rugpull', 'rug pull', 'ponzi', 'honeypot', 'drainer',
   'stealer', 'pyramid', 'laundering', 'money launder',
   'pump and dump', 'pump & dump',
+  'explicit',
 ];
 
 /** Invalid project name patterns — indicate non-token/non-project inputs */
