@@ -67,7 +67,7 @@ export class CryptoContentResolver {
     source: 'direct' | 'ipfs',
   ): ResolvedWhitepaper {
     const text = content.text;
-    const pageCount = this.estimatePageCount(text, content.source as 'raw' | 'pdf' | 'html');
+    const pageCount = content.pageCount ?? this.estimatePageCount(text, content.source as 'raw' | 'pdf' | 'html');
     const isImageOnly = this.detectImageOnly(text, pageCount);
     const isPasswordProtected = this.detectPasswordProtected(text, content);
 

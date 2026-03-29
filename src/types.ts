@@ -326,6 +326,7 @@ export interface ResolvedContent {
   contentType: string;
   source: string;
   resolvedUrl: string;
+  pageCount?: number;
   diagnostics: string[];
 }
 

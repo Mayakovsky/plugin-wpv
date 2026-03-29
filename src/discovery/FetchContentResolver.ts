@@ -1,6 +1,6 @@
 // Minimal IContentResolver using fetch — for live L1 scans where
 // plugin-autognostic's ContentResolver may not be available.
-// Handles HTML pages. PDF support is basic (extracts raw text).
+// Handles HTML pages. PDF support uses pdf-parse for proper text extraction.
 
 import type { IContentResolver, ResolvedContent } from '../types';
 
@@ -22,13 +22,41 @@ export class FetchContentResolver implements IContentResolver {
     const contentType = response.headers.get('content-type') ?? '';
     const body = await response.text();
 
-    if (contentType.includes('application/pdf')) {
+    if (contentType.includes('application/pdf') || url.toLowerCase().endsWith('.pdf')) {
+      // PDF is binary — re-fetch as ArrayBuffer and parse with pdf-parse
+      try {
+        const pdfResponse = await fetch(url, {
+          headers: {
+            'User-Agent': 'WhitepaperGrey/1.0 (whitepaper-verification)',
+            'Accept': 'application/pdf,*/*',
+          },
+          signal: AbortSignal.timeout(15000),
+          redirect: 'follow',
+        });
+        const buffer = Buffer.from(await pdfResponse.arrayBuffer());
+        const pdfParse = (await import('pdf-parse')).default;
+        const parsed = await pdfParse(buffer);
+        const pdfText = parsed.text?.trim() ?? '';
+        if (pdfText.length > 100) {
+          return {
+            text: pdfText,
+            contentType: 'application/pdf',
+            source: 'pdf',
+            resolvedUrl: url,
+            pageCount: parsed.numpages,
+            diagnostics: [`FetchContentResolver: pdf-parse extracted ${pdfText.length} chars, ${parsed.numpages} pages`],
+          };
+        }
+      } catch (pdfErr) {
+        // pdf-parse failed — fall through to raw text
+      }
+      // Fallback: return raw text (may be garbled for binary PDFs)
       return {
         text: body.length > 100 ? body : '',
         contentType: 'application/pdf',
         source: 'pdf',
         resolvedUrl: url,
-        diagnostics: ['FetchContentResolver: raw PDF text'],
+        diagnostics: ['FetchContentResolver: pdf-parse failed, raw text fallback'],
       };
     }
 
