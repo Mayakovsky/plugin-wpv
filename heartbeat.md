@@ -1,7 +1,7 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-03-29 (10/18 hotfix: 5 fixes for 8 remaining failures)
+> Last updated: 2026-03-29 (16/23 hotfix: L2+L3 enrichment, plain text names, HEAD check, bare domains, missing fields)
 > Updated by: Claude Opus 4.6 — Kovsky session
-> Session label: 10/18 → targeting 18/18. Hex validator loosened, scam filter, cache poison guard, doc_url path fixed, NSFW domains, min date.
+> Session label: 16/23 → targeting 23/23. project_legitimacy_scan 3/3 PERFECT. daily_technical_briefing 8/8 PERFECT.
 > Staleness gate: 2026-03-28 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
@@ -74,6 +74,7 @@
 | 4 | 3/6 | Raydium COMPLETED + 2 rejections | USDC data quality, NSFW not filtered, non-token name not filtered | Content filtering gaps |
 | 5 | 4/4 (scan only) | project_legitimacy_scan PERFECT | Other 3 offerings: claimExtractor null, plain text rejected, date wrong | L2/L3 not wired, no text parsing |
 | 6 | 10/18 | 10 passed (all rejections + some accepts) | 8 failed: short hex addr, "scam" filter gap, poisoned cache, doc_url path, NSFW domain, min date | Edge cases in validators + code paths |
+| 7 | 16/23 | scan 3/3, briefing 8/8, verify 2/4, full 3/8 | 7 failed: cached L1 0-claims, plain text no addr, 404 URL, bare domain, missing fields | L2 enrichment + text parsing + URL checks |
 
 ## Next Actions (ordered)
 1. **Re-evaluate via Butler** — fixes 10-13 deployed, targeting 6/6
