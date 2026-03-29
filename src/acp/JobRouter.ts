@@ -311,12 +311,82 @@ export class JobRouter {
   }
 
   private async handleFullVerification(input: Record<string, unknown>) {
+    const reqAddr = input.token_address as string | undefined;
+    const reqName = (input.project_name as string | undefined)?.trim();
+
     // Check for cached result first
     const wp = await this.findWhitepaper(input);
     if (wp) {
       const verification = await this.deps.verificationsRepo.findByWhitepaperId(wp.id);
       if (verification) {
         const claims = await this.deps.claimsRepo.findByWhitepaperId(wp.id);
+        const totalClaims = (verification.totalClaims as number) ?? claims.length;
+
+        // Fix 1: If cached result has 0 claims (L1-only), enrich with L2+L3
+        if (totalClaims === 0 && this.deps.claimExtractor && this.deps.cryptoResolver) {
+          const docUrl = (wp as Record<string, unknown>).documentUrl as string | undefined;
+          if (docUrl) {
+            try {
+              log.info('Enriching cached L1 result with L2+L3', { projectName: wp.projectName, docUrl: docUrl.slice(0, 60) });
+              const resolved = await this.deps.cryptoResolver.resolveWhitepaper(docUrl);
+              if (resolved.text.length > 100) {
+                this.deps.costTracker.reset();
+                this.deps.costTracker.startStage('l2');
+                const newClaims = await this.deps.claimExtractor.extractClaims(resolved.text, wp.projectName);
+                this.deps.costTracker.endStage('l2', 0, 0);
+
+                // L3 if available
+                let evaluations: unknown[] = [];
+                let scores = new Map<string, number>();
+                if (this.deps.claimEvaluator) {
+                  this.deps.costTracker.startStage('l3');
+                  const evalResult = await this.deps.claimEvaluator.evaluateAll(newClaims, resolved.text);
+                  evaluations = evalResult.evaluations;
+                  scores = evalResult.scores;
+                  this.deps.costTracker.endStage('l3', 0, 0);
+                }
+
+                // Store enriched claims
+                if (!JobRouter.hasViolationKeywords(wp.projectName)) {
+                  for (const claim of newClaims) {
+                    await this.deps.claimsRepo.create({
+                      whitepaperId: wp.id,
+                      category: claim.category,
+                      claimText: claim.claimText,
+                      statedEvidence: claim.statedEvidence,
+                      sourceSection: claim.sourceSection,
+                      mathProofPresent: claim.mathematicalProofPresent,
+                      evaluationJson: claim.regulatoryRelevance ? { regulatoryRelevance: true } : undefined,
+                    });
+                  }
+                }
+
+                const claimScores = newClaims.map((c) => ({
+                  category: c.category as never,
+                  score: scores.get(c.claimId) ?? 50,
+                }));
+                const aggregate = this.deps.scoreAggregator.aggregate(claimScores);
+                const analysis = this.extractStructuralAnalysis(verification);
+
+                const enrichedReport = this.deps.reportGenerator.generateFullVerification(
+                  { ...this.verificationRowToResult(verification), totalClaims: newClaims.length, verdict: aggregate.verdict, confidenceScore: aggregate.confidenceScore, focusAreaScores: aggregate.focusAreaScores },
+                  newClaims,
+                  evaluations as never,
+                  wp as never,
+                  scores,
+                  analysis,
+                );
+                if (reqAddr) enrichedReport.tokenAddress = reqAddr;
+                log.info('L2+L3 enrichment complete', { projectName: wp.projectName, claims: newClaims.length });
+                return enrichedReport;
+              }
+            } catch (err) {
+              log.warn('L2+L3 enrichment failed — returning cached L1', { error: (err as Error).message });
+            }
+          }
+        }
+
+        // Return cached result (has claims, or enrichment failed)
         const analysis = this.extractStructuralAnalysis(verification);
         const fullReport = this.deps.reportGenerator.generateFullVerification(
           this.verificationRowToResult(verification),
@@ -335,7 +405,6 @@ export class JobRouter {
           analysis,
         );
 
-        const reqAddr = input.token_address as string | undefined;
         if (reqAddr) {
           fullReport.tokenAddress = reqAddr;
         }
@@ -344,11 +413,45 @@ export class JobRouter {
       }
     }
 
-    // No cached result — check if we have a URL for live L1+L2+L3
+    // No cached result — try live pipeline
     const documentUrl = (input.document_url as string | undefined)?.trim();
-    const projectName = (input.project_name as string | undefined)?.trim();
-    if (!documentUrl || !projectName) {
-      return this.notInDatabase(input);
+    const projectName = reqName || 'Unknown';
+
+    // If no document_url, try discovery
+    if (!documentUrl && this.deps.tieredDiscovery) {
+      const metadata: ProjectMetadata = {
+        agentName: projectName,
+        entityId: null,
+        description: null,
+        linkedUrls: [],
+        category: null,
+        graduationStatus: null,
+      };
+      try {
+        const discovered = await this.deps.tieredDiscovery.discover(metadata, reqAddr ?? '');
+        if (discovered) {
+          const { resolved, analysis, structuralScore, hypeTechRatio, claims: discClaims, wp: discWp } = await this.runL1L2(discovered.documentUrl, projectName, reqAddr);
+          const { evaluations, scores } = this.deps.claimEvaluator
+            ? await this.deps.claimEvaluator.evaluateAll(discClaims, resolved.text)
+            : { evaluations: [], scores: new Map<string, number>() };
+          const claimScores = discClaims.map((c) => ({ category: c.category as never, score: scores.get(c.claimId) ?? 50 }));
+          const aggregate = this.deps.scoreAggregator.aggregate(claimScores);
+          const tokens = this.deps.costTracker.getTotalTokens();
+          const report = this.deps.reportGenerator.generateFullVerification(
+            { structuralScore, confidenceScore: aggregate.confidenceScore, hypeTechRatio, verdict: aggregate.verdict, focusAreaScores: aggregate.focusAreaScores, totalClaims: discClaims.length, verifiedClaims: evaluations.length, llmTokensUsed: tokens.input + tokens.output, computeCostUsd: this.deps.costTracker.getTotalCostUsd() },
+            discClaims, evaluations as never, discWp as never, scores, analysis,
+          );
+          if (reqAddr) report.tokenAddress = reqAddr;
+          return report;
+        }
+      } catch (err) {
+        log.warn('Discovery failed for full_technical_verification', { error: (err as Error).message });
+      }
+      return this.insufficientData(input);
+    }
+
+    if (!documentUrl) {
+      return this.insufficientData(input);
     }
 
     // Validate URL

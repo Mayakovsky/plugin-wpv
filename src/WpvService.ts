@@ -420,6 +420,18 @@ export class WpvService extends Service {
     // Scan ALL string fields in requirement for content violations — shared patterns
     WpvService.scanForViolations(requirement);
 
+    // Fix 5: Reject JSON requirements missing all identifying fields
+    if (!isPlainText) {
+      const hasTokenAddress = requirement?.token_address !== undefined && requirement?.token_address !== null;
+      const hasProjectName = requirement?.project_name !== undefined && requirement?.project_name !== null;
+      const hasDocumentUrl = requirement?.document_url !== undefined && requirement?.document_url !== null;
+      if (!hasTokenAddress && !hasProjectName && !hasDocumentUrl) {
+        const err = new Error('Invalid requirement: must include at least one of token_address, project_name, or document_url');
+        err.name = 'InputValidationError';
+        throw err;
+      }
+    }
+
     // WS3: document_url validation for verify_project_whitepaper
     if (offeringId === 'verify_project_whitepaper') {
       const docUrl = requirement?.document_url;
@@ -432,6 +444,19 @@ export class WpvService extends Service {
         }
         // NSFW domain check — uses hostname parsing to avoid false positives
         WpvService.validateUrlDomain(trimmedUrl);
+        // Fix 4: Reject bare domain URLs (no meaningful path)
+        try {
+          const urlObj = new URL(trimmedUrl);
+          if (urlObj.pathname === '/' || urlObj.pathname === '') {
+            const host = urlObj.hostname.toLowerCase();
+            const isDocSite = /\b(docs|whitepaper|technical|paper|wiki|gitbook)\b/.test(host);
+            if (!isDocSite) {
+              const err = new Error('Invalid document_url: URL must point to a specific document, not a bare domain');
+              err.name = 'InputValidationError';
+              throw err;
+            }
+          }
+        } catch (e) { if (e instanceof Error && e.name === 'InputValidationError') throw e; }
         // Reject non-document file types
         const lowerUrl = trimmedUrl.toLowerCase();
         if (/\.(png|jpg|jpeg|gif|svg|ico|webp|bmp|mp4|mp3|avi|mov)(\?.*)?$/.test(lowerUrl)) {
@@ -439,6 +464,15 @@ export class WpvService extends Service {
           err.name = 'InputValidationError';
           throw err;
         }
+        // Fix 3: HEAD check — reject definitively inaccessible URLs
+        try {
+          const headResp = await fetch(trimmedUrl, { method: 'HEAD', signal: AbortSignal.timeout(3000), redirect: 'follow' });
+          if (headResp.status === 404 || headResp.status === 410 || headResp.status >= 500) {
+            const err = new Error(`Invalid document_url: URL returned HTTP ${headResp.status} — document not accessible`);
+            err.name = 'InputValidationError';
+            throw err;
+          }
+        } catch (e) { if (e instanceof Error && e.name === 'InputValidationError') throw e; }
       }
     }
 
