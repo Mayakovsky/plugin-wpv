@@ -28,7 +28,12 @@ export interface AnthropicClient {
 
 const EXTRACTION_SYSTEM_PROMPT = `You are a scientific claim extractor for cryptocurrency and DeFi whitepapers.
 
-Extract all testable claims from the document. A testable claim is a specific assertion that can be verified against external data, mathematical analysis, or benchmark comparison.
+Extract all testable claims from the document that are about the TARGET PROJECT specified by the user. A testable claim is a specific assertion that can be verified against external data, mathematical analysis, or benchmark comparison.
+
+IMPORTANT:
+- Only extract claims that the target project itself makes about its OWN technology, tokenomics, or performance.
+- Do NOT extract claims about other projects mentioned in historical context, background sections, or comparisons (e.g., if an Ethereum whitepaper discusses Bitcoin's block time in its History section, that is NOT an Ethereum claim).
+- Do NOT extract claims from introductory summaries of prior work — only claims the project makes about itself.
 
 Categorize each claim into one of these categories:
 - TOKENOMICS: Claims about token supply, distribution, yield, APY, vesting, burns, inflation
@@ -41,7 +46,7 @@ For each claim, extract:
 - statedEvidence: What evidence the whitepaper provides
 - mathematicalProofPresent: Whether a mathematical proof accompanies the claim
 - sourceSection: Which section of the document contains this claim
-- regulatoryRelevance: Whether this claim relates to regulatory compliance (MiCA, EU regulation, KYC/AML, ESMA requirements, investor protection, risk disclosure obligations, or legal compliance frameworks). Set true for any claim about meeting regulatory standards or legal requirements. Also flag risk disclosures — note whether they are substantive (specific, quantified risks) or boilerplate (generic, vague warnings).
+- regulatoryRelevance: Whether this claim EXPLICITLY relates to regulatory compliance (MiCA, EU regulation, KYC/AML, ESMA requirements, investor protection, risk disclosure obligations, or legal compliance frameworks). Set true ONLY for claims that explicitly mention regulatory standards or legal requirements by name. A technical whitepaper describing protocol mechanics is NOT regulatory compliance — do not conflate technical descriptions with MiCA compliance. Also flag risk disclosures — note whether they are substantive (specific, quantified risks) or boilerplate (generic, vague warnings).
 
 Example:
 {

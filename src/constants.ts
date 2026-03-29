@@ -116,7 +116,8 @@ export const MICA_CLAIM_KEYWORDS = [
   'markets in crypto-assets',
   'regulation (eu) 2023/1114',
   'esma whitepaper',
-  'eu regulation',
+  'mica regulation',
+  'mica complian',
   'eu crypto regulation',
   'mifid ii',
 ] as const;
@@ -136,13 +137,14 @@ export const MICA_REQUIRED_SECTIONS = [
 export const MICA_SECTION_PATTERNS: Record<string, RegExp[]> = {
   issuer_identity: [
     /\bissuer\b/i, /\bcompany\s+(?:information|details|identity)\b/i,
-    /\bteam\b/i, /\bfounders?\b/i, /\blegal\s+entity\b/i,
+    /\blegal\s+entity\b/i,
     /\bcontact\s+(?:information|details)\b/i,
+    /\bregistered\s+(?:office|address)\b/i,
   ],
   technology_description: [
-    /\btechnology\b/i, /\btechnical\s+(?:architecture|design|overview)\b/i,
-    /\bprotocol\s+design\b/i, /\bsmart\s+contracts?\b/i,
-    /\bconsensus\b/i, /\bblockchain\b/i,
+    /\btechnical\s+(?:architecture|design|overview|specification)\b/i,
+    /\bprotocol\s+design\b/i, /\bsystem\s+architecture\b/i,
+    /\btechnology\s+(?:stack|description|overview)\b/i,
   ],
   risk_disclosure: [
     /\brisk\s+(?:disclosure|factors?|warning)\b/i,
@@ -163,8 +165,9 @@ export const MICA_SECTION_PATTERNS: Record<string, RegExp[]> = {
     /\bdecision.?making\b/i, /\bproposal\b/i,
   ],
   environmental_impact: [
-    /\benvironmental\b/i, /\bcarbon\b/i, /\benergy\s+consumption\b/i,
-    /\bsustainability\b/i, /\bproof.of.stake\b/i,
+    /\benvironmental\s+impact\b/i, /\bcarbon\s+(?:footprint|offset|neutral)\b/i,
+    /\benergy\s+consumption\b/i,
+    /\bsustainability\s+(?:report|assessment|disclosure)\b/i,
   ],
 } as const;
 

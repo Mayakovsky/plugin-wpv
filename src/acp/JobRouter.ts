@@ -663,7 +663,32 @@ export class JobRouter {
     }
 
     // Run L1+L2
-    const { resolved, analysis, structuralScore, hypeTechRatio, claims, wp: newWp } = await this.runL1L2(documentUrl, projectName);
+    let { resolved, analysis, structuralScore, hypeTechRatio, claims, wp: newWp } = await this.runL1L2(documentUrl, projectName);
+
+    // If provided document_url yielded 0 claims (e.g. landing page, SPA), try discovery fallback
+    if (claims.length === 0 && this.deps.tieredDiscovery && projectName !== 'Unknown') {
+      try {
+        log.info('full_tech document_url yielded 0 claims — trying discovery fallback', { projectName, documentUrl: documentUrl.slice(0, 80) });
+        const metadata: ProjectMetadata = {
+          agentName: projectName,
+          entityId: null,
+          description: null,
+          linkedUrls: [],
+          category: null,
+          graduationStatus: null,
+        };
+        const discovered = await this.deps.tieredDiscovery.discover(metadata, reqAddr ?? '');
+        if (discovered && discovered.documentUrl !== documentUrl) {
+          const fallback = await this.runL1L2(discovered.documentUrl, projectName, reqAddr);
+          if (fallback.claims.length > 0) {
+            log.info('Discovery fallback succeeded for full_tech', { projectName, discoveredUrl: discovered.documentUrl.slice(0, 80), claims: fallback.claims.length });
+            ({ resolved, analysis, structuralScore, hypeTechRatio, claims, wp: newWp } = fallback);
+          }
+        }
+      } catch (err) {
+        log.warn('Discovery fallback failed for full_tech', { projectName, error: (err as Error).message });
+      }
+    }
 
     // L3: Full claim evaluation
     const { evaluations, scores } = await this.deps.claimEvaluator.evaluateAll(claims, resolved.text);
