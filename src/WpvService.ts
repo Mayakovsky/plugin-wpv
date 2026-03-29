@@ -8,8 +8,9 @@ import { WpvWhitepapersRepo } from './db/wpvWhitepapersRepo';
 import { WpvClaimsRepo } from './db/wpvClaimsRepo';
 import { WpvVerificationsRepo } from './db/wpvVerificationsRepo';
 import { StructuralAnalyzer } from './verification/StructuralAnalyzer';
-import type { ClaimExtractor } from './verification/ClaimExtractor';
-import type { ClaimEvaluator } from './verification/ClaimEvaluator';
+import { ClaimExtractor } from './verification/ClaimExtractor';
+import { ClaimEvaluator } from './verification/ClaimEvaluator';
+import { createAnthropicClient } from './verification/anthropicFetchClient';
 import { ScoreAggregator } from './verification/ScoreAggregator';
 import { ReportGenerator } from './verification/ReportGenerator';
 import { CostTracker } from './verification/CostTracker';
@@ -94,13 +95,26 @@ export class WpvService extends Service {
         composer,
       });
 
+      // Initialize L2+L3 pipeline (ClaimExtractor + ClaimEvaluator)
+      const anthropicApiKey = runtime.getSetting('ANTHROPIC_API_KEY') ?? process.env.ANTHROPIC_API_KEY;
+      let claimExtractor: ClaimExtractor | null = null;
+      let claimEvaluator: ClaimEvaluator | null = null;
+      if (anthropicApiKey) {
+        const anthropicClient = createAnthropicClient(anthropicApiKey);
+        claimExtractor = new ClaimExtractor({ client: anthropicClient, costTracker });
+        claimEvaluator = new ClaimEvaluator({ client: anthropicClient, costTracker });
+        logger.info('WpvService: ClaimExtractor + ClaimEvaluator initialized (L2+L3 ready)');
+      } else {
+        logger.warn('WpvService: ANTHROPIC_API_KEY not set — L2+L3 pipeline unavailable');
+      }
+
       const jobRouter = new JobRouter({
         whitepaperRepo,
         verificationsRepo,
         claimsRepo,
         structuralAnalyzer,
-        claimExtractor: null as never,  // L2/L3 only — not needed for $0.25 scans
-        claimEvaluator: null as never,  // L2/L3 only
+        claimExtractor: claimExtractor as never,
+        claimEvaluator: claimEvaluator as never,
         scoreAggregator,
         reportGenerator,
         costTracker,
@@ -113,8 +127,8 @@ export class WpvService extends Service {
         claimsRepo,
         verificationsRepo,
         structuralAnalyzer,
-        claimExtractor: null as never,
-        claimEvaluator: null as never,
+        claimExtractor: claimExtractor as never,
+        claimEvaluator: claimEvaluator as never,
         scoreAggregator,
         reportGenerator,
         costTracker,
@@ -241,8 +255,53 @@ export class WpvService extends Service {
     return false;
   }
 
-  private static async validateTokenAddress(offeringId: string, requirement: Record<string, unknown>): Promise<void> {
-    if (offeringId === 'daily_technical_briefing') return;
+  private static async validateTokenAddress(offeringId: string, requirement: Record<string, unknown>, isPlainText?: boolean): Promise<void> {
+    // WS4A: Date validation for daily_technical_briefing
+    if (offeringId === 'daily_technical_briefing') {
+      const dateStr = requirement?.date;
+      if (dateStr === undefined || dateStr === null) return; // no date = default to today
+      if (typeof dateStr !== 'string') {
+        const err = new Error('Invalid date: must be a string in YYYY-MM-DD format');
+        err.name = 'InputValidationError';
+        throw err;
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        const err = new Error(`Invalid date format: expected YYYY-MM-DD, got '${dateStr}'`);
+        err.name = 'InputValidationError';
+        throw err;
+      }
+      const parsed = new Date(dateStr + 'T00:00:00Z');
+      if (isNaN(parsed.getTime())) {
+        const err = new Error(`Invalid date: '${dateStr}' is not a valid date`);
+        err.name = 'InputValidationError';
+        throw err;
+      }
+      const today = new Date();
+      today.setHours(23, 59, 59, 999);
+      if (parsed > today) {
+        const err = new Error(`Invalid date: '${dateStr}' is in the future`);
+        err.name = 'InputValidationError';
+        throw err;
+      }
+      // Content filtering still applies for daily briefing
+      const allStringValues = Object.values(requirement)
+        .filter((v): v is string => typeof v === 'string')
+        .map((v) => v.toLowerCase());
+      const violationPatterns = [
+        /nsfw/i, /explicit/i, /sexual/i, /pornograph/i,
+        /\[.*(?:nsfw|violation|banned|illegal|prohibited).*\]/i,
+      ];
+      for (const value of allStringValues) {
+        for (const pattern of violationPatterns) {
+          if (pattern.test(value)) {
+            const err2 = new Error('Request contains policy-violating content');
+            err2.name = 'InputValidationError';
+            throw err2;
+          }
+        }
+      }
+      return;
+    }
 
     // Scan ALL string fields in requirement for content violations
     const allStringValues = Object.values(requirement)
@@ -266,7 +325,31 @@ export class WpvService extends Service {
       }
     }
 
+    // WS3: document_url validation for verify_project_whitepaper
+    if (offeringId === 'verify_project_whitepaper') {
+      const docUrl = requirement?.document_url;
+      if (docUrl !== undefined && docUrl !== null && typeof docUrl === 'string') {
+        const trimmedUrl = docUrl.trim();
+        if (!/^https?:\/\/.+\..+/.test(trimmedUrl)) {
+          const err = new Error('Invalid document_url: must be a valid HTTP/HTTPS URL');
+          err.name = 'InputValidationError';
+          throw err;
+        }
+        const lowerUrl = trimmedUrl.toLowerCase();
+        if (/\.(png|jpg|jpeg|gif|svg|ico|webp|bmp|mp4|mp3|avi|mov)(\?.*)?$/.test(lowerUrl)) {
+          const err = new Error('Invalid document_url: must point to a document, not an image or media file');
+          err.name = 'InputValidationError';
+          throw err;
+        }
+      }
+    }
+
     const tokenAddress = requirement?.token_address;
+
+    // Plain-text-extracted addresses skip format validation (may be truncated)
+    // but still run content filters above and eth_getCode below
+    if (isPlainText && tokenAddress) return;
+
     if (tokenAddress !== undefined && tokenAddress !== null) {
       if (typeof tokenAddress !== 'string' || !tokenAddress.trim()) {
         const err = new Error(`Invalid token_address: expected non-empty string, got '${String(tokenAddress).slice(0, 50)}'`);
@@ -373,8 +456,8 @@ export class WpvService extends Service {
 
       for (const offeringId of offerings) {
         // Bug 3: Pre-accept input validator — runs before accept() in phase 0
-        const validator = async (input: { requirement: Record<string, unknown> }) => {
-          await WpvService.validateTokenAddress(offeringId, input.requirement);
+        const validator = async (input: { requirement: Record<string, unknown>; isPlainText?: boolean }) => {
+          await WpvService.validateTokenAddress(offeringId, input.requirement, input.isPlainText);
         };
 
         const handler = async (input: { requirement: Record<string, unknown> }) => {

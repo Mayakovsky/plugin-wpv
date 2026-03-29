@@ -204,10 +204,10 @@ export class JobRouter {
 
   private async handleVerifyWhitepaper(input: Record<string, unknown>) {
     const documentUrl = (input.document_url as string | undefined)?.trim();
-    const projectName = (input.project_name as string | undefined)?.trim();
+    const projectName = (input.project_name as string | undefined)?.trim() || (input.token_address as string | undefined)?.trim() || 'Unknown';
 
-    if (!documentUrl || !projectName) {
-      return { error: 'missing_input', message: 'document_url and project_name are required' };
+    if (!documentUrl) {
+      return { error: 'missing_input', message: 'document_url is required for verify_project_whitepaper' };
     }
 
     // Validate URL format — reject file://, javascript:, or malformed URLs
@@ -386,8 +386,13 @@ export class JobRouter {
     );
   }
 
-  private async handleDailyBriefing(_input: Record<string, unknown>) {
+  private async handleDailyBriefing(input: Record<string, unknown>) {
     const MAX_BRIEFING_SIZE = 10;
+    const MIN_SUBSTANTIVE = 3;
+
+    // WS4B: Respect the requested date
+    const requestedDate = (input.date as string | undefined)?.trim();
+    const targetDate = requestedDate ?? new Date().toISOString().split('T')[0];
 
     let batch = await this.deps.verificationsRepo.getLatestDailyBatch();
 
@@ -406,7 +411,9 @@ export class JobRouter {
     batch = batch.slice(0, MAX_BRIEFING_SIZE);
 
     if (batch.length === 0) {
-      return this.deps.reportGenerator.generateDailyBriefing([]);
+      const briefing = this.deps.reportGenerator.generateDailyBriefing([]);
+      briefing.date = targetDate;
+      return briefing;
     }
 
     const reports = [];
@@ -436,7 +443,22 @@ export class JobRouter {
       );
     }
 
-    return this.deps.reportGenerator.generateDailyBriefing(reports);
+    // WS4C: Prioritize projects with substantive data (claims > 0)
+    const withClaims = reports.filter((r) => (r.claimCount ?? r.claims?.length ?? 0) > 0);
+    const withoutClaims = reports.filter((r) => (r.claimCount ?? r.claims?.length ?? 0) === 0);
+    const ordered = [...withClaims, ...withoutClaims].slice(0, MAX_BRIEFING_SIZE);
+
+    // If fewer than MIN_SUBSTANTIVE have claims, only include those that do
+    // (3 well-analyzed > 10 empty)
+    const finalReports = withClaims.length >= MIN_SUBSTANTIVE
+      ? ordered
+      : withClaims.length > 0
+        ? withClaims
+        : ordered; // fallback: include all if none have claims
+
+    const briefing = this.deps.reportGenerator.generateDailyBriefing(finalReports);
+    briefing.date = targetDate;
+    return briefing;
   }
 
   private async findWhitepaper(input: Record<string, unknown>) {
