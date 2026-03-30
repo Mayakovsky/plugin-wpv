@@ -1,8 +1,8 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-03-29 (16/23 hotfix: L2+L3 enrichment, plain text names, HEAD check, bare domains, missing fields)
+> Last updated: 2026-03-29 (14/16 regression fix: claim focus, MiCA tightening, discovery fallbacks, DexScreener resolver)
 > Updated by: Claude Opus 4.6 — Kovsky session
-> Session label: 16/23 → targeting 23/23. project_legitimacy_scan 3/3 PERFECT. daily_technical_briefing 8/8 PERFECT.
-> Staleness gate: 2026-03-28 — if today is >3 days past this,
+> Session label: 14/16 regression. Claim extraction scoped to target project, MiCA false positives fixed, SPA/landing page discovery fallbacks in both verify + full_tech.
+> Staleness gate: 2026-03-29 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
 ## Focus (1-3 goals, testable)
@@ -75,12 +75,17 @@
 | 5 | 4/4 (scan only) | project_legitimacy_scan PERFECT | Other 3 offerings: claimExtractor null, plain text rejected, date wrong | L2/L3 not wired, no text parsing |
 | 6 | 10/18 | 10 passed (all rejections + some accepts) | 8 failed: short hex addr, "scam" filter gap, poisoned cache, doc_url path, NSFW domain, min date | Edge cases in validators + code paths |
 | 7 | 16/23 | scan 3/3, briefing 8/8, verify 2/4, full 3/8 | 7 failed: cached L1 0-claims, plain text no addr, 404 URL, bare domain, missing fields | L2 enrichment + text parsing + URL checks |
+| 8 | 10/18 | — | 8 failed: hex length, scam filter, poison cache, doc_url path, NSFW domain, min date | Edge case validators |
+| 9 | 7/12 | scan PERFECT, briefing PERFECT | 5 failed: non-standard fields, GitHub blob URLs | extractFromUnknownFields + normalizeGitHubUrl |
+| 10 | 4/6 | — | 2 failed: porn filter, DNS reject | NSFW pattern + HEAD check network errors |
+| 11 | 5/6 | — | 1 failed: SPA doc_url yields 0 claims | verify_project_whitepaper discovery fallback |
+| 12 | 6/6 → 5/6 regression | — | 1 failed: Aerodrome SPA (full_tech) | full_tech discovery fallback added |
+| 13 | 14/16 regression | — | 2 failed: Bitcoin claims in ETH report, broad MiCA patterns | Claim focus + MiCA tightening |
 
 ## Next Actions (ordered)
-1. **Re-evaluate via Butler** — fixes 10-13 deployed, targeting 6/6
-2. **If USDC recurs** — update seed data with correct MiCA assessment
-3. **Close ports 3000 + 3001** in Lightsail after graduation
-4. **LAUNCH** — outreach, pinned thread, monitor
+1. **Re-evaluate via Butler** — claim focus + MiCA tightening + discovery fallbacks deployed
+2. **Close ports 3000 + 3001** in Lightsail after graduation
+3. **LAUNCH** — outreach, pinned thread, monitor
 
 ## ACP Registration Context
 - **Role:** Provider
