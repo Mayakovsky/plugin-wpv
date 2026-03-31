@@ -580,10 +580,17 @@ export class WpvService extends Service {
           throw err;
         }
         // Reject known dead/null/burn addresses — not real token contracts
+        // BUT only hard-reject when token_address is the SOLE identifying field.
         const lower = trimmed.toLowerCase();
         if (/^0x(0{40}|dead(beef)?[0-9a-f]*(dead|beef)[0-9a-f]*|f{40})$/.test(lower) ||
             /^0x(.)\1{39}$/.test(lower) ||
             /^0x([0-9a-f]{2})\1{19}$/.test(lower)) {
+          const hasOtherFields = !!(requirement.project_name || requirement.document_url);
+          if (hasOtherFields) {
+            // Soft fail: strip bad address, proceed with other fields
+            delete requirement.token_address;
+            return;
+          }
           const err = new Error(`Invalid token_address: burn/null address rejected — '${trimmed.slice(0, 50)}'`);
           err.name = 'InputValidationError';
           throw err;

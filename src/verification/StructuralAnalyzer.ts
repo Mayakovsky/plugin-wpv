@@ -288,6 +288,12 @@ export class StructuralAnalyzer {
       summaryParts.push(`Missing: ${missing}.`);
     }
 
+    // Caveat: Grey analyzes the discovered/provided document only.
+    // Projects may have separate MiCA-compliant filings with national authorities or ESMA.
+    if (micaCompliant !== 'YES' && micaCompliant !== 'NOT_APPLICABLE') {
+      summaryParts.push('Note: analysis based on discovered document only — project may have separate regulatory filings not captured here.');
+    }
+
     return {
       claimsMicaCompliance,
       micaCompliant,

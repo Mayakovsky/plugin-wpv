@@ -23,7 +23,9 @@ export class WebSearchFallback {
   async searchWhitepaper(projectName: string): Promise<string | null> {
     const queries = [
       `${projectName} whitepaper filetype:pdf`,
+      `${projectName} technical paper filetype:pdf`,
       `${projectName} tokenomics whitepaper`,
+      `${projectName} protocol documentation`,
     ];
 
     for (const query of queries) {
@@ -103,6 +105,18 @@ export class WebSearchFallback {
     // Second pass: any PDF
     for (const r of results) {
       if (r.url.toLowerCase().endsWith('.pdf')) {
+        return r.url;
+      }
+    }
+
+    // Third pass: docs sites that likely have parseable content
+    for (const r of results) {
+      const urlLower = r.url.toLowerCase();
+      const titleLower = r.title.toLowerCase();
+      if (
+        (urlLower.includes('docs.') || urlLower.includes('/docs/') || urlLower.includes('gitbook')) &&
+        (titleLower.includes(nameLower) || urlLower.includes(nameLower))
+      ) {
         return r.url;
       }
     }

@@ -152,8 +152,18 @@ export class JobRouter {
     }
 
     // Cache miss — run live L1 if discovery stack is available
-    const projectName = (input.project_name as string | undefined)?.trim() ?? 'Unknown';
+    let projectName = (input.project_name as string | undefined)?.trim() ?? '';
     const tokenAddress = (input.token_address as string | undefined)?.trim() ?? '';
+
+    // Resolve project name from token address if missing
+    if (!projectName && tokenAddress) {
+      const resolved = await resolveTokenName(tokenAddress);
+      if (resolved) {
+        projectName = resolved;
+        input.project_name = resolved;
+      }
+    }
+    if (!projectName) projectName = 'Unknown';
 
     if (this.deps.tieredDiscovery) {
       try {
@@ -809,7 +819,20 @@ export class JobRouter {
         ? withClaims
         : ordered; // fallback: include all if none have claims
 
-    const briefing = this.deps.reportGenerator.generateDailyBriefing(finalReports);
+    // Deduplicate by tokenAddress — keep only the entry with the most claims per address
+    const deduped = new Map<string, typeof finalReports[0]>();
+    for (const report of finalReports) {
+      const key = (report.tokenAddress as string)?.toLowerCase() ?? report.projectName;
+      const existing = deduped.get(key);
+      const existingClaims = existing ? (existing.claimCount ?? existing.claims?.length ?? 0) : -1;
+      const newClaims = report.claimCount ?? report.claims?.length ?? 0;
+      if (!existing || newClaims > existingClaims) {
+        deduped.set(key, report);
+      }
+    }
+    const dedupedReports = Array.from(deduped.values());
+
+    const briefing = this.deps.reportGenerator.generateDailyBriefing(dedupedReports);
     briefing.date = targetDate;
     return briefing;
   }
