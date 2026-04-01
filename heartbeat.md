@@ -1,8 +1,8 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-03-29 (14/16 regression fix: claim focus, MiCA tightening, discovery fallbacks, DexScreener resolver)
+> Last updated: 2026-03-31 (7/18 regression fix: MiCA caveat, soft burn address, broader web search, briefing dedup, legitimacy token resolver)
 > Updated by: Claude Opus 4.6 — Kovsky session
-> Session label: 14/16 regression. Claim extraction scoped to target project, MiCA false positives fixed, SPA/landing page discovery fallbacks in both verify + full_tech.
-> Staleness gate: 2026-03-29 — if today is >3 days past this,
+> Session label: Evaluator expanded from 16→18 tests with stricter expectations, regressed to 7/18. Applied 5 fixes targeting 4 failure categories: DB pollution, MiCA overselling, burn address rejection, discovery gaps. DB cleaned (26 duplicate/artifact rows deleted, 73 whitepapers retained).
+> Staleness gate: 2026-03-31 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
 ## Focus (1-3 goals, testable)
@@ -37,8 +37,14 @@
 - [x] **WS2: Plain text parsing** — AcpService.parseRequirement() extracts 0x from natural language. isPlainText skips format validator. (2026-03-29)
 - [x] **WS3: document_url validation** — rejects non-URLs, images/media at REQUEST phase. project_name optional. (2026-03-29)
 - [x] **WS4: Date handling** — YYYY-MM-DD validation, future date rejection, date passthrough, substantive content filtering. (2026-03-29)
-- [ ] **Graduation** — project_legitimacy_scan 4/4 PERFECT. Other 3 offerings now functional. Targeting full graduation.
-- [ ] **USDC MiCA data quality** — evaluator says USDC is fully MiCA-compliant, Grey says PARTIAL. May need seed data update if this test case recurs.
+- [x] **DB cleanup** — Supabase restored from backup after accidental full wipe. 26 duplicate/artifact eval rows deleted, 73 whitepapers retained (66 seed + 7 best-per-address eval keepers). (2026-03-31)
+- [x] **MiCA caveat** — StructuralAnalyzer appends regulatory filing disclaimer for non-YES/non-NOT_APPLICABLE results. (2026-03-31)
+- [x] **Soft burn address** — WpvService strips burn/null addresses when project_name or document_url present, instead of hard-rejecting. (2026-03-31)
+- [x] **Broader web search** — WebSearchFallback queries technical papers + protocol docs + picks docs/GitBook sites as fallback. (2026-03-31)
+- [x] **Briefing dedup** — JobRouter deduplicates daily briefing by tokenAddress, keeping entry with most claims. (2026-03-31)
+- [x] **Legitimacy token resolver** — handleLegitimacyScan calls resolveTokenName() when project_name missing (matching verify/full patterns). (2026-03-31)
+- [x] **character.ts reframe** — MiCA description updated, offerings trimmed from 5 to 4. (2026-03-31)
+- [ ] **Graduation** — Evaluator expanded to 18 tests. Best was 14/16, regressed to 7/18. Fixes deployed, awaiting re-eval.
 - [ ] **LAUNCH** — fire outreach, pinned thread, monitor
 
 ## What Works (verified)
@@ -56,14 +62,20 @@
 - ✅ **Graduation submission sent** — videos submitted to Virtuals (2026-03-26)
 
 ## What's Broken
-- ⚠️ **USDC MiCA assessment** — Grey returns PARTIAL, evaluator says fully compliant. Seed data may need update.
+- ⚠️ **MiCA accuracy** — Grey does structural pattern matching only. Projects with separate ESMA-registered filings (USDC, Aave, Virtuals) now get a caveat instead of a flat "NO". May still not satisfy evaluator fully.
 - ⚠️ **AcpWrapper.ts is still a stub** — retained for IAcpClient interface tests. Production ACP goes through plugin-acp.
 - ⚠️ **Ports 3000 + 3001 open** in Lightsail firewall — close after graduation review completes.
 - ⚠️ Image-only PDF detection limited (deferred Phase 2)
 - ⚠️ OCR gap — scanned PDFs return INSUFFICIENT_DATA (deferred Phase 2)
 
 ## Test Count
-- **303 tests across 23 test files, 0 failures** (verified 2026-03-28, post-restructure)
+- **303 tests across 23 test files, 0 failures** (verified 2026-03-31)
+
+## DB State (post-cleanup 2026-03-31)
+- **73 whitepapers** (66 seed + 7 eval keepers)
+- **73 verifications**
+- **255 claims**
+- No duplicates per token_address
 
 ## Graduation Eval History
 | Run | Score | Passed | Failed | Key Issue |
@@ -81,9 +93,10 @@
 | 11 | 5/6 | — | 1 failed: SPA doc_url yields 0 claims | verify_project_whitepaper discovery fallback |
 | 12 | 6/6 → 5/6 regression | — | 1 failed: Aerodrome SPA (full_tech) | full_tech discovery fallback added |
 | 13 | 14/16 regression | — | 2 failed: Bitcoin claims in ETH report, broad MiCA patterns | Claim focus + MiCA tightening |
+| 14 | 7/18 (expanded) | — | Evaluator expanded 16→18 tests. DB pollution (duplicate briefing entries), MiCA overselling, burn address hard-reject, discovery gaps (Lido, USDC) | 5 code fixes + DB cleanup |
 
 ## Next Actions (ordered)
-1. **Re-evaluate via Butler** — claim focus + MiCA tightening + discovery fallbacks deployed
+1. **Re-evaluate via Butler** — 5 fixes + DB cleanup deployed (2026-03-31)
 2. **Close ports 3000 + 3001** in Lightsail after graduation
 3. **LAUNCH** — outreach, pinned thread, monitor
 
@@ -136,6 +149,7 @@
 | 2026-03-28 | Claude Opus 4.6 (Kovsky) | Option A restructure: 4 offerings, live L1, all-field content filtering, eth_getCode | 303/303, deployed |
 | 2026-03-29 | Claude Opus 4.6 (Kovsky) | WS1-4: ClaimExtractor+ClaimEvaluator live (anthropicFetchClient), plain text parsing, doc URL validation, date handling. project_legitimacy_scan 4/4 PERFECT. | 303/303, deployed |
 | 2026-03-29 | Claude Opus 4.6 (Kovsky) | 10/18 hotfix: hex 20-40 chars, scam/fraud filter, cache poison guard, doc_url tokenAddress passthrough, NSFW domain check, min date 2015. Poisoned Supabase entry deleted. | 303/303, deployed |
+| 2026-03-31 | Claude Opus 4.6 (Kovsky) | 7/18 fix: MiCA caveat, soft burn address, broader web search, briefing dedup, legitimacy token resolver. DB restored from backup, cleaned 26 duplicate rows (73 retained). character.ts MiCA reframe + 4 offerings. | 303/303, deployed |
 
 ## Quick Commands
 ```bash

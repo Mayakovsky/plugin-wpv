@@ -38,6 +38,27 @@ export class WebSearchFallback {
       }
     }
 
+    // Fallback: if project name has a version suffix (e.g., "Aave V3", "Uniswap v2"),
+    // retry with the base name only
+    const baseNameMatch = projectName.match(/^(.+?)\s+[vV]\d+$/);
+    if (baseNameMatch) {
+      const baseName = baseNameMatch[1].trim();
+      const fallbackQueries = [
+        `${baseName} whitepaper filetype:pdf`,
+        `${baseName} technical paper filetype:pdf`,
+        `${baseName} protocol documentation`,
+      ];
+      for (const query of fallbackQueries) {
+        try {
+          const results = await this.search(query);
+          const candidate = this.pickBestResult(results, baseName);
+          if (candidate) return candidate;
+        } catch {
+          // Try next query
+        }
+      }
+    }
+
     return null;
   }
 

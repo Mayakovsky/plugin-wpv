@@ -585,8 +585,11 @@ export class WpvService extends Service {
         if (/^0x(0{40}|dead(beef)?[0-9a-f]*(dead|beef)[0-9a-f]*|f{40})$/.test(lower) ||
             /^0x(.)\1{39}$/.test(lower) ||
             /^0x([0-9a-f]{2})\1{19}$/.test(lower)) {
-          const hasOtherFields = !!(requirement.project_name || requirement.document_url);
-          if (hasOtherFields) {
+          const hasDocUrl = !!requirement.document_url;
+          const projectName = typeof requirement.project_name === 'string' ? requirement.project_name.trim() : '';
+          const NON_MEANINGFUL_NAMES = ['empty', 'unknown', 'none', 'test', 'n/a', 'null', 'undefined', ''];
+          const hasMeaningfulName = projectName.length > 0 && !NON_MEANINGFUL_NAMES.includes(projectName.toLowerCase());
+          if (hasDocUrl || hasMeaningfulName) {
             // Soft fail: strip bad address, proceed with other fields
             delete requirement.token_address;
             return;

@@ -16,7 +16,7 @@
 | **Framework** | ElizaOS v1.x (`@elizaos/core` 1.6.5) |
 | **Database** | Supabase Pro (PostgreSQL + pgvector, $25/mo) |
 | **Package Manager** | `bun` (required) |
-| **Test Framework** | Vitest (304 tests, 23 files) |
+| **Test Framework** | Vitest (303 tests, 23 files) |
 | **Peer Dependencies** | `@elizaos/plugin-autognostic` (optional), `@elizaos/plugin-acp` (optional — ACP marketplace connection) |
 | **LLM** | Claude Sonnet via Anthropic API (claim extraction + evaluation) |
 | **Chain** | Base (Virtuals Protocol) |
@@ -200,4 +200,4 @@ scripts/
 
 ---
 
-*Last updated: 2026-03-26 (Breakbot tests passed, graduation submission sent)*
+*Last updated: 2026-03-31 (7/18 regression fix: MiCA caveat, soft burn address, broader web search, briefing dedup, legitimacy token resolver, DB cleanup)*
