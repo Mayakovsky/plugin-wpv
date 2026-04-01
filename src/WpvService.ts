@@ -70,6 +70,12 @@ const MALICIOUS_CONTENT_PATTERNS: RegExp[] = [
   /\bpyramid\s*scheme\b/i,
   /\bmoney\s*launder/i,
   /\bpump\s*(?:and|&)\s*dump\b/i,
+  /\bhack(?:ing|ed|s)?\b/i,
+  /\bexploit(?:ing|ed|s)?\b/i,
+  /\bphish(?:ing)?\b/i,
+  /\bmalware\b/i,
+  /\bransomware\b/i,
+  /\bdrainer\b/i,
 ];
 
 /** Combined violation patterns — all-field content scanner */
@@ -383,10 +389,10 @@ export class WpvService extends Service {
         }
       }
 
-      // Extract known protocol names
+      // Extract known protocol/chain names — L1s, L2s, DeFi, infrastructure (80 protocols)
       if (!requirement.project_name) {
         const projectMatch = text.match(
-          /\b(Uniswap|Aave|Compound|MakerDAO|Curve|Synthetix|SushiSwap|Balancer|Yearn|Chainlink|Lido|Rocket\s*Pool|Frax|Convex|Euler|Morpho|Radiant|Pendle|GMX|dYdX|Virtuals\s*Protocol)\s*(v\d+)?\b/i
+          /\b(Bitcoin|Ethereum|Solana|Cardano|Polkadot|Avalanche|Cosmos|Toncoin|Tron|Near|Algorand|Aptos|Sui|Sei|Hedera|Fantom|Stellar|XRP|Litecoin|Monero|Filecoin|Internet\s*Computer|Kaspa|Injective|Celestia|Mantle|Arbitrum|Optimism|Base|Polygon|zkSync|Starknet|Scroll|Linea|Blast|Manta|Mode|Uniswap|Aave|Compound|MakerDAO|Maker|Curve|Synthetix|SushiSwap|Balancer|Yearn|Chainlink|Lido|Rocket\s*Pool|Frax|Convex|Euler|Morpho|Radiant|Pendle|GMX|dYdX|Virtuals\s*Protocol|Aerodrome|Jupiter|Raydium|Orca|Marinade|Jito|Drift|1inch|PancakeSwap|Pancake\s*Swap|Trader\s*Joe|Camelot|Stargate|LayerZero|Layer\s*Zero|Wormhole|Across|Hop\s*Protocol|The\s*Graph|Arweave|Akash|Render|Pyth|API3)\s*(v\d+)?\b/i
         );
         if (projectMatch) {
           requirement.project_name = projectMatch[0].trim();
@@ -557,6 +563,32 @@ export class WpvService extends Service {
       }
     }
 
+    // Cross-field consistency check: reject when project_name and document_url
+    // clearly belong to different projects. Only checks when BOTH are present.
+    if (typeof requirement?.project_name === 'string' && typeof requirement?.document_url === 'string') {
+      const projName = requirement.project_name.trim().toLowerCase();
+      const docUrl = requirement.document_url.trim().toLowerCase();
+
+      // Check if document_url contains a known protocol name that contradicts project_name
+      const urlProtocols = [
+        'uniswap', 'aave', 'compound', 'makerdao', 'curve', 'synthetix',
+        'sushiswap', 'balancer', 'yearn', 'chainlink', 'lido', 'solana',
+        'ethereum', 'bitcoin', 'cardano', 'polkadot', 'avalanche', 'polygon',
+        'arbitrum', 'optimism', 'celestia', 'cosmos', 'near', 'aptos', 'sui',
+        'aerodrome', 'jupiter', 'raydium', 'pancakeswap', 'stargate',
+        'layerzero', 'wormhole', 'filecoin', 'arweave', 'render',
+      ];
+
+      const urlMatchedProtocol = urlProtocols.find((p) => docUrl.includes(p));
+      if (urlMatchedProtocol && !projName.includes(urlMatchedProtocol) && !urlMatchedProtocol.includes(projName)) {
+        const err = new Error(
+          `Contradictory inputs: document_url references '${urlMatchedProtocol}' but project_name is '${requirement.project_name}'. These appear to be different projects.`
+        );
+        err.name = 'InputValidationError';
+        throw err;
+      }
+    }
+
     const tokenAddress = requirement?.token_address;
 
     // Plain-text-extracted addresses skip format validation (may be truncated)
@@ -615,6 +647,16 @@ export class WpvService extends Service {
         }
         // Format valid + contract check passed — allow through
         return;
+      }
+
+      // Reject Bitcoin addresses — Bitcoin is not a supported chain per requirement_schema.
+      // P2PKH starts with '1' (25-34 chars), P2SH starts with '3' (34 chars),
+      // Bech32 starts with 'bc1'. All use base58 which overlaps with Solana.
+      // ALWAYS hard reject — this is a schema violation, not a data quality issue.
+      if (/^[13][a-km-zA-HJ-NP-Z1-9]{24,33}$/.test(trimmed) || /^bc1[a-zA-HJ-NP-Z0-9]{25,89}$/.test(trimmed)) {
+        const err = new Error(`Invalid token_address: Bitcoin address detected — not a supported chain. Supported chains: Base, Ethereum, Solana — '${trimmed.slice(0, 50)}'`);
+        err.name = 'InputValidationError';
+        throw err;
       }
 
       // Solana/other chains: alphanumeric only (base58), 26-50 chars
