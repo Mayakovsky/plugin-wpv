@@ -718,6 +718,7 @@ export class WpvService extends Service {
           id: string,
           handler: (input: { requirement: Record<string, unknown> }) => Promise<unknown>,
           validator?: (input: { requirement: Record<string, unknown> }) => void | Promise<void>,
+          price?: number,
         ) => void;
       } | null;
 
@@ -726,14 +727,15 @@ export class WpvService extends Service {
         return;
       }
 
-      const offerings: OfferingId[] = [
-        'project_legitimacy_scan',
-        'verify_project_whitepaper',
-        'full_technical_verification',
-        'daily_technical_briefing',
+      const offerings: { id: OfferingId; price: number }[] = [
+        { id: 'project_legitimacy_scan', price: 0.25 },
+        { id: 'verify_project_whitepaper', price: 1.50 },
+        { id: 'full_technical_verification', price: 3.00 },
+        { id: 'daily_technical_briefing', price: 8.00 },
       ];
 
-      for (const offeringId of offerings) {
+      for (const offering of offerings) {
+        const offeringId = offering.id;
         // Bug 3: Pre-accept input validator — runs before accept() in phase 0
         const validator = async (input: { requirement: Record<string, unknown>; isPlainText?: boolean }) => {
           await WpvService.validateTokenAddress(offeringId, input.requirement, input.isPlainText);
@@ -750,7 +752,7 @@ export class WpvService extends Service {
           return this.deps.jobRouter.handleJob(offeringId, input.requirement);
         };
 
-        acpService.registerOfferingHandler(offeringId, handler, validator);
+        acpService.registerOfferingHandler(offeringId, handler, validator, offering.price);
       }
 
       this.acpRegistered = true;
