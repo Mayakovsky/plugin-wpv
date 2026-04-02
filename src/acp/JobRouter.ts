@@ -94,6 +94,16 @@ async function resolveTokenName(tokenAddress: string): Promise<string | null> {
   return null;
 }
 
+/**
+ * Strip version suffixes from project names for fuzzy DB matching.
+ * "Aave V3" → "Aave", "Uniswap v2" → "Uniswap", "Compound V3" → "Compound"
+ * Returns null if no version suffix found (no point re-querying with same string).
+ */
+function stripVersionSuffix(name: string): string | null {
+  const stripped = name.replace(/\s+[vV]\d+(\.\d+)*\s*$/, '').trim();
+  return stripped !== name.trim() ? stripped : null;
+}
+
 export interface JobRouterDeps {
   whitepaperRepo: WpvWhitepapersRepo;
   verificationsRepo: WpvVerificationsRepo;
@@ -458,6 +468,14 @@ export class JobRouter {
       report.tokenAddress = requestedTokenAddress;
     }
 
+    log.info('Pipeline complete', {
+      offering: 'verify_project_whitepaper',
+      projectName: (wp as Record<string, unknown>).projectName ?? projectName,
+      totalClaims: claims.length,
+      llmTokensUsed: tokens.input + tokens.output,
+      computeCostUsd: this.deps.costTracker.getTotalCostUsd().toFixed(4),
+    });
+
     return report;
   }
 
@@ -729,6 +747,14 @@ export class JobRouter {
       });
     }
 
+    log.info('Pipeline complete', {
+      offering: 'full_technical_verification',
+      projectName,
+      totalClaims: claims.length,
+      llmTokensUsed: tokens.input + tokens.output,
+      computeCostUsd: this.deps.costTracker.getTotalCostUsd().toFixed(4),
+    });
+
     return this.deps.reportGenerator.generateFullVerification(
       {
         structuralScore,
@@ -854,6 +880,16 @@ export class JobRouter {
     if (projectName) {
       const results = await this.deps.whitepaperRepo.findByProjectName(projectName);
       if (results.length > 0) return results[0];
+
+      // Version-strip fallback: "Aave V3" → try "Aave"
+      const stripped = stripVersionSuffix(projectName);
+      if (stripped) {
+        const fallbackResults = await this.deps.whitepaperRepo.findByProjectName(stripped);
+        if (fallbackResults.length > 0) {
+          log.info('findWhitepaper: version-strip fallback matched', { original: projectName, stripped, matches: fallbackResults.length });
+          return fallbackResults[0];
+        }
+      }
     }
     if (tokenAddress) {
       const results = await this.deps.whitepaperRepo.findByTokenAddress(tokenAddress);
@@ -878,7 +914,19 @@ export class JobRouter {
     const candidates: Array<{ wp: Record<string, unknown>; claimCount: number }> = [];
 
     if (projectName) {
-      const byName = await this.deps.whitepaperRepo.findByProjectName(projectName);
+      let byName = await this.deps.whitepaperRepo.findByProjectName(projectName);
+
+      // Version-strip fallback: "Aave V3" → try "Aave"
+      if (byName.length === 0) {
+        const stripped = stripVersionSuffix(projectName);
+        if (stripped) {
+          byName = await this.deps.whitepaperRepo.findByProjectName(stripped);
+          if (byName.length > 0) {
+            log.info('findBestWhitepaper: version-strip fallback matched', { original: projectName, stripped, matches: byName.length });
+          }
+        }
+      }
+
       for (const wp of byName) {
         const claims = await this.deps.claimsRepo.findByWhitepaperId(wp.id);
         candidates.push({ wp: wp as Record<string, unknown>, claimCount: claims.length });
