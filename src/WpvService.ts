@@ -728,10 +728,10 @@ export class WpvService extends Service {
       }
 
       const offerings: { id: OfferingId; price: number }[] = [
-        { id: 'project_legitimacy_scan', price: 0.25 },
-        { id: 'verify_project_whitepaper', price: 1.50 },
-        { id: 'full_technical_verification', price: 3.00 },
-        { id: 'daily_technical_briefing', price: 8.00 },
+        { id: 'project_legitimacy_scan', price: 0.01 },
+        { id: 'verify_project_whitepaper', price: 0.02 },
+        { id: 'full_technical_verification', price: 0.03 },
+        { id: 'daily_technical_briefing', price: 0.04 },
       ];
 
       for (const offering of offerings) {
