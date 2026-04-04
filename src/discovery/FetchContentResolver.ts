@@ -73,12 +73,39 @@ export class FetchContentResolver implements IContentResolver {
       .replace(/\s+/g, ' ')
       .trim();
 
+    // SPA detection: if HTML yielded very little text but contained
+    // script tags AND a known JS framework marker, it's likely a
+    // client-rendered SPA. Signal this in diagnostics for CryptoContentResolver.
+    const SPA_TEXT_THRESHOLD = 500;
+    const SPA_FRAMEWORK_MARKERS = [
+      '__NEXT_DATA__',       // Next.js
+      'id="__nuxt"',         // Nuxt.js
+      'id="root"',           // React (Create React App)
+      'id="app"',            // Vue.js
+      'data-reactroot',      // React
+      'ng-version',          // Angular
+      'data-svelte',         // Svelte/SvelteKit
+      '__GATSBY',            // Gatsby
+    ];
+
+    const diagnostics = ['FetchContentResolver: HTML text extraction'];
+
+    if (text.length < SPA_TEXT_THRESHOLD) {
+      const hasScriptTags = body.includes('<script');
+      const hasFrameworkMarker = SPA_FRAMEWORK_MARKERS.some(
+        (marker) => body.includes(marker),
+      );
+      if (hasScriptTags && hasFrameworkMarker) {
+        diagnostics.push('SPA_DETECTED');
+      }
+    }
+
     return {
       text,
       contentType: contentType || 'text/html',
       source: 'html',
       resolvedUrl: url,
-      diagnostics: ['FetchContentResolver: HTML text extraction'],
+      diagnostics,
     };
   }
 }

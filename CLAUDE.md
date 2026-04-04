@@ -18,7 +18,7 @@
 | **Package Manager** | `bun` (required) |
 | **Test Framework** | Vitest (303 tests, 23 files) |
 | **Peer Dependencies** | `@elizaos/plugin-autognostic` (optional), `@elizaos/plugin-acp` (optional — ACP marketplace connection) |
-| **LLM** | Claude Sonnet via Anthropic API (claim extraction + evaluation) |
+| **LLM** | Claude Sonnet via Anthropic API (`claude-sonnet-4-20250514`). Set via `WPV_MODEL` env var. Haiku tested but insufficient for claim extraction on technical whitepapers — returned 0 claims on Aave v1 PDF. |
 | **Chain** | Base (Virtuals Protocol) |
 
 ---
@@ -189,9 +189,39 @@ scripts/
 
 ---
 
+## VPS Deployment Process
+
+**plugin-wpv** (public repo — git pull works):
+```bash
+ssh -i C:\Users\kidco\.ssh\WhitepaperGrey.pem ubuntu@44.243.254.19
+cd /opt/grey/plugin-wpv && git pull && bun install && bun run build
+cd /opt/grey/wpv-agent && bun run build
+pm2 restart grey
+```
+
+**plugin-acp** (PRIVATE repo — git pull broken, use SCP):
+```bash
+# From local machine:
+scp -i C:\Users\kidco\.ssh\WhitepaperGrey.pem plugin-acp/src/AcpService.ts ubuntu@44.243.254.19:/opt/grey/plugin-acp/src/AcpService.ts
+# On VPS:
+cd /opt/grey/plugin-acp && bun run build
+# dist is SYMLINKED into wpv-agent/node_modules — no copy needed
+pm2 restart grey
+```
+
+**CRITICAL:** plugin-acp dist is symlinked (`/opt/grey/wpv-agent/node_modules/@elizaos/plugin-acp/dist → /opt/grey/plugin-acp/dist`). Do NOT `bun install` in wpv-agent or the symlink may be replaced with a stale copy. ElizaOS re-bundles on startup from node_modules dist files.
+
+**After restart:** Wait for "Registered 4 offering handlers" in logs before triggering any tests.
+
+**Use `vitest run` (not `vitest`)** for local tests — watch mode leaves orphaned processes.
+
+---
+
 ## Related Documentation
 
 - `heartbeat.md` — Live session state
+- `BUILD DOCS and DATA/F5_Aave_V3_Diagnostic_Report.md` — Aave V3 discovery diagnostic + recommendations
+- `BUILD DOCS and DATA/SPA_Headless_Browser_Design_Plan.md` — Playwright headless browser for SPA whitepapers (Forces review)
 - `BUILD DOCS and DATA/Grey_Kovsky_Execution.md` — Current execution plan (includes plugin-acp build spec)
 - `BUILD DOCS and DATA/Grey_PreLaunch_Checklist.md` — Forces tasks
 - `BUILD DOCS and DATA/Grey_50_Test_Regimen.md` — 66 Test specification
@@ -200,4 +230,4 @@ scripts/
 
 ---
 
-*Last updated: 2026-03-31 (7/18 regression fix: MiCA caveat, soft burn address, broader web search, briefing dedup, legitimacy token resolver, DB cleanup)*
+*Last updated: 2026-04-04 (eval run 20: 13/15, Sonnet restored, tokenAddress fix, SPA design plan for Forces review)*

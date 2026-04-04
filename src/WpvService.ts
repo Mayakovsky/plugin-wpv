@@ -763,7 +763,10 @@ export class WpvService extends Service {
   }
 
   async stop(): Promise<void> {
-    // Cleanup if needed
+    // Graceful shutdown — close headless browser if running
+    if (this.deps?.cryptoResolver) {
+      await this.deps.cryptoResolver.close();
+    }
   }
 
   setDeps(deps: WpvServiceDeps): void {
