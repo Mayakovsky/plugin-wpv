@@ -328,6 +328,37 @@ export class JobRouter {
 
     // document_url is optional per schema — if missing, try discovery
     if (!documentUrl) {
+      // Check cache first — prefer entries with the most claims
+      const cachedWp = await this.findBestWhitepaper(input);
+      if (cachedWp) {
+        const cachedWpId = cachedWp.id as string;
+        const cachedClaims = await this.deps.claimsRepo.findByWhitepaperId(cachedWpId);
+        if (cachedClaims.length > 0) {
+          const verification = await this.deps.verificationsRepo.findByWhitepaperId(cachedWpId);
+          if (verification) {
+            const analysis = this.extractStructuralAnalysis(verification);
+            const report = this.deps.reportGenerator.generateTokenomicsAudit(
+              this.verificationRowToResult(verification),
+              cachedClaims.map((c) => ({
+                claimId: c.id,
+                category: c.category as never,
+                claimText: c.claimText,
+                statedEvidence: c.statedEvidence,
+                mathematicalProofPresent: c.mathProofPresent,
+                sourceSection: c.sourceSection,
+                regulatoryRelevance: (c.evaluationJson as Record<string, unknown>)?.regulatoryRelevance === true,
+              })),
+              cachedWp as never,
+              undefined,
+              analysis,
+            );
+            if (requestedTokenAddress) report.tokenAddress = requestedTokenAddress;
+            log.info('verify_project_whitepaper: returning cached result', { projectName, claims: cachedClaims.length });
+            return report;
+          }
+        }
+      }
+
       if (this.deps.tieredDiscovery) {
         try {
           const metadata: ProjectMetadata = {

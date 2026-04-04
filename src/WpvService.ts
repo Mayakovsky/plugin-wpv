@@ -707,6 +707,16 @@ export class WpvService extends Service {
           throw err;
         }
       }
+
+      // Cross-reference: reject non-EVM L1 chain names paired with 0x EVM addresses.
+      // Bitcoin, Cardano, etc. don't use EVM — a 0x address is contradictory.
+      const NON_EVM_CHAINS = ['bitcoin', 'btc', 'cardano', 'ada', 'ripple', 'xrp', 'litecoin', 'ltc', 'monero', 'xmr', 'dogecoin', 'doge', 'toncoin', 'ton', 'tron', 'trx', 'stellar', 'xlm', 'hedera', 'hbar', 'algorand', 'algo', 'kaspa', 'kas'];
+      const tokenAddr = requirement?.token_address as string | undefined;
+      if (tokenAddr && tokenAddr.startsWith('0x') && NON_EVM_CHAINS.includes(lower)) {
+        const err = new Error(`Contradictory inputs: project '${projectName}' is a non-EVM chain but token_address '${tokenAddr.slice(0, 20)}...' is an EVM address`);
+        err.name = 'InputValidationError';
+        throw err;
+      }
     }
   }
 

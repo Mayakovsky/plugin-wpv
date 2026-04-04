@@ -93,11 +93,12 @@
 - **plugin-acp: 59 tests / 2 files, 0 failures** (verified 2026-04-03)
 - **wpv-agent: 13 tests / 1 file, 0 failures** (verified 2026-04-03)
 
-## DB State (post-cleanup 2026-04-01)
+## DB State (post-cleanup 2026-04-04)
 - **76 whitepapers** (66 seed + 10 eval keepers)
 - **74 verifications**
-- **280 claims**
+- **283 claims**
 - No duplicates per token_address
+- Cleaned 14 eval artifacts (12 zero-claim entries + 2 duplicate Uniswap losers)
 
 ## Graduation Eval History
 | Run | Score | Passed | Failed | Key Issue |
