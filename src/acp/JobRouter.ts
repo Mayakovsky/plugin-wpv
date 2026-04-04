@@ -358,7 +358,9 @@ export class JobRouter {
           log.warn('Discovery failed for verify_project_whitepaper (no document_url)', { projectName, error: (err as Error).message });
         }
       }
-      return this.insufficientData(input);
+      const insuffResult = this.insufficientData(input);
+      if (requestedTokenAddress) insuffResult.tokenAddress = requestedTokenAddress;
+      return insuffResult;
     }
 
     // Validate URL format — reject file://, javascript:, or malformed URLs
