@@ -903,41 +903,55 @@ export class JobRouter {
   }
 
   /**
-   * Find a whitepaper by project_name or token_address.
-   * Used by handleLegitimacyScan and handleDailyBriefing where any cached entry is fine.
+   * Find a usable whitepaper by project_name or token_address.
+   * Skips 0-claim entries — a cached failure is not a cached result.
+   * If the only matching entries have 0 claims, returns null so handlers
+   * fall through to live discovery (which may find new data and self-heal the DB).
    */
   private async findWhitepaper(input: Record<string, unknown>) {
     const projectName = input.project_name as string | undefined;
     const tokenAddress = input.token_address as string | undefined;
 
+    const allCandidates: Array<{ id: string }> = [];
+
     if (projectName) {
       const results = await this.deps.whitepaperRepo.findByProjectName(projectName);
-      if (results.length > 0) return results[0];
+      allCandidates.push(...results);
 
-      // Version-strip fallback: "Aave V3" → try "Aave"
-      const stripped = stripVersionSuffix(projectName);
-      if (stripped) {
-        const fallbackResults = await this.deps.whitepaperRepo.findByProjectName(stripped);
-        if (fallbackResults.length > 0) {
-          log.info('findWhitepaper: version-strip fallback matched', { original: projectName, stripped, matches: fallbackResults.length });
-          return fallbackResults[0];
+      if (results.length === 0) {
+        const stripped = stripVersionSuffix(projectName);
+        if (stripped) {
+          const fallbackResults = await this.deps.whitepaperRepo.findByProjectName(stripped);
+          if (fallbackResults.length > 0) {
+            log.info('findWhitepaper: version-strip fallback matched', { original: projectName, stripped, matches: fallbackResults.length });
+            allCandidates.push(...fallbackResults);
+          }
         }
       }
     }
-    if (tokenAddress) {
+    if (tokenAddress && allCandidates.length === 0) {
       const results = await this.deps.whitepaperRepo.findByTokenAddress(tokenAddress);
-      if (results.length > 0) return results[0];
+      allCandidates.push(...results);
+    }
+
+    // Filter: skip 0-claim entries (cached failures)
+    for (const wp of allCandidates) {
+      const claims = await this.deps.claimsRepo.findByWhitepaperId(wp.id);
+      if (claims.length > 0) return wp;
+    }
+
+    if (allCandidates.length > 0) {
+      log.info('findWhitepaper: all candidates have 0 claims — treating as cache miss', {
+        projectName, tokenAddress: tokenAddress?.slice(0, 10), candidates: allCandidates.length,
+      });
     }
     return null;
   }
 
   /**
-   * BUG-B FIX: Find the BEST whitepaper for a token — preferring entries WITH claims.
-   * When multiple DB entries exist for the same project (e.g., "Uniswap" from L1 scan
-   * and "Uniswap v3" from L2 verify_project_whitepaper), this returns the one with
-   * the most claims rather than whichever was inserted first.
-   *
-   * Used by handleFullVerification where we need the richest cached data.
+   * Find the BEST whitepaper for a token — returns the entry with the most claims.
+   * Skips 0-claim entries entirely — a cached failure is not a cached result.
+   * Returns null if all candidates have 0 claims, so handlers fall through to discovery.
    */
   private async findBestWhitepaper(input: Record<string, unknown>) {
     const projectName = input.project_name as string | undefined;
@@ -978,16 +992,26 @@ export class JobRouter {
 
     if (candidates.length === 0) return null;
 
+    // Filter out 0-claim entries — cached failures, not cached results
+    const usable = candidates.filter((c) => c.claimCount > 0);
+    if (usable.length === 0) {
+      log.info('findBestWhitepaper: all candidates have 0 claims — treating as cache miss', {
+        projectName, tokenAddress: tokenAddress?.slice(0, 10), candidates: candidates.length,
+      });
+      return null;
+    }
+
     // Sort by claimCount descending — prefer entries with the most claims
-    candidates.sort((a, b) => b.claimCount - a.claimCount);
+    usable.sort((a, b) => b.claimCount - a.claimCount);
 
     log.info('findBestWhitepaper candidates', {
       total: candidates.length,
-      best: (candidates[0].wp as { projectName: string }).projectName,
-      bestClaims: candidates[0].claimCount,
+      usable: usable.length,
+      best: (usable[0].wp as { projectName: string }).projectName,
+      bestClaims: usable[0].claimCount,
     });
 
-    return candidates[0].wp;
+    return usable[0].wp;
   }
 
   /**
