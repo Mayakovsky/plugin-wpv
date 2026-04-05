@@ -451,6 +451,17 @@ export class WpvService extends Service {
   private static async validateTokenAddress(offeringId: string, requirement: Record<string, unknown>, isPlainText?: boolean): Promise<void> {
     // WS4A: Date validation for daily_technical_briefing
     if (offeringId === 'daily_technical_briefing') {
+      // Strict key validation: reject unknown fields in structured (non-plain-text) briefing requests.
+      // Plain-text parsing may inject cross-offering keys like project_name/token_address — allow those.
+      if (!isPlainText) {
+        const BRIEFING_ALLOWED_KEYS = new Set(['date']);
+        const unknownKeys = Object.keys(requirement).filter((k) => !BRIEFING_ALLOWED_KEYS.has(k));
+        if (unknownKeys.length > 0) {
+          const err = new Error(`Unknown field(s): ${unknownKeys.map((k) => `'${k}'`).join(', ')} — daily_technical_briefing accepts only 'date' (YYYY-MM-DD format)`);
+          err.name = 'InputValidationError';
+          throw err;
+        }
+      }
       const dateStr = requirement?.date;
       if (dateStr === undefined || dateStr === null) return; // no date = default to today
       if (typeof dateStr !== 'string') {
@@ -545,13 +556,18 @@ export class WpvService extends Service {
           err.name = 'InputValidationError';
           throw err;
         }
-        // Fix 3: HEAD check — reject definitively inaccessible URLs
+        // Fix 3: HEAD check — reject truly unreachable URLs, soft-clear stale URLs
         try {
           const headResp = await fetch(trimmedUrl, { method: 'HEAD', signal: AbortSignal.timeout(3000), redirect: 'follow' });
-          if (headResp.status === 404 || headResp.status === 410 || headResp.status >= 500) {
-            const err = new Error(`Invalid document_url: URL returned HTTP ${headResp.status} — document not accessible`);
+          if (headResp.status >= 500) {
+            const err = new Error(`Invalid document_url: URL returned HTTP ${headResp.status} — server error`);
             err.name = 'InputValidationError';
             throw err;
+          }
+          if (headResp.status === 404 || headResp.status === 410) {
+            // Stale URL — clear document_url so JobRouter falls through to cache/discovery
+            logger.warn('document_url returned ' + headResp.status + ' — clearing for discovery fallback', { url: trimmedUrl.slice(0, 80) });
+            delete requirement.document_url;
           }
         } catch (e) {
           if (e instanceof Error && e.name === 'InputValidationError') throw e;

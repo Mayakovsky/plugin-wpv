@@ -133,41 +133,65 @@ export const MICA_REQUIRED_SECTIONS = [
   'environmental_impact',
 ] as const;
 
-/** Section detection patterns for each MiCA requirement */
+/** Section detection patterns for each MiCA requirement.
+ *  Broadened to catch alternative phrasings used by regulated issuers
+ *  (e.g., Circle USDC, Tether, Paxos). */
 export const MICA_SECTION_PATTERNS: Record<string, RegExp[]> = {
   issuer_identity: [
     /\bissuer\b/i, /\bcompany\s+(?:information|details|identity)\b/i,
     /\blegal\s+entity\b/i,
     /\bcontact\s+(?:information|details)\b/i,
     /\bregistered\s+(?:office|address)\b/i,
+    /\babout\s+(?:us|the\s+(?:company|issuer|team))\b/i,
+    /\bcorporate\s+(?:structure|overview|information)\b/i,
+    /\borganiz(?:ation|ational)\s+(?:structure|overview)\b/i,
   ],
   technology_description: [
     /\btechnical\s+(?:architecture|design|overview|specification)\b/i,
     /\bprotocol\s+design\b/i, /\bsystem\s+architecture\b/i,
     /\btechnology\s+(?:stack|description|overview)\b/i,
+    /\bhow\s+(?:it\s+works|the\s+protocol\s+works)\b/i,
+    /\bsmart\s+contract\s+(?:architecture|design|overview)\b/i,
+    /\bminting\s+(?:and\s+)?(?:burning|redemption)\s+(?:mechanism|process)\b/i,
+    /\breserve\s+(?:management|backing|mechanism)\b/i,
   ],
   risk_disclosure: [
-    /\brisk\s+(?:disclosure|factors?|warning)\b/i,
+    /\brisk\s+(?:disclosure|factors?|warning|management|assessment|framework)\b/i,
     /\brisk\b.*\b(?:section|chapter)\b/i,
     /\binvestment\s+risks?\b/i, /\bregulatory\s+risks?\b/i,
+    /\boperational\s+risks?\b/i, /\bmarket\s+risks?\b/i,
+    /\bcounterparty\s+risks?\b/i, /\bliquidity\s+risks?\b/i,
+    /\brisk\s+disclaimer\b/i, /\bdisclaimer\b.*\brisk/i,
   ],
   rights_obligations: [
     /\brights?\s+(?:and\s+)?obligations?\b/i,
     /\btoken\s+holder\s+rights?\b/i,
     /\blegal\s+rights?\b/i, /\bvoting\s+rights?\b/i,
+    /\bholder\s+rights?\b/i, /\buser\s+rights?\b/i,
+    /\bterms\s+(?:of\s+service|and\s+conditions|of\s+use)\b/i,
+    /\bredemption\s+rights?\b/i,
   ],
   redemption_mechanisms: [
     /\bredemption\b/i, /\brefund\b/i, /\bbuyback\b/i,
     /\bwithdrawal\s+mechanism\b/i, /\bexit\s+mechanism\b/i,
+    /\bmint(?:ing)?\s+(?:and\s+)?(?:redeem|burn)\b/i,
+    /\bconversion\s+mechanism\b/i,
+    /\bpeg\s+(?:stability|mechanism|maintenance)\b/i,
   ],
   governance: [
     /\bgovernance\b/i, /\bdao\b/i, /\bvoting\b/i,
     /\bdecision.?making\b/i, /\bproposal\b/i,
+    /\bgovernance\s+(?:framework|structure|model)\b/i,
+    /\bcompliance\s+(?:framework|program|oversight)\b/i,
+    /\bregulatory\s+(?:framework|compliance|oversight)\b/i,
   ],
   environmental_impact: [
-    /\benvironmental\s+impact\b/i, /\bcarbon\s+(?:footprint|offset|neutral)\b/i,
+    /\benvironmental\s+(?:impact|disclosure|considerations?)\b/i,
+    /\bcarbon\s+(?:footprint|offset|neutral)\b/i,
     /\benergy\s+consumption\b/i,
-    /\bsustainability\s+(?:report|assessment|disclosure)\b/i,
+    /\bsustainability\s+(?:report|assessment|disclosure|commitment)\b/i,
+    /\besg\b/i,
+    /\bclimate\s+(?:impact|disclosure|commitment|risk)\b/i,
   ],
 } as const;
 

@@ -13,6 +13,24 @@ export interface SearchResult {
   title: string;
 }
 
+/**
+ * Known whitepaper URLs for well-documented protocols whose whitepapers
+ * live at non-obvious locations (HackMD, research subdomains, GitHub releases).
+ * Keyed by lowercase project name substring match.
+ */
+/**
+ * Each entry: [pattern, url]. Pattern is tested via word-boundary regex
+ * against the lowercase project name to avoid substring collisions
+ * (e.g., "maker" matching "MarketMaker").
+ */
+const KNOWN_WHITEPAPER_URLS: Array<[RegExp, string]> = [
+  [/\blido\b/i, 'https://lido.fi/static/Lido:Ethereum-Liquid-Staking.pdf'],
+  [/\bmakerdao\b|\bmaker\s*dao\b/i, 'https://makerdao.com/en/whitepaper'],
+  [/\bchainlink\b/i, 'https://research.chain.link/whitepaper-v2.pdf'],
+  [/\bcompound\b/i, 'https://compound.finance/documents/Compound.Whitepaper.pdf'],
+  [/\bsynthetix\b/i, 'https://docs.synthetix.io/synthetix-protocol/the-synthetix-protocol/synthetix-litepaper'],
+];
+
 export class WebSearchFallback {
   constructor(private fetchFn: typeof fetch = fetch) {}
 
@@ -21,9 +39,19 @@ export class WebSearchFallback {
    * Returns the best candidate URL, or null.
    */
   async searchWhitepaper(projectName: string): Promise<string | null> {
+    // Check known URL map first — instant, no network
+    for (const [pattern, url] of KNOWN_WHITEPAPER_URLS) {
+      if (pattern.test(projectName)) {
+        log.info('Known URL map hit', { projectName, pattern: pattern.source, url: url.slice(0, 60) });
+        return url;
+      }
+    }
+
     const queries = [
       `${projectName} whitepaper filetype:pdf`,
       `${projectName} technical paper filetype:pdf`,
+      `${projectName} protocol specification`,
+      `${projectName} technical RFC`,
       `${projectName} tokenomics whitepaper`,
       `${projectName} protocol documentation`,
     ];
