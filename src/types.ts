@@ -167,7 +167,8 @@ export interface ResolvedWhitepaper {
   isImageOnly: boolean;
   isPasswordProtected: boolean;
   source: 'direct' | 'ipfs' | 'composed' | 'docs_site'
-        | 'llms-txt' | 'site-specific' | 'headless-browser';
+        | 'llms-txt' | 'site-specific' | 'headless-browser'
+        | 'docs-crawl';
   originalUrl: string;
   resolvedUrl: string;
 }

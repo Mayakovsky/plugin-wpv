@@ -78,6 +78,22 @@ export class WpvVerificationsRepo {
       ));
   }
 
+  /** Get verifications from a specific date (UTC). Used for date-specific briefings. */
+  async getVerificationsByDate(dateStr: string): Promise<WpvVerificationRow[]> {
+    const dayStart = new Date(dateStr + 'T00:00:00Z');
+    const dayEnd = new Date(dayStart);
+    dayEnd.setDate(dayEnd.getDate() + 1);
+
+    return this.db
+      .select()
+      .from(wpvVerifications)
+      .where(and(
+        gte(wpvVerifications.verifiedAt, dayStart),
+        sql`${wpvVerifications.verifiedAt} < ${dayEnd.toISOString()}::timestamptz`,
+      ))
+      .orderBy(desc(wpvVerifications.verifiedAt));
+  }
+
   /** Get the N most recent verifications regardless of date */
   async getMostRecent(limit: number): Promise<WpvVerificationRow[]> {
     return this.db

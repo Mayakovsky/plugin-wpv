@@ -11,6 +11,7 @@ import { IPFS_GATEWAY, IMAGE_ONLY_CHAR_THRESHOLD } from '../constants';
 import { LlmsTxtResolver } from './LlmsTxtResolver';
 import { SiteSpecificRegistry } from './SiteSpecificRegistry';
 import { HeadlessBrowserResolver } from './HeadlessBrowserResolver';
+import { DocsSiteCrawler } from './DocsSiteCrawler';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger({ operation: 'CryptoContentResolver' });
@@ -25,6 +26,7 @@ export class CryptoContentResolver {
   private llmsTxtResolver = new LlmsTxtResolver();
   private siteRegistry = new SiteSpecificRegistry();
   private headlessBrowser = new HeadlessBrowserResolver();
+  private docsCrawler = new DocsSiteCrawler();
 
   constructor(private contentResolver: IContentResolver) {}
 
@@ -66,8 +68,19 @@ export class CryptoContentResolver {
         );
       }
 
-      // If we got substantive content, use it directly
+      // If we got substantive content, check if it's a docs site landing page
+      // that would benefit from sub-page crawling before returning.
       if (content.text.length >= THIN_CONTENT_THRESHOLD) {
+        const isHtml = !content.contentType?.includes('pdf');
+        if (isHtml && DocsSiteCrawler.isDocsSite(url, content.text.length)) {
+          log.info('Docs site detected — attempting sub-page crawl', {
+            url, textLength: content.text.length,
+          });
+          const crawled = await this.docsCrawler.crawl(url, content.text);
+          if (crawled && crawled.text.length > content.text.length * 1.5) {
+            return this.buildResult(crawled, url, crawled.resolvedUrl ?? url, 'docs-crawl');
+          }
+        }
         return this.buildResult(content, url, resolvedUrl, source);
       }
 
@@ -154,6 +167,8 @@ export class CryptoContentResolver {
         return 'llms-txt';
       case 'headless-browser':
         return 'headless-browser';
+      case 'docs-crawl':
+        return 'docs-crawl';
       default:
         // site-specific-gitbook, site-specific-notion, etc. → 'site-specific'
         if (contentSource.startsWith('site-specific')) return 'site-specific';

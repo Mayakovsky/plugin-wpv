@@ -816,16 +816,21 @@ export class JobRouter {
     const requestedDate = (input.date as string | undefined)?.trim();
     const targetDate = requestedDate ?? new Date().toISOString().split('T')[0];
 
-    let batch = await this.deps.verificationsRepo.getLatestDailyBatch();
-
-    // If today's batch is short, backfill with most recent verifications
-    if (batch.length < MAX_BRIEFING_SIZE) {
-      const recent = await this.deps.verificationsRepo.getMostRecent(MAX_BRIEFING_SIZE);
-      const seen = new Set(batch.map((v) => v.id));
-      for (const v of recent) {
-        if (!seen.has(v.id)) {
-          batch.push(v);
-          if (batch.length >= MAX_BRIEFING_SIZE) break;
+    let batch;
+    if (requestedDate) {
+      // Date-specific: filter verifications to the requested date only (no backfill)
+      batch = await this.deps.verificationsRepo.getVerificationsByDate(requestedDate);
+    } else {
+      // No date specified: use latest batch + backfill with recent
+      batch = await this.deps.verificationsRepo.getLatestDailyBatch();
+      if (batch.length < MAX_BRIEFING_SIZE) {
+        const recent = await this.deps.verificationsRepo.getMostRecent(MAX_BRIEFING_SIZE);
+        const seen = new Set(batch.map((v) => v.id));
+        for (const v of recent) {
+          if (!seen.has(v.id)) {
+            batch.push(v);
+            if (batch.length >= MAX_BRIEFING_SIZE) break;
+          }
         }
       }
     }
@@ -891,7 +896,17 @@ export class JobRouter {
     }
     const dedupedReports = Array.from(deduped.values());
 
-    const briefing = this.deps.reportGenerator.generateDailyBriefing(dedupedReports);
+    // Phase 4: Quality filter — exclude 0-claim entries from briefings.
+    // These are verifications where discovery succeeded but ClaimExtractor
+    // found nothing substantive. Including them pollutes the briefing.
+    const qualityFiltered = dedupedReports.filter((report) => {
+      const claimCount = report.claimCount ?? report.claims?.length ?? 0;
+      return claimCount > 0;
+    });
+    // If ALL entries have 0 claims, include them rather than returning nothing
+    const briefingReports = qualityFiltered.length > 0 ? qualityFiltered : dedupedReports;
+
+    const briefing = this.deps.reportGenerator.generateDailyBriefing(briefingReports);
     briefing.date = targetDate;
     return briefing;
   }
