@@ -195,7 +195,7 @@ export class HeadlessBrowserResolver {
       }
 
       // Targeted text extraction with fallback
-      const text = await page.evaluate(() => {
+      let text = await page.evaluate(() => {
         const selectors = [
           'main',
           'article',
@@ -231,8 +231,9 @@ export class HeadlessBrowserResolver {
           () => document.body.innerText,
         );
         if (!retryText || retryText.length < 100) return retryText || null;
-        // Use retryText for thin-content check below
         if (retryText.length >= THIN_SPA_THRESHOLD) return retryText;
+        // Hydration produced 100-1999 chars — propagate to link-following check below
+        text = retryText;
       }
 
       // SPA link-following: if content is thin (likely index/nav page),
