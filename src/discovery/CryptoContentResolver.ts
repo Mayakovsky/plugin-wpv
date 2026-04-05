@@ -45,6 +45,27 @@ export class CryptoContentResolver {
     try {
       const content = await this.contentResolver.resolve(resolvedUrl);
 
+      // Redirect-to-homepage: original URL had a document path but landed on root.
+      // Treat homepage content as empty to trigger enhanced resolution / discovery.
+      const redirectedToHomepage = content.diagnostics?.includes('REDIRECT_TO_HOMEPAGE') ?? false;
+      if (redirectedToHomepage) {
+        log.warn('document_url redirected to homepage — content is not a whitepaper', {
+          originalUrl: url,
+          finalUrl: content.resolvedUrl,
+        });
+        // Force enhanced resolution regardless of text length
+        const enhanced = await this.enhancedResolve(url, false);
+        if (enhanced) {
+          const enhancedSource = this.mapSource(enhanced.source);
+          return this.buildResult(enhanced, url, enhanced.resolvedUrl, enhancedSource);
+        }
+        // Enhanced failed — return empty so TieredDocumentDiscovery fires downstream
+        return this.buildResult(
+          { ...content, text: '' },
+          url, content.resolvedUrl ?? resolvedUrl, source,
+        );
+      }
+
       // If we got substantive content, use it directly
       if (content.text.length >= THIN_CONTENT_THRESHOLD) {
         return this.buildResult(content, url, resolvedUrl, source);

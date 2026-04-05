@@ -451,6 +451,15 @@ export class WpvService extends Service {
   private static async validateTokenAddress(offeringId: string, requirement: Record<string, unknown>, isPlainText?: boolean): Promise<void> {
     // WS4A: Date validation for daily_technical_briefing
     if (offeringId === 'daily_technical_briefing') {
+      // Normalize keys to lowercase (Option B — lenient): "Date", "DATE" → "date"
+      for (const key of Object.keys(requirement)) {
+        const lower = key.toLowerCase();
+        if (lower !== key) {
+          requirement[lower] = requirement[key];
+          delete requirement[key];
+        }
+      }
+
       // Strict key validation: reject unknown fields in structured (non-plain-text) briefing requests.
       // Plain-text parsing may inject cross-offering keys like project_name/token_address — allow those.
       if (!isPlainText) {

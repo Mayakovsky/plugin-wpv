@@ -100,11 +100,24 @@ export class FetchContentResolver implements IContentResolver {
       }
     }
 
+    // Redirect-to-homepage detection: original URL had a meaningful path
+    // (e.g., /whitepaper) but we landed on root (/) after redirects.
+    // The content is a homepage, not a document.
+    try {
+      const origPath = new URL(url).pathname;
+      const finalUrl = response.url;
+      const finalPath = new URL(finalUrl).pathname;
+      const ROOT_PATHS = ['/', '/en', '/en/', ''];
+      if (origPath.length > 3 && !ROOT_PATHS.includes(origPath) && ROOT_PATHS.includes(finalPath) && finalUrl !== url) {
+        diagnostics.push('REDIRECT_TO_HOMEPAGE');
+      }
+    } catch { /* URL parse failure — skip check */ }
+
     return {
       text,
       contentType: contentType || 'text/html',
       source: 'html',
-      resolvedUrl: url,
+      resolvedUrl: response.url,
       diagnostics,
     };
   }

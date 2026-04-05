@@ -14,21 +14,45 @@ export interface SearchResult {
 }
 
 /**
- * Known whitepaper URLs for well-documented protocols whose whitepapers
- * live at non-obvious locations (HackMD, research subdomains, GitHub releases).
- * Keyed by lowercase project name substring match.
- */
-/**
+ * Known whitepaper URLs for well-documented protocols.
  * Each entry: [pattern, url]. Pattern is tested via word-boundary regex
- * against the lowercase project name to avoid substring collisions
- * (e.g., "maker" matching "MarketMaker").
+ * against the project name to avoid substring collisions.
+ * All URLs verified via curl — only 200-status entries included.
  */
 const KNOWN_WHITEPAPER_URLS: Array<[RegExp, string]> = [
-  [/\blido\b/i, 'https://lido.fi/static/Lido:Ethereum-Liquid-Staking.pdf'],
-  [/\bmakerdao\b|\bmaker\s*dao\b/i, 'https://makerdao.com/en/whitepaper'],
-  [/\bchainlink\b/i, 'https://research.chain.link/whitepaper-v2.pdf'],
+  // ── DeFi Protocols ──
+  [/\buniswap\b/i, 'https://uniswap.org/whitepaper-v3.pdf'],
+  [/\baave\b/i, 'https://raw.githubusercontent.com/aave/aave-v3-core/master/techpaper/Aave_V3_Technical_Paper.pdf'],
+  [/\bmakerdao\b|\bmaker\s*dao\b/i, 'https://makerdao.com/whitepaper/White%20Paper%20-The%20Maker%20Protocol_%20MakerDAO%E2%80%99s%20Multi-Collateral%20Dai%20(MCD)%20System-FINAL-%20021720.pdf'],
   [/\bcompound\b/i, 'https://compound.finance/documents/Compound.Whitepaper.pdf'],
+  [/\blido\b/i, 'https://lido.fi/static/Lido:Ethereum-Liquid-Staking.pdf'],
+  [/\bchainlink\b/i, 'https://research.chain.link/whitepaper-v2.pdf'],
+  [/\bcurve\b/i, 'https://curve.fi/files/stableswap-paper.pdf'],
   [/\bsynthetix\b/i, 'https://docs.synthetix.io/synthetix-protocol/the-synthetix-protocol/synthetix-litepaper'],
+  [/\byearn\b/i, 'https://docs.yearn.fi/getting-started/intro'],
+  [/\bdydx\b/i, 'https://docs.dydx.exchange'],
+  [/\bgmx\b/i, 'https://gmxio.gitbook.io/gmx/overview'],
+  [/\bfrax\b/i, 'https://docs.frax.finance'],
+  [/\bjupiter\b/i, 'https://docs.jup.ag'],
+  [/\braydium\b/i, 'https://docs.raydium.io'],
+  [/\bsushiswap\b|\bsushi\s*swap\b/i, 'https://docs.sushi.com'],
+  [/\bpancakeswap\b|\bpancake\s*swap\b/i, 'https://docs.pancakeswap.finance'],
+  [/\bethena\b/i, 'https://ethena-labs.gitbook.io/ethena-labs/solution-overview/usde-overview'],
+  [/\bbalancer\b/i, 'https://docs.balancer.fi'],
+  // ── L1/L2 Chains ──
+  [/\bsolana\b/i, 'https://solana.com/solana-whitepaper.pdf'],
+  [/\bethereum\b/i, 'https://ethereum.org/en/whitepaper'],
+  [/\bbitcoin\b/i, 'https://bitcoin.org/bitcoin.pdf'],
+  [/\bpolkadot\b/i, 'https://polkadot.network/papers/polkadot-whitepaper.pdf'],
+  [/\bavalanche\b|\bavax\b/i, 'https://www.avalabs.org/whitepapers'],
+  [/\bnear\b/i, 'https://near.org/papers/the-official-near-white-paper'],
+  [/\bcelestia\b/i, 'https://arxiv.org/pdf/1905.09274.pdf'],
+  [/\baptos\b/i, 'https://aptos.dev/en/network/blockchain/aptos-white-paper'],
+  [/\bsui\b/i, 'https://docs.sui.io/paper/sui.pdf'],
+  [/\barbitrum\b/i, 'https://raw.githubusercontent.com/OffchainLabs/nitro/master/docs/Nitro-whitepaper.pdf'],
+  // ── Infrastructure ──
+  [/\blayerzero\b|\blayer\s*zero\b/i, 'https://layerzero.network/publications/LayerZero_Whitepaper_V2.1.0.pdf'],
+  [/\bwormhole\b/i, 'https://docs.wormhole.com/wormhole'],
 ];
 
 export class WebSearchFallback {
@@ -151,23 +175,44 @@ export class WebSearchFallback {
       }
     }
 
-    // Second pass: any PDF
+    // Second pass: research/docs/papers subdomains — high-quality sources
+    for (const r of results) {
+      try {
+        const hostname = new URL(r.url).hostname.toLowerCase();
+        if (/^(research|docs|papers|whitepaper)\./.test(hostname)) {
+          if (r.url.toLowerCase().includes(nameLower) || r.title.toLowerCase().includes(nameLower)) {
+            return r.url;
+          }
+        }
+      } catch { continue; }
+    }
+
+    // Third pass: any PDF
     for (const r of results) {
       if (r.url.toLowerCase().endsWith('.pdf')) {
         return r.url;
       }
     }
 
-    // Third pass: docs sites that likely have parseable content
+    // Fourth pass: docs sites — match project name in URL OR title (not both required)
     for (const r of results) {
       const urlLower = r.url.toLowerCase();
       const titleLower = r.title.toLowerCase();
-      if (
-        (urlLower.includes('docs.') || urlLower.includes('/docs/') || urlLower.includes('gitbook')) &&
-        (titleLower.includes(nameLower) || urlLower.includes(nameLower))
-      ) {
+      const isDocsSite = urlLower.includes('docs.') || urlLower.includes('/docs/') || urlLower.includes('gitbook');
+      const hasProjectRef = titleLower.includes(nameLower) || urlLower.includes(nameLower);
+      if (isDocsSite && hasProjectRef) {
         return r.url;
       }
+    }
+
+    // Fifth pass: GitBook URLs (almost always project documentation)
+    for (const r of results) {
+      try {
+        const hostname = new URL(r.url).hostname.toLowerCase();
+        if (hostname.includes('gitbook.io')) {
+          return r.url;
+        }
+      } catch { continue; }
     }
 
     return null;

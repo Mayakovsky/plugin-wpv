@@ -23,6 +23,10 @@ const MAX_REDIRECTS = 3;
 const RATE_LIMIT_PER_HOUR = 10;
 const MIN_FREE_RAM_BYTES = 400 * 1024 * 1024; // 400MB
 const CONTEXT_CLOSE_TIMEOUT_MS = 5000;
+const THIN_SPA_THRESHOLD = 2000;
+const MAX_SUBPAGES = 5;
+const SUBPAGE_TIMEOUT_MS = 10000;
+const MAX_DEEP_CONTENT_CHARS = 50000;
 
 // Resource types to block — Grey is text-only, no visual awareness.
 // If Grey ever gains visual awareness (OCR, vision model), revisit this.
@@ -140,7 +144,7 @@ export class HeadlessBrowserResolver {
       on: (event: string, handler: (arg: unknown) => void) => void;
       goto: (url: string, opts: unknown) => Promise<void>;
       url: () => string;
-      evaluate: (fn: () => string) => Promise<string>;
+      evaluate: <T>(fn: (() => T) | ((arg: unknown) => T), arg?: unknown) => Promise<T>;
       waitForFunction: (fn: string | (() => boolean), opts?: unknown) => Promise<void>;
     };
     let navigationRedirectCount = 0;
@@ -226,7 +230,23 @@ export class HeadlessBrowserResolver {
         const retryText = await page.evaluate(
           () => document.body.innerText,
         );
-        return retryText || null;
+        if (!retryText || retryText.length < 100) return retryText || null;
+        // Use retryText for thin-content check below
+        if (retryText.length >= THIN_SPA_THRESHOLD) return retryText;
+      }
+
+      // SPA link-following: if content is thin (likely index/nav page),
+      // follow internal links to find substantive documentation.
+      const contentForCheck = text ?? '';
+      if (contentForCheck.length >= 100 && contentForCheck.length < THIN_SPA_THRESHOLD) {
+        log.info('Thin SPA content — attempting link following', {
+          url,
+          chars: contentForCheck.length,
+        });
+        const deepContent = await this.followInternalLinks(page, url);
+        if (deepContent && deepContent.length > contentForCheck.length) {
+          return deepContent;
+        }
       }
 
       return text;
@@ -280,6 +300,135 @@ export class HeadlessBrowserResolver {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Follow internal links from a thin SPA page to find substantive content.
+   * Scores links by relevance, follows top candidates, concatenates results.
+   */
+  private async followInternalLinks(
+    page: { goto: (url: string, opts: unknown) => Promise<void>; evaluate: <T>(fn: (() => T) | ((arg: unknown) => T), arg?: unknown) => Promise<T> },
+    originalUrl: string,
+  ): Promise<string | null> {
+    const origin = new URL(originalUrl).origin;
+
+    // Extract internal links from the rendered page
+    const links: string[] = await page.evaluate((originStr) => {
+      const anchors = Array.from(document.querySelectorAll('a[href]'));
+      return anchors
+        .map((a) => {
+          try {
+            const href = (a as HTMLAnchorElement).href;
+            if (href.startsWith(originStr as string)) return href;
+            return null;
+          } catch { return null; }
+        })
+        .filter((href): href is string => href !== null)
+        .filter((href, i, arr) => arr.indexOf(href) === i);
+    }, origin);
+
+    if (links.length === 0) return null;
+
+    // Score and rank by content relevance
+    const scoredLinks = links
+      .map((href) => ({ href, score: this.scoreLink(href) }))
+      .filter((l) => l.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, MAX_SUBPAGES);
+
+    if (scoredLinks.length === 0) return null;
+
+    const contentParts: string[] = [];
+    let totalChars = 0;
+
+    for (const { href } of scoredLinks) {
+      if (totalChars >= MAX_DEEP_CONTENT_CHARS) break;
+
+      try {
+        await page.goto(href, {
+          waitUntil: 'networkidle',
+          timeout: SUBPAGE_TIMEOUT_MS,
+        });
+
+        const subpageText = await page.evaluate(() => {
+          const selectors = [
+            'main', 'article', '.content', '#content',
+            '[role="main"]', '.documentation', '.docs-content',
+            '.markdown-body',
+          ];
+          for (const sel of selectors) {
+            const el = document.querySelector(sel);
+            if (el && (el as HTMLElement).innerText.length > 200) {
+              return (el as HTMLElement).innerText;
+            }
+          }
+          return document.body.innerText;
+        });
+
+        if (subpageText && subpageText.length > 200) {
+          contentParts.push(subpageText);
+          totalChars += subpageText.length;
+          this.pageCount++;
+        }
+      } catch {
+        // Subpage failed — skip, try next
+      }
+    }
+
+    if (contentParts.length === 0) return null;
+
+    log.info('Link following completed', {
+      originalUrl,
+      pagesFollowed: contentParts.length,
+      totalChars,
+    });
+
+    return contentParts.join('\n\n---\n\n');
+  }
+
+  /**
+   * Score a URL by likelihood of containing whitepaper/protocol content.
+   * Higher = more likely substantive. 0 = skip entirely.
+   */
+  private scoreLink(href: string): number {
+    const lower = href.toLowerCase();
+    let score = 0;
+
+    // Skip non-content links
+    const negative = [
+      'changelog', 'release-notes', 'blog', 'news',
+      'faq', 'support', 'contact', 'careers', 'jobs',
+      'login', 'signup', 'register', 'api-reference',
+      'sdk', 'npm', 'github.com', 'twitter.com',
+      'discord', 'telegram', 'medium.com',
+    ];
+    for (const kw of negative) {
+      if (lower.includes(kw)) return 0;
+    }
+
+    // High-value content signals
+    const highValue = [
+      'whitepaper', 'protocol', 'overview', 'introduction',
+      'architecture', 'technical', 'specification', 'tokenomics',
+      'mechanism', 'design', 'how-it-works', 'concept',
+    ];
+    for (const kw of highValue) {
+      if (lower.includes(kw)) score += 3;
+    }
+
+    // Medium-value signals
+    const medValue = ['docs', 'documentation', 'guide', 'reference', 'governance', 'security'];
+    for (const kw of medValue) {
+      if (lower.includes(kw)) score += 1;
+    }
+
+    // Prefer shorter paths (closer to root docs)
+    try {
+      const pathDepth = (new URL(href).pathname.match(/\//g) || []).length;
+      if (pathDepth <= 2) score += 1;
+    } catch { /* ignore */ }
+
+    return score;
   }
 
   private async ensureBrowser(): Promise<void> {
