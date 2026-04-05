@@ -45,13 +45,17 @@ export class ClaimEvaluator {
   /**
    * Evaluate a single claim across all applicable methods.
    */
-  async evaluateClaim(claim: ExtractedClaim, fullText: string): Promise<ClaimEvaluation> {
+  async evaluateClaim(claim: ExtractedClaim, fullText: string, requirementText?: string | null): Promise<ClaimEvaluation> {
     const evaluation: ClaimEvaluation = { claimId: claim.claimId };
 
     try {
-      // Math sanity (if proof present)
-      if (claim.mathematicalProofPresent) {
-        evaluation.mathValidity = await this.evaluateMathSanity(claim, fullText);
+      // Math sanity — triggers on proof present OR requirement-requested math analysis
+      const requiresMathAnalysis = requirementText
+        ? /\b(math|formula|quantitative|calcul|equation|model|simulat|stress.?test|volatil)/i.test(requirementText)
+        : false;
+
+      if (claim.mathematicalProofPresent || (requiresMathAnalysis && this.hasQuantitativeContent(claim))) {
+        evaluation.mathValidity = await this.evaluateMathSanity(claim, fullText, requirementText);
       }
 
       // Benchmark comparison
@@ -156,14 +160,20 @@ export class ClaimEvaluator {
    * Convenience: run full evaluation pipeline for a claim set.
    * Evaluates each claim individually, then runs consistency as a final pass.
    */
-  async evaluateAll(claims: ExtractedClaim[], fullText: string): Promise<{
+  async evaluateAll(
+    claims: ExtractedClaim[],
+    fullText: string,
+    options?: { requirementText?: string | null },
+  ): Promise<{
     evaluations: ClaimEvaluation[];
     scores: Map<string, number>;
   }> {
+    const requirementText = options?.requirementText ?? null;
+
     // Individual evaluations
     const evaluations: ClaimEvaluation[] = [];
     for (const claim of claims) {
-      const evaluation = await this.evaluateClaim(claim, fullText);
+      const evaluation = await this.evaluateClaim(claim, fullText, requirementText);
       evaluations.push(evaluation);
     }
 
@@ -186,12 +196,22 @@ export class ClaimEvaluator {
 
   // ── Private evaluation methods ─────────────
 
-  private async evaluateMathSanity(claim: ExtractedClaim, fullText: string): Promise<MathValidity> {
+  private hasQuantitativeContent(claim: ExtractedClaim): boolean {
+    return /\d+%|\d+\.\d+|formula|equation|ratio|delta|hedge|rate|collateral|threshold|margin/i.test(
+      claim.claimText + ' ' + claim.statedEvidence
+    );
+  }
+
+  private async evaluateMathSanity(claim: ExtractedClaim, fullText: string, requirementText?: string | null): Promise<MathValidity> {
+    const system = requirementText
+      ? `You are a mathematical auditor for DeFi protocols. The buyer requested: "${requirementText}". Evaluate the mathematical validity of this claim in that context. Analyze whether the quantitative assertions hold and whether the mathematical model is sound. Reply with VALID, FLAWED, or UNVERIFIABLE, and explain your reasoning.`
+      : 'Evaluate whether the mathematical proof in the document supports the claim. Reply with VALID, FLAWED, or UNVERIFIABLE.';
+
     try {
       const response = await this.client.messages.create({
         model: this.model,
         max_tokens: 512,
-        system: 'Evaluate whether the mathematical proof in the document supports the claim. Reply with VALID, FLAWED, or UNVERIFIABLE.',
+        system,
         messages: [{
           role: 'user',
           content: `Claim: ${claim.claimText}\nEvidence: ${claim.statedEvidence}\n\nRelevant text excerpt:\n${fullText.slice(0, 10000)}`,

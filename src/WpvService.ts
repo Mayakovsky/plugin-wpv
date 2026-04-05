@@ -207,6 +207,7 @@ export class WpvService extends Service {
         costTracker,
         cryptoResolver,
         tieredDiscovery,
+        anthropicClient: anthropicApiKey ? createAnthropicClient(anthropicApiKey) : undefined,
       });
 
       this.setDeps({
@@ -797,13 +798,18 @@ export class WpvService extends Service {
           await WpvService.validateTokenAddress(offeringId, input.requirement, input.isPlainText);
         };
 
-        const handler = async (input: { requirement: Record<string, unknown> }) => {
+        const handler = async (input: { requirement: Record<string, unknown>; rawContent?: string }) => {
           if (!this.deps?.jobRouter) {
             return { error: 'wpv_not_ready', message: 'WPV JobRouter not initialized' };
           }
 
           // Validate again in handler (defense in depth — also covers HTTP path)
           await WpvService.validateTokenAddress(offeringId, input.requirement);
+
+          // Preserve raw requirement text for requirement-aware analysis
+          if (input.rawContent) {
+            input.requirement._requirementText = input.rawContent;
+          }
 
           return this.deps.jobRouter.handleJob(offeringId, input.requirement);
         };

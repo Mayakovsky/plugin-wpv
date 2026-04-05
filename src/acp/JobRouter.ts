@@ -116,6 +116,8 @@ export interface JobRouterDeps {
   costTracker: CostTracker;
   cryptoResolver: CryptoContentResolver;
   tieredDiscovery: TieredDocumentDiscovery | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  anthropicClient?: any;
 }
 
 export class JobRouter {
@@ -260,7 +262,7 @@ export class JobRouter {
    * Shared by handleVerifyWhitepaper and handleFullVerification.
    * Returns intermediate results for further processing.
    */
-  private async runL1L2(documentUrl: string, projectName: string, tokenAddress?: string | null) {
+  private async runL1L2(documentUrl: string, projectName: string, tokenAddress?: string | null, requirementText?: string | null) {
     // Resolve the document
     const resolved = await this.deps.cryptoResolver.resolveWhitepaper(normalizeGitHubUrl(documentUrl));
 
@@ -273,7 +275,7 @@ export class JobRouter {
 
     // L2: Claim extraction (timed + token tracked)
     this.deps.costTracker.startStage('l2');
-    const claims = await this.deps.claimExtractor.extractClaims(resolved.text, projectName);
+    const claims = await this.deps.claimExtractor.extractClaims(resolved.text, projectName, { requirementText });
     // Note: ClaimExtractor calls costTracker.recordUsage() internally
     // We capture the delta via getStageMetrics() after the verification
 
@@ -315,6 +317,7 @@ export class JobRouter {
     const documentUrl = (input.document_url as string | undefined)?.trim();
     const requestedTokenAddress = (input.token_address as string | undefined)?.trim() ?? null;
     let projectName = (input.project_name as string | undefined)?.trim() || '';
+    const requirementText = this.extractRequirementText(input);
 
     // Resolve project name from token address if missing
     if (!projectName && requestedTokenAddress) {
@@ -372,9 +375,9 @@ export class JobRouter {
           const discovered = await this.deps.tieredDiscovery.discover(metadata, requestedTokenAddress ?? '');
           if (discovered) {
             // Use discovered document URL for L1+L2+L3
-            const { resolved: discResolved, analysis: discAnalysis, structuralScore: discScore, hypeTechRatio: discHype, claims: discClaims, wp: discWp } = await this.runL1L2(discovered.documentUrl, projectName, requestedTokenAddress);
+            const { resolved: discResolved, analysis: discAnalysis, structuralScore: discScore, hypeTechRatio: discHype, claims: discClaims, wp: discWp } = await this.runL1L2(discovered.documentUrl, projectName, requestedTokenAddress, requirementText);
             this.deps.costTracker.startStage('l3');
-            const { evaluations: discEvals, scores: discScores } = await this.deps.claimEvaluator.evaluateAll(discClaims, discResolved.text);
+            const { evaluations: discEvals, scores: discScores } = await this.deps.claimEvaluator.evaluateAll(discClaims, discResolved.text, { requirementText });
             this.deps.costTracker.endStage('l3', 0, 0);
             const discClaimScores = discClaims.map((c) => ({ category: c.category as never, score: discScores.get(c.claimId) ?? 50 }));
             const discAggregate = this.deps.scoreAggregator.aggregate(discClaimScores);
@@ -408,7 +411,7 @@ export class JobRouter {
       return { error: 'invalid_url', message: 'document_url exceeds maximum length (2048)' };
     }
 
-    let { resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = await this.runL1L2(documentUrl, projectName, requestedTokenAddress);
+    let { resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = await this.runL1L2(documentUrl, projectName, requestedTokenAddress, requirementText);
 
     // If provided document_url yielded 0 claims (e.g. JavaScript SPA, empty page),
     // try discovery as fallback before giving up
@@ -425,7 +428,7 @@ export class JobRouter {
         };
         const discovered = await this.deps.tieredDiscovery.discover(metadata, requestedTokenAddress ?? '');
         if (discovered && discovered.documentUrl !== documentUrl) {
-          const fallback = await this.runL1L2(discovered.documentUrl, projectName, requestedTokenAddress);
+          const fallback = await this.runL1L2(discovered.documentUrl, projectName, requestedTokenAddress, requirementText);
           if (fallback.claims.length > 0) {
             log.info('Discovery fallback succeeded', { projectName, discoveredUrl: discovered.documentUrl.slice(0, 80), claims: fallback.claims.length });
             ({ resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = fallback);
@@ -438,7 +441,7 @@ export class JobRouter {
 
     // L3: Claim evaluation (timed)
     this.deps.costTracker.startStage('l3');
-    const { evaluations, scores } = await this.deps.claimEvaluator.evaluateAll(claims, resolved.text);
+    const { evaluations, scores } = await this.deps.claimEvaluator.evaluateAll(claims, resolved.text, { requirementText });
     this.deps.costTracker.endStage('l3', 0, 0); // L3 tokens tracked via recordUsage internally
 
     // Build score array from evaluation results
@@ -496,6 +499,12 @@ export class JobRouter {
       analysis,
     );
 
+    // Requirement-aware synthesis: focused analysis addressing buyer's specific question
+    if (requirementText && /\b(math|evaluat|audit|analys|mechan|architect|impact|stress|volatil)/i.test(requirementText)) {
+      const synthesis = await this.generateSynthesis(requirementText, projectName, claims, resolved.text);
+      if (synthesis) report.logicSummary = synthesis;
+    }
+
     // Ensure requested token_address is in the report
     if (requestedTokenAddress) {
       report.tokenAddress = requestedTokenAddress;
@@ -515,6 +524,7 @@ export class JobRouter {
   private async handleFullVerification(input: Record<string, unknown>) {
     const reqAddr = input.token_address as string | undefined;
     let reqName = (input.project_name as string | undefined)?.trim();
+    const requirementText = this.extractRequirementText(input);
 
     // Resolve project name from token address if missing
     if (!reqName && reqAddr) {
@@ -581,7 +591,7 @@ export class JobRouter {
                 let scores = new Map<string, number>();
                 if (this.deps.claimEvaluator) {
                   this.deps.costTracker.startStage('l3');
-                  const evalResult = await this.deps.claimEvaluator.evaluateAll(newClaims, resolved.text);
+                  const evalResult = await this.deps.claimEvaluator.evaluateAll(newClaims, resolved.text, { requirementText });
                   evaluations = evalResult.evaluations;
                   scores = evalResult.scores;
                   this.deps.costTracker.endStage('l3', 0, 0);
@@ -689,9 +699,9 @@ export class JobRouter {
       try {
         const discovered = await this.deps.tieredDiscovery.discover(metadata, reqAddr ?? '');
         if (discovered) {
-          const { resolved, analysis, structuralScore, hypeTechRatio, claims: discClaims, wp: discWp } = await this.runL1L2(discovered.documentUrl, projectName, reqAddr);
+          const { resolved, analysis, structuralScore, hypeTechRatio, claims: discClaims, wp: discWp } = await this.runL1L2(discovered.documentUrl, projectName, reqAddr, requirementText);
           const { evaluations, scores } = this.deps.claimEvaluator
-            ? await this.deps.claimEvaluator.evaluateAll(discClaims, resolved.text)
+            ? await this.deps.claimEvaluator.evaluateAll(discClaims, resolved.text, { requirementText })
             : { evaluations: [], scores: new Map<string, number>() };
           const claimScores = discClaims.map((c) => ({ category: c.category as never, score: scores.get(c.claimId) ?? 50 }));
           const aggregate = this.deps.scoreAggregator.aggregate(claimScores);
@@ -724,7 +734,7 @@ export class JobRouter {
     }
 
     // Run L1+L2
-    let { resolved, analysis, structuralScore, hypeTechRatio, claims, wp: newWp } = await this.runL1L2(documentUrl, projectName);
+    let { resolved, analysis, structuralScore, hypeTechRatio, claims, wp: newWp } = await this.runL1L2(documentUrl, projectName, reqAddr, requirementText);
 
     // If provided document_url yielded 0 claims (e.g. landing page, SPA), try discovery fallback
     if (claims.length === 0 && this.deps.tieredDiscovery && projectName !== 'Unknown') {
@@ -740,7 +750,7 @@ export class JobRouter {
         };
         const discovered = await this.deps.tieredDiscovery.discover(metadata, reqAddr ?? '');
         if (discovered && discovered.documentUrl !== documentUrl) {
-          const fallback = await this.runL1L2(discovered.documentUrl, projectName, reqAddr);
+          const fallback = await this.runL1L2(discovered.documentUrl, projectName, reqAddr, requirementText);
           if (fallback.claims.length > 0) {
             log.info('Discovery fallback succeeded for full_tech', { projectName, discoveredUrl: discovered.documentUrl.slice(0, 80), claims: fallback.claims.length });
             ({ resolved, analysis, structuralScore, hypeTechRatio, claims, wp: newWp } = fallback);
@@ -752,7 +762,7 @@ export class JobRouter {
     }
 
     // L3: Full claim evaluation
-    const { evaluations, scores } = await this.deps.claimEvaluator.evaluateAll(claims, resolved.text);
+    const { evaluations, scores } = await this.deps.claimEvaluator.evaluateAll(claims, resolved.text, { requirementText });
 
     // Build score array from evaluation results
     const claimScores = claims.map((c) => ({
@@ -788,7 +798,7 @@ export class JobRouter {
       computeCostUsd: this.deps.costTracker.getTotalCostUsd().toFixed(4),
     });
 
-    return this.deps.reportGenerator.generateFullVerification(
+    const fullReport = this.deps.reportGenerator.generateFullVerification(
       {
         structuralScore,
         confidenceScore: aggregate.confidenceScore,
@@ -806,6 +816,15 @@ export class JobRouter {
       scores,
       analysis,
     );
+
+    // Requirement-aware synthesis: focused analysis addressing buyer's specific question
+    if (requirementText && /\b(math|evaluat|audit|analys|mechan|architect|impact|stress|volatil)/i.test(requirementText)) {
+      const synthesis = await this.generateSynthesis(requirementText, projectName, claims, resolved.text);
+      if (synthesis) fullReport.logicSummary = synthesis;
+    }
+
+    if (reqAddr) fullReport.tokenAddress = reqAddr;
+    return fullReport;
   }
 
   private async handleDailyBriefing(input: Record<string, unknown>) {
@@ -909,6 +928,56 @@ export class JobRouter {
     const briefing = this.deps.reportGenerator.generateDailyBriefing(briefingReports);
     briefing.date = targetDate;
     return briefing;
+  }
+
+  /** Extract buyer's analytical requirement from the input, if present. */
+  private extractRequirementText(input: Record<string, unknown>): string | null {
+    if (typeof input._requirementText === 'string' && input._requirementText.length > 10) {
+      return input._requirementText;
+    }
+    return null;
+  }
+
+  /**
+   * Generate a focused analysis synthesis that directly addresses the buyer's question.
+   * Only fires when requirementText contains analytical keywords.
+   * Shared by handleVerifyWhitepaper and handleFullVerification.
+   */
+  private async generateSynthesis(
+    requirementText: string,
+    projectName: string,
+    claims: Array<{ category: string; claimText: string; statedEvidence: string }>,
+    documentText: string,
+  ): Promise<string | null> {
+    if (!this.deps.anthropicClient) return null;
+
+    const model = process.env.WPV_MODEL || 'claude-sonnet-4-20250514';
+    try {
+      const response = await this.deps.anthropicClient.messages.create({
+        model,
+        max_tokens: 2048,
+        system: 'You are a DeFi protocol analyst. Based on the extracted claims and source document, provide a focused technical analysis that directly addresses the buyer\'s question. Be specific and quantitative where possible. If the document lacks sufficient data, state what is missing.',
+        messages: [{
+          role: 'user',
+          content: `Buyer's requirement: "${requirementText}"\n\nProject: ${projectName}\n\nExtracted claims:\n${claims.map(c => `- [${c.category}] ${c.claimText} (evidence: ${c.statedEvidence})`).join('\n')}\n\nSource document excerpt:\n${documentText.slice(0, 20000)}\n\nProvide a focused analysis addressing the buyer's specific question.`,
+        }],
+      });
+
+      // Track cost regardless of response content shape
+      this.deps.costTracker.recordUsage(
+        response.usage.input_tokens,
+        response.usage.output_tokens,
+      );
+
+      for (const block of response.content) {
+        if (block.type === 'text' && block.text) {
+          return block.text;
+        }
+      }
+    } catch (err) {
+      log.warn('Analysis synthesis failed', { projectName, error: (err as Error).message });
+    }
+    return null;
   }
 
   /** Returns true if the name contains violation keywords — do not cache */

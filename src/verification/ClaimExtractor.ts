@@ -106,8 +106,19 @@ export class ClaimExtractor {
    * Extract testable claims from whitepaper text.
    * Returns empty array (not error) if no claims found.
    */
-  async extractClaims(text: string, projectName: string, maxRetries = 2): Promise<ExtractedClaim[]> {
+  async extractClaims(
+    text: string,
+    projectName: string,
+    options?: { maxRetries?: number; requirementText?: string | null },
+  ): Promise<ExtractedClaim[]> {
+    const maxRetries = options?.maxRetries ?? 2;
+    const requirementText = options?.requirementText ?? null;
+
     if (!text || text.trim().length === 0) return [];
+
+    const userContent = requirementText
+      ? `The buyer has requested: "${requirementText}"\n\nExtract all testable claims from this ${projectName} whitepaper, with SPECIAL FOCUS on claims relevant to the buyer's request. If the request mentions mathematical evaluation, formulas, or quantitative analysis, prioritize extracting mathematical definitions, equations, model parameters, and quantitative assertions. Tag these with mathematicalProofPresent: true if they contain formal/quantitative content.\n\n${text.slice(0, 50000)}`
+      : `Extract all testable claims from this ${projectName} whitepaper:\n\n${text.slice(0, 50000)}`;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
@@ -118,7 +129,7 @@ export class ClaimExtractor {
           messages: [
             {
               role: 'user',
-              content: `Extract all testable claims from this ${projectName} whitepaper:\n\n${text.slice(0, 50000)}`,
+              content: userContent,
             },
           ],
           tools: [CLAIM_EXTRACTION_TOOL],
