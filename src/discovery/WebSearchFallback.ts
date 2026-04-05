@@ -21,6 +21,9 @@ export interface SearchResult {
  */
 const KNOWN_WHITEPAPER_URLS: Array<[RegExp, string]> = [
   // ── DeFi Protocols ──
+  // Uniswap: version-specific entries first, generic last
+  [/\buniswap\s+v4\b/i, 'https://docs.uniswap.org/contracts/v4/overview'],
+  [/\buniswap\s+v3\b/i, 'https://uniswap.org/whitepaper-v3.pdf'],
   [/\buniswap\b/i, 'https://uniswap.org/whitepaper-v3.pdf'],
   [/\baave\b/i, 'https://raw.githubusercontent.com/aave/aave-v3-core/master/techpaper/Aave_V3_Technical_Paper.pdf'],
   [/\bmakerdao\b|\bmaker\s*dao\b/i, 'https://makerdao.com/whitepaper/White%20Paper%20-The%20Maker%20Protocol_%20MakerDAO%E2%80%99s%20Multi-Collateral%20Dai%20(MCD)%20System-FINAL-%20021720.pdf'],

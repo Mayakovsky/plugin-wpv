@@ -644,8 +644,22 @@ export class WpvService extends Service {
             /^0x([0-9a-f]{2})\1{19}$/.test(lower)) {
           const hasDocUrl = !!requirement.document_url;
           const projectName = typeof requirement.project_name === 'string' ? requirement.project_name.trim() : '';
-          const NON_MEANINGFUL_NAMES = ['empty', 'unknown', 'none', 'test', 'n/a', 'null', 'undefined', ''];
+          const NON_MEANINGFUL_NAMES = [
+            'empty', 'unknown', 'none', 'test', 'n/a', 'null', 'undefined', '',
+            'placeholder', 'dummy', 'sample', 'example', 'fake', 'zero',
+            'test token', 'test project', 'empty address', 'null address',
+            'zero address', 'burn address', 'dead address',
+          ];
           const hasMeaningfulName = projectName.length > 0 && !NON_MEANINGFUL_NAMES.includes(projectName.toLowerCase());
+
+          // Reject names that describe the address rather than a project
+          const ADDRESS_DESCRIPTOR_PATTERN = /\b(empty|zero|null|dead|burn|void)\s+(address|contract|token|wallet)\b/i;
+          if (ADDRESS_DESCRIPTOR_PATTERN.test(projectName)) {
+            const err = new Error(`Invalid: project name '${projectName.slice(0, 50)}' describes an address, not a project`);
+            err.name = 'InputValidationError';
+            throw err;
+          }
+
           if (hasDocUrl || hasMeaningfulName) {
             // Soft fail: strip bad address, proceed with other fields
             delete requirement.token_address;
