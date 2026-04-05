@@ -392,7 +392,7 @@ export class WpvService extends Service {
       // Extract known protocol/chain names — L1s, L2s, DeFi, infrastructure (80 protocols)
       if (!requirement.project_name) {
         const projectMatch = text.match(
-          /\b(Bitcoin|Ethereum|Solana|Cardano|Polkadot|Avalanche|Cosmos|Toncoin|Tron|Near|Algorand|Aptos|Sui|Sei|Hedera|Fantom|Stellar|XRP|Litecoin|Monero|Filecoin|Internet\s*Computer|Kaspa|Injective|Celestia|Mantle|Arbitrum|Optimism|Base|Polygon|zkSync|Starknet|Scroll|Linea|Blast|Manta|Mode|Uniswap|Aave|Compound|MakerDAO|Maker|Curve|Synthetix|SushiSwap|Balancer|Yearn|Chainlink|Lido|Rocket\s*Pool|Frax|Convex|Euler|Morpho|Radiant|Pendle|GMX|dYdX|Virtuals\s*Protocol|Aerodrome|Jupiter|Raydium|Orca|Marinade|Jito|Drift|1inch|PancakeSwap|Pancake\s*Swap|Trader\s*Joe|Camelot|Stargate|LayerZero|Layer\s*Zero|Wormhole|Across|Hop\s*Protocol|The\s*Graph|Arweave|Akash|Render|Pyth|API3)\s*(v\d+)?\b/i
+          /\b(Bitcoin|Ethereum|Solana|Cardano|Polkadot|Avalanche|Cosmos|Toncoin|Tron|Near|Algorand|Aptos|Sui|Sei|Hedera|Fantom|Stellar|XRP|Litecoin|Monero|Filecoin|Internet\s*Computer|Kaspa|Injective|Celestia|Mantle|Arbitrum|Optimism|Base|Polygon|zkSync|Starknet|Scroll|Linea|Blast|Manta|Mode|Uniswap|Aave|Compound|MakerDAO|Maker|Curve|Synthetix|SushiSwap|Balancer|Yearn|Chainlink|Lido|Rocket\s*Pool|Frax|Convex|Euler|Morpho|Radiant|Pendle|GMX|dYdX|Virtuals\s*Protocol|Aerodrome|Jupiter|Raydium|Orca|Marinade|Jito|Drift|1inch|PancakeSwap|Pancake\s*Swap|Trader\s*Joe|Camelot|Stargate|LayerZero|Layer\s*Zero|Wormhole|Across|Hop\s*Protocol|The\s*Graph|Arweave|Akash|Render|Pyth|API3|Ethena|USDe|Hyperliquid|EigenLayer|Eigen\s*Layer)\s*(v\d+)?\b/i
         );
         if (projectMatch) {
           requirement.project_name = projectMatch[0].trim();
@@ -635,15 +635,22 @@ export class WpvService extends Service {
         // If project_name or document_url are also present, log warning and strip the bad address.
         const isContract = await WpvService.isContractAddress(trimmed);
         if (!isContract) {
-          const hasOtherFields = !!(requirement.project_name || requirement.document_url);
-          if (hasOtherFields) {
-            // Soft fail: strip bad address, proceed with other fields
-            delete requirement.token_address;
-            return;
+          const projName = (requirement.project_name as string | undefined)?.toLowerCase() ?? '';
+          const hasDocUrl = !!requirement.document_url;
+
+          // Hard-reject if project_name looks like a wallet/personal address, not a real project
+          const isWalletName = /wallet|personal|my\s*addr|test\s*addr|vitalik|satoshi/i.test(projName);
+          const isInvalidName = INVALID_NAME_PATTERNS.some((p: string) => projName.includes(p));
+
+          if (isWalletName || isInvalidName || (!projName && !hasDocUrl)) {
+            const err = new Error(`Invalid token_address: address is not a contract (EOA wallet) — '${trimmed.slice(0, 50)}'`);
+            err.name = 'InputValidationError';
+            throw err;
           }
-          const err = new Error(`Invalid token_address: address is not a contract (EOA wallet) — '${trimmed.slice(0, 50)}'`);
-          err.name = 'InputValidationError';
-          throw err;
+
+          // Soft fail: strip bad address, proceed with other legitimate fields
+          delete requirement.token_address;
+          return;
         }
         // Format valid + contract check passed — allow through
         return;
