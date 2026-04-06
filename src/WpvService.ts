@@ -548,6 +548,9 @@ export class WpvService extends Service {
         .join(' ')
         .toLowerCase();
 
+      // TEMP DEBUG — remove after eval 28 confirms scope check works
+      logger.info('Scope check fullText', { fullText: fullText.slice(0, 200), keys: Object.keys(requirement) });
+
       const OUT_OF_SCOPE_PATTERNS = [
         /\b(?:current|live|real.?time|latest|today'?s?)\s+(?:market\s+)?(?:price|value|rate|cost)\b/,
         /\b(?:buy|sell|trade|swap|exchange|convert)\s+(?:some|my|the)?\s*(?:tokens?|coins?|crypto)?\b/,
@@ -844,7 +847,10 @@ export class WpvService extends Service {
       for (const offering of offerings) {
         const offeringId = offering.id;
         // Bug 3: Pre-accept input validator — runs before accept() in phase 0
-        const validator = async (input: { requirement: Record<string, unknown>; isPlainText?: boolean }) => {
+        const validator = async (input: { requirement: Record<string, unknown>; isPlainText?: boolean; rawContent?: string }) => {
+          if (input.rawContent) {
+            input.requirement._requirementText = input.rawContent;
+          }
           await WpvService.validateTokenAddress(offeringId, input.requirement, input.isPlainText);
         };
 
@@ -853,13 +859,13 @@ export class WpvService extends Service {
             return { error: 'wpv_not_ready', message: 'WPV JobRouter not initialized' };
           }
 
-          // Validate again in handler (defense in depth — also covers HTTP path)
-          await WpvService.validateTokenAddress(offeringId, input.requirement);
-
-          // Preserve raw requirement text for requirement-aware analysis
+          // Preserve raw requirement text before validation (scope check needs it)
           if (input.rawContent) {
             input.requirement._requirementText = input.rawContent;
           }
+
+          // Validate again in handler (defense in depth — also covers HTTP path)
+          await WpvService.validateTokenAddress(offeringId, input.requirement);
 
           return this.deps.jobRouter.handleJob(offeringId, input.requirement);
         };
