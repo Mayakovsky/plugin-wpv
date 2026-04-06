@@ -397,6 +397,17 @@ export class WpvService extends Service {
         );
         if (projectMatch) {
           requirement.project_name = projectMatch[0].trim();
+
+          // If no version was adjacent, scan for non-adjacent version near whitepaper keywords
+          // e.g., "Chainlink oracle network based on their V2 whitepaper"
+          if (!projectMatch[2]) {
+            const versionNearKeyword = text.match(
+              /\b(v\d+)\s*(?:whitepaper|white\s*paper|technical\s*paper|protocol|specification|documentation)\b/i
+            );
+            if (versionNearKeyword) {
+              requirement.project_name = projectMatch[0].trim() + ' ' + versionNearKeyword[1].toLowerCase();
+            }
+          }
         }
       }
     }
@@ -524,6 +535,45 @@ export class WpvService extends Service {
       const hasDocumentUrl = requirement?.document_url !== undefined && requirement?.document_url !== null;
       if (!hasTokenAddress && !hasProjectName && !hasDocumentUrl) {
         const err = new Error('Invalid requirement: must include at least one of token_address, project_name, or document_url');
+        err.name = 'InputValidationError';
+        throw err;
+      }
+    }
+
+    // Out-of-scope detection for plain text full_technical_verification requests
+    // Reject questions that are clearly not about whitepaper/technical verification
+    if (offeringId === 'full_technical_verification' && isPlainText) {
+      const fullText = Object.values(requirement)
+        .filter((v): v is string => typeof v === 'string')
+        .join(' ')
+        .toLowerCase();
+
+      const OUT_OF_SCOPE_PATTERNS = [
+        /\b(?:current|live|real.?time|latest|today'?s?)\s+(?:market\s+)?(?:price|value|rate|cost)\b/,
+        /\b(?:buy|sell|trade|swap|exchange|convert)\s+(?:some|my|the)?\s*(?:tokens?|coins?|crypto)?\b/,
+        /\b(?:portfolio|wallet\s+balance|holdings|net\s+worth)\b/,
+        /\b(?:price\s+prediction|will\s+.*\s+go\s+up|moon|dump|pump)\b/,
+        /\b(?:should\s+i\s+(?:buy|sell|invest|hold))\b/,
+        /\b(?:trading\s+(?:signal|strategy|bot|advice))\b/,
+        /\b(?:airdrop|giveaway|free\s+(?:tokens?|coins?|crypto))\b/,
+      ];
+
+      const IN_SCOPE_PATTERNS = [
+        /\b(?:whitepaper|white\s*paper|technical\s*paper|litepaper)\b/,
+        /\b(?:verify|verif|analyz|analys|evaluat|audit|review|assess|examin)\b/,
+        /\b(?:claims?|tokenomics|consensus|security|architecture|protocol|mechanism)\b/,
+        /\b(?:mathematical|formal|proof|theorem|invariant)\b/,
+        /\b(?:smart\s*contract|decentraliz|oracle|liquidity|staking)\b/,
+        /\b(?:documentation|specification|RFC|technical)\b/,
+      ];
+
+      const isOutOfScope = OUT_OF_SCOPE_PATTERNS.some(p => p.test(fullText));
+      const isInScope = IN_SCOPE_PATTERNS.some(p => p.test(fullText));
+
+      if (isOutOfScope && !isInScope) {
+        const err = new Error(
+          'Requirement is outside scope — this service provides whitepaper technical verification and analysis, not market data, trading advice, or portfolio management'
+        );
         err.name = 'InputValidationError';
         throw err;
       }

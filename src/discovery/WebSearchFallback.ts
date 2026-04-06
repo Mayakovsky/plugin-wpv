@@ -29,6 +29,9 @@ const KNOWN_WHITEPAPER_URLS: Array<[RegExp, string]> = [
   [/\bmakerdao\b|\bmaker\s*dao\b/i, 'https://makerdao.com/whitepaper/White%20Paper%20-The%20Maker%20Protocol_%20MakerDAO%E2%80%99s%20Multi-Collateral%20Dai%20(MCD)%20System-FINAL-%20021720.pdf'],
   [/\bcompound\b/i, 'https://compound.finance/documents/Compound.Whitepaper.pdf'],
   [/\blido\b/i, 'https://lido.fi/static/Lido:Ethereum-Liquid-Staking.pdf'],
+  // Chainlink: version-specific first, generic last (default: latest V2)
+  [/\bchainlink\s+v2\b/i, 'https://research.chain.link/whitepaper-v2.pdf'],
+  [/\bchainlink\s+v1\b/i, 'https://research.chain.link/whitepaper-v1.pdf'],
   [/\bchainlink\b/i, 'https://research.chain.link/whitepaper-v2.pdf'],
   [/\bcurve\b/i, 'https://curve.fi/files/stableswap-paper.pdf'],
   [/\bsynthetix\b/i, 'https://docs.synthetix.io/synthetix-protocol/the-synthetix-protocol/synthetix-litepaper'],
