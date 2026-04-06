@@ -575,9 +575,9 @@ export class WpvService extends Service {
             throw err;
           }
           if (headResp.status === 404 || headResp.status === 410) {
-            // Stale URL — clear document_url so JobRouter falls through to cache/discovery
-            logger.warn('document_url returned ' + headResp.status + ' — clearing for discovery fallback', { url: trimmedUrl.slice(0, 80) });
-            delete requirement.document_url;
+            const err = new Error(`Invalid document_url: URL returned HTTP ${headResp.status} — document not found`);
+            err.name = 'InputValidationError';
+            throw err;
           }
         } catch (e) {
           if (e instanceof Error && e.name === 'InputValidationError') throw e;

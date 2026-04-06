@@ -2,7 +2,7 @@
 // WPV Whitepapers Repository — CRUD for wpv_whitepapers
 // ════════════════════════════════════════════
 
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { wpvWhitepapers, type WpvWhitepaperRow, type WpvWhitepaperInsert } from './wpvSchema';
 import type { DrizzleDbLike } from '../types';
 
@@ -30,7 +30,7 @@ export class WpvWhitepapersRepo {
     return this.db
       .select()
       .from(wpvWhitepapers)
-      .where(eq(wpvWhitepapers.projectName, projectName));
+      .where(sql`LOWER(${wpvWhitepapers.projectName}) = LOWER(${projectName})`);
   }
 
   async findByTokenAddress(tokenAddress: string): Promise<WpvWhitepaperRow[]> {

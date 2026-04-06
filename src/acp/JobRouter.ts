@@ -340,22 +340,43 @@ export class JobRouter {
           const verification = await this.deps.verificationsRepo.findByWhitepaperId(cachedWpId);
           if (verification) {
             const analysis = this.extractStructuralAnalysis(verification);
+            const mappedClaims = cachedClaims.map((c) => ({
+              claimId: c.id,
+              category: c.category as never,
+              claimText: c.claimText,
+              statedEvidence: c.statedEvidence,
+              mathematicalProofPresent: c.mathProofPresent,
+              sourceSection: c.sourceSection,
+              regulatoryRelevance: (c.evaluationJson as Record<string, unknown>)?.regulatoryRelevance === true,
+            }));
             const report = this.deps.reportGenerator.generateTokenomicsAudit(
               this.verificationRowToResult(verification),
-              cachedClaims.map((c) => ({
-                claimId: c.id,
-                category: c.category as never,
-                claimText: c.claimText,
-                statedEvidence: c.statedEvidence,
-                mathematicalProofPresent: c.mathProofPresent,
-                sourceSection: c.sourceSection,
-                regulatoryRelevance: (c.evaluationJson as Record<string, unknown>)?.regulatoryRelevance === true,
-              })),
+              mappedClaims,
               cachedWp as never,
               undefined,
               analysis,
             );
             if (requestedTokenAddress) report.tokenAddress = requestedTokenAddress;
+
+            // Requirement-aware synthesis on cached data
+            if (requirementText && /\b(math|evaluat|audit|analys|mechan|architect|impact|stress|volatil|risk|attack|exploit|vulnerab)/i.test(requirementText)) {
+              const docUrl = (cachedWp as Record<string, unknown>).documentUrl as string | undefined;
+              let docText = '';
+              if (docUrl) {
+                try {
+                  const resolved = await this.deps.cryptoResolver.resolveWhitepaper(normalizeGitHubUrl(docUrl));
+                  docText = resolved.text;
+                } catch {
+                  log.warn('Could not re-fetch document for synthesis — using claims only', { docUrl });
+                }
+              }
+              const synthesis = await this.generateSynthesis(requirementText, projectName, mappedClaims as never, docText);
+              if (synthesis) {
+                report.logicSummary = synthesis;
+                log.info('Synthesis attached to cached verify result', { projectName, synthesisLength: synthesis.length });
+              }
+            }
+
             log.info('verify_project_whitepaper: returning cached result', { projectName, claims: cachedClaims.length });
             return report;
           }
@@ -549,27 +570,48 @@ export class JobRouter {
         const claims = await this.deps.claimsRepo.findByWhitepaperId(wpId);
         const totalClaims = (verification.totalClaims as number) ?? claims.length;
 
-        // ── Cached result HAS claims → return it directly ──
+        // ── Cached result HAS claims → return it (with optional synthesis) ──
         if (totalClaims > 0 && claims.length > 0) {
           log.info('Returning cached result with claims', { projectName: wpName, totalClaims });
           const analysis = this.extractStructuralAnalysis(verification);
+          const mappedClaims = claims.map((c) => ({
+            claimId: c.id,
+            category: c.category as never,
+            claimText: c.claimText,
+            statedEvidence: c.statedEvidence,
+            mathematicalProofPresent: c.mathProofPresent,
+            sourceSection: c.sourceSection,
+            regulatoryRelevance: (c.evaluationJson as Record<string, unknown>)?.regulatoryRelevance === true,
+          }));
           const fullReport = this.deps.reportGenerator.generateFullVerification(
             this.verificationRowToResult(verification),
-            claims.map((c) => ({
-              claimId: c.id,
-              category: c.category as never,
-              claimText: c.claimText,
-              statedEvidence: c.statedEvidence,
-              mathematicalProofPresent: c.mathProofPresent,
-              sourceSection: c.sourceSection,
-              regulatoryRelevance: (c.evaluationJson as Record<string, unknown>)?.regulatoryRelevance === true,
-            })),
+            mappedClaims,
             [],
             wp as never,
             undefined,
             analysis,
           );
           if (reqAddr) fullReport.tokenAddress = reqAddr;
+
+          // Requirement-aware synthesis on cached data
+          if (requirementText && /\b(math|evaluat|audit|analys|mechan|architect|impact|stress|volatil|risk|attack|exploit|vulnerab)/i.test(requirementText)) {
+            const docUrl = (wp as Record<string, unknown>).documentUrl as string | undefined;
+            let docText = '';
+            if (docUrl) {
+              try {
+                const resolved = await this.deps.cryptoResolver.resolveWhitepaper(normalizeGitHubUrl(docUrl));
+                docText = resolved.text;
+              } catch {
+                log.warn('Could not re-fetch document for synthesis — using claims only', { docUrl });
+              }
+            }
+            const synthesis = await this.generateSynthesis(requirementText, wpName, mappedClaims as never, docText);
+            if (synthesis) {
+              fullReport.logicSummary = synthesis;
+              log.info('Synthesis attached to cached result', { projectName: wpName, synthesisLength: synthesis.length });
+            }
+          }
+
           return fullReport;
         }
 
@@ -1005,10 +1047,29 @@ export class JobRouter {
       if (results.length === 0) {
         const stripped = stripVersionSuffix(projectName);
         if (stripped) {
-          const fallbackResults = await this.deps.whitepaperRepo.findByProjectName(stripped);
-          if (fallbackResults.length > 0) {
-            log.info('findWhitepaper: version-strip fallback matched', { original: projectName, stripped, matches: fallbackResults.length });
-            allCandidates.push(...fallbackResults);
+          const requestedVersion = projectName.match(/\b(v\d+)\b/i)?.[1]?.toLowerCase();
+          const strippedResults = await this.deps.whitepaperRepo.findByProjectName(stripped);
+
+          if (strippedResults.length > 0 && requestedVersion) {
+            const versionMatched = strippedResults.filter((wp) => {
+              const wpName = ((wp as Record<string, unknown>).projectName as string ?? '').toLowerCase();
+              const wpUrl = ((wp as Record<string, unknown>).documentUrl as string ?? '').toLowerCase();
+              return wpName.includes(requestedVersion) || wpUrl.includes(requestedVersion);
+            });
+            if (versionMatched.length > 0) {
+              allCandidates.push(...versionMatched);
+              log.info('findWhitepaper: version-strip fallback (version-filtered)', {
+                original: projectName, stripped, requestedVersion,
+                total: strippedResults.length, matched: versionMatched.length,
+              });
+            } else {
+              log.info('findWhitepaper: version mismatch — skipping cache', {
+                original: projectName, stripped, requestedVersion,
+              });
+            }
+          } else if (strippedResults.length > 0) {
+            allCandidates.push(...strippedResults);
+            log.info('findWhitepaper: version-strip fallback matched', { original: projectName, stripped, matches: strippedResults.length });
           }
         }
       }
@@ -1051,8 +1112,29 @@ export class JobRouter {
       if (byName.length === 0) {
         const stripped = stripVersionSuffix(projectName);
         if (stripped) {
-          byName = await this.deps.whitepaperRepo.findByProjectName(stripped);
-          if (byName.length > 0) {
+          const requestedVersion = projectName.match(/\b(v\d+)\b/i)?.[1]?.toLowerCase();
+          const strippedResults = await this.deps.whitepaperRepo.findByProjectName(stripped);
+
+          if (strippedResults.length > 0 && requestedVersion) {
+            const versionMatched = strippedResults.filter((wp) => {
+              const wpName = ((wp as Record<string, unknown>).projectName as string ?? '').toLowerCase();
+              const wpUrl = ((wp as Record<string, unknown>).documentUrl as string ?? '').toLowerCase();
+              return wpName.includes(requestedVersion) || wpUrl.includes(requestedVersion);
+            });
+            if (versionMatched.length > 0) {
+              byName = versionMatched;
+              log.info('findBestWhitepaper: version-strip fallback (version-filtered)', {
+                original: projectName, stripped, requestedVersion,
+                total: strippedResults.length, matched: versionMatched.length,
+              });
+            } else {
+              log.info('findBestWhitepaper: version mismatch — skipping cache', {
+                original: projectName, stripped, requestedVersion,
+                cachedNames: strippedResults.slice(0, 3).map((wp) => (wp as Record<string, unknown>).projectName),
+              });
+            }
+          } else if (strippedResults.length > 0) {
+            byName = strippedResults;
             log.info('findBestWhitepaper: version-strip fallback matched', { original: projectName, stripped, matches: byName.length });
           }
         }
