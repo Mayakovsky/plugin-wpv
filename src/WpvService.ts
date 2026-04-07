@@ -573,9 +573,6 @@ export class WpvService extends Service {
         .join(' ')
         .toLowerCase();
 
-      // TEMP DEBUG — remove after eval 28 confirms scope check works
-      logger.info('Scope check fullText', { fullText: fullText.slice(0, 200), keys: Object.keys(requirement) });
-
       const OUT_OF_SCOPE_PATTERNS = [
         /\b(?:current|live|real.?time|latest|today'?s?)\s+(?:market\s+)?(?:price|value|rate|cost)\b/,
         /\b(?:buy|sell|trade|swap|exchange|convert)\s+(?:some|my|the)?\s*(?:tokens?|coins?|crypto)?\b/,

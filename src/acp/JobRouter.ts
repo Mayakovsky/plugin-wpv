@@ -885,16 +885,19 @@ export class JobRouter {
       // An empty briefing for a valid date indicates a discovery pipeline gap
       if (batch.length === 0) {
         log.info('Briefing: no verifications for requested date — backfilling from recent', { requestedDate });
-        batch = await this.deps.verificationsRepo.getMostRecent(MAX_BRIEFING_SIZE);
+        const recent = await this.deps.verificationsRepo.getMostRecent(MAX_BRIEFING_SIZE * 3);
+        batch = recent.filter(v => (v.totalClaims ?? 0) > 0).slice(0, MAX_BRIEFING_SIZE);
       }
     } else {
       // No date specified: use latest batch + backfill with recent
       batch = await this.deps.verificationsRepo.getLatestDailyBatch();
+      // Filter out 0-claim entries (L1-only noise)
+      batch = batch.filter(v => (v.totalClaims ?? 0) > 0);
       if (batch.length < MAX_BRIEFING_SIZE) {
-        const recent = await this.deps.verificationsRepo.getMostRecent(MAX_BRIEFING_SIZE);
+        const recent = await this.deps.verificationsRepo.getMostRecent(MAX_BRIEFING_SIZE * 3);
         const seen = new Set(batch.map((v) => v.id));
         for (const v of recent) {
-          if (!seen.has(v.id)) {
+          if (!seen.has(v.id) && (v.totalClaims ?? 0) > 0) {
             batch.push(v);
             if (batch.length >= MAX_BRIEFING_SIZE) break;
           }
