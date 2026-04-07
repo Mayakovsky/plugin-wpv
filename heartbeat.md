@@ -1,7 +1,7 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-04-07 (eval 30 fixes — briefing quality filter, DB purge, SDK fix)
+> Last updated: 2026-04-07 (concurrency architecture + Playwright DocsSiteCrawler + eval 30 fixes)
 > Updated by: Claude Opus 4.6 — Kovsky session
-> Session label: Eval 28: 8/16 (SDK version mismatch — all deliveries EXPIRED). Eval 29: 13/16 (SDK fixed, 3 content failures). Eval 30: 18/22 (expanded matrix, 4 failures: briefing quality, Aerodrome SPA, Aave 404). DB purged to 4 quality entries. Briefing backfill now filters totalClaims>0. Plain-text URL extraction + burn/nonsense rejection deployed. 309/309 tests.
+> Session label: Major architecture update. Part A: Job mutex (serialized processing), per-job CostTracker (no shared state), Playwright mutex + resolveLinks(). Part B: Playwright DocsSiteCrawler — SPA docs sites get browser rendering for sub-pages. Part C: Fix 5 (404 soft-fallback for known protocols), Fix 6 (upsert at write time — no more duplicate DB entries). Part D: Shared KNOWN_PROTOCOL_PATTERN constant. 309/309 tests. DB: 4 quality entries (Aave/Uniswap/Lido/Chainlink).
 > Staleness gate: 2026-04-07 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
@@ -143,11 +143,9 @@
 | 30 | 18/22 | scan 4/4, briefing 5/7, full 6/7, verify 3/4 | Expanded 22-test matrix. Aerodrome SPA 0 claims (F4), briefing 0-claim entries (F1), Aerodrome full_tech INSUFFICIENT_DATA (F4), Aave 404 URL (F4). | Briefing quality filter (totalClaims>0). DB purged to 4 quality entries. Fix 4 (Playwright DocsSiteCrawler) pending. |
 
 ## Next Actions (ordered)
-1. **Fix 4: Playwright in DocsSiteCrawler** — SPA docs sites (Aerodrome) get 17 chars from HTTP, need browser rendering for sub-pages
-2. **Upsert at write time** — prevent duplicate DB entries from eval runs (currently blind INSERT every time)
-3. **Revert 404→soft-fallback for verify_project_whitepaper** — evaluator sends broken Aave URLs, expects Grey to find the doc anyway
-4. **After graduation:** close ports 3000+3001, set production prices, wire DiscoveryCron, hygiene service
-5. **LAUNCH** — outreach, pinned thread, monitor
+1. **Trigger eval 31** — all eval 30 failures addressed: Playwright DocsSiteCrawler, 404 soft-fallback, upsert, concurrency
+2. **After graduation:** close ports 3000+3001, set production prices, wire DiscoveryCron, full hygiene service, render cache
+3. **LAUNCH** — outreach, pinned thread, monitor
 
 ## Test Pricing (pre-graduation)
 | Offering | Test Price | Production Price |
@@ -225,6 +223,7 @@
 | 2026-04-06 | Claude Opus 4.6 (Kovsky) | Eval 28: 8/16 — ALL accept EXPIRED. Root cause: ACP SDK `0.3.0-beta-subscription.2` in wpv-agent (wrong branch). deliver() returned success but UserOps never hit chain (wallet nonce=1). Fixed: replaced SDK with correct `0.3.0-beta.39`, added deliver() txnHash logging. | SDK fixed, deployed |
 | 2026-04-06 | Claude Opus 4.6 (Kovsky) | Eval 29: 13/16. Fix 2: plain-text URL extraction (document-quality filter). Fix 3: burn+nonsense name rejection (known protocol gate). Fix 1: briefing backfill from recent. Hotfix: _requirementText before validation. Scope check tests (6/6). | 309/309, deployed |
 | 2026-04-07 | Claude Opus 4.6 (Kovsky) | Eval 30: 18/22 (expanded matrix). DB purged to 4 quality entries (Aave/Uniswap/Lido/Chainlink). Briefing quality filter: totalClaims>0 on both backfill paths. Removed debug log. SLA comments updated in AgentCardConfig.ts + CLAUDE.md. Nonsense row purged. | 309/309, deployed |
+| 2026-04-07 | Claude Opus 4.6 (Kovsky) | Concurrency + Playwright + eval 30 fixes. Part A: job mutex (promise-chain serialization), per-job CostTracker (35 refs replaced), Playwright mutex + resolveLinks(). Part B: DocsSiteCrawler Playwright integration (isDocsSiteUrl, fetchAndStrip fallback, DOM link extraction, LINKS_FOLLOWED anti-double-crawl). Part C: Fix 5 (404 soft-fallback for known protocols), Fix 6 (upsert at write time — both runL1L2 + handleLegitimacyScan). Part D: shared KNOWN_PROTOCOL_PATTERN, DrizzleDbLike.delete required, repo delete methods. | 309/309, deployed |
 
 ## Quick Commands
 ```bash

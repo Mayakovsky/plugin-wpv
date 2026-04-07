@@ -234,4 +234,4 @@ pm2 restart grey
 
 ---
 
-*Last updated: 2026-04-07 (eval 30: 18/22. SDK fix, DB purge, briefing quality filter, plain-text URL extraction, burn+nonsense rejection. Fix 4 Playwright DocsSiteCrawler pending.)*
+*Last updated: 2026-04-07 (concurrency architecture + Playwright DocsSiteCrawler + 404 soft-fallback + upsert at write time. All eval 30 failures addressed. 309 tests / 24 files.)*
