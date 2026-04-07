@@ -11,6 +11,7 @@ function createMockDeps(): JobRouterDeps {
       findByTokenAddress: vi.fn().mockResolvedValue([]),
       findById: vi.fn().mockResolvedValue({ id: 'wp-1', projectName: 'Test', tokenAddress: '0x1' }),
       create: vi.fn().mockResolvedValue({ id: 'wp-new', projectName: 'New' }),
+      deleteById: vi.fn().mockResolvedValue(undefined),
     } as never,
     verificationsRepo: {
       findByWhitepaperId: vi.fn().mockResolvedValue({
@@ -21,12 +22,14 @@ function createMockDeps(): JobRouterDeps {
       getLatestDailyBatch: vi.fn().mockResolvedValue([]),
       getMostRecent: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockResolvedValue({ id: 'v-1' }),
+      deleteByWhitepaperId: vi.fn().mockResolvedValue(undefined),
     } as never,
     claimsRepo: {
       findByWhitepaperId: vi.fn().mockResolvedValue([
         { id: 'c-1', category: 'TOKENOMICS', claimText: 'Test', statedEvidence: '', sourceSection: '', mathProofPresent: false },
       ]),
       create: vi.fn().mockResolvedValue({ id: 'c-new' }),
+      deleteByWhitepaperId: vi.fn().mockResolvedValue(undefined),
     } as never,
     structuralAnalyzer: {
       analyze: vi.fn().mockResolvedValue({ hasAbstract: true }),

@@ -24,6 +24,10 @@ export class WpvClaimsRepo {
       .where(eq(wpvClaims.whitepaperId, whitepaperId));
   }
 
+  async deleteByWhitepaperId(whitepaperId: string): Promise<void> {
+    await this.db.delete(wpvClaims).where(eq(wpvClaims.whitepaperId, whitepaperId));
+  }
+
   async listByCategory(category: string): Promise<WpvClaimRow[]> {
     return this.db
       .select()

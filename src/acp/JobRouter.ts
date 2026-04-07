@@ -226,16 +226,34 @@ export class JobRouter {
             newWpId = `tmp-${Date.now()}`;
             log.warn('Skipping L1 cache write — violation keywords', { projectName });
           } else {
-            const newWp = await this.deps.whitepaperRepo.create({
-              projectName,
-              tokenAddress,
-              documentUrl: discovered.documentUrl,
-              chain: tokenAddress.startsWith('0x') ? 'base' : 'solana',
-              pageCount: discovered.resolved.pageCount,
-              status: 'VERIFIED',
-              selectionScore: 0,
+            // Upsert: if existing whitepaper with claims exists, reuse it (L1 scan shouldn't overwrite L2 data)
+            const existing = await this.deps.whitepaperRepo.findByProjectName(projectName);
+            const existingWithClaims = existing.find(async (e) => {
+              const eClaims = await this.deps.claimsRepo.findByWhitepaperId(e.id);
+              return eClaims.length > 0;
             });
-            newWpId = newWp.id;
+            if (existingWithClaims) {
+              // Existing record with L2 claims — reuse, refresh verification
+              newWpId = existingWithClaims.id;
+              await this.deps.verificationsRepo.deleteByWhitepaperId(newWpId);
+              log.info('L1 upsert: reusing existing whitepaper with claims', { projectName });
+            } else {
+              // No claims — clean up 0-claim entries, create fresh
+              for (const e of existing) {
+                await this.deps.verificationsRepo.deleteByWhitepaperId(e.id);
+                await this.deps.whitepaperRepo.deleteById(e.id);
+              }
+              const newWp = await this.deps.whitepaperRepo.create({
+                projectName,
+                tokenAddress,
+                documentUrl: discovered.documentUrl,
+                chain: tokenAddress.startsWith('0x') ? 'base' : 'solana',
+                pageCount: discovered.resolved.pageCount,
+                status: 'VERIFIED',
+                selectionScore: 0,
+              });
+              newWpId = newWp.id;
+            }
           }
 
           const verdict = structuralScore >= 3 ? Verdict.PASS
@@ -306,27 +324,64 @@ export class JobRouter {
       wp = { id: `tmp-${Date.now()}`, projectName, tokenAddress: tokenAddress ?? null };
       log.warn('Skipping cache write — project name contains violation keywords', { projectName });
     } else {
-      wp = await this.deps.whitepaperRepo.create({
-        projectName,
-        tokenAddress: tokenAddress ?? undefined,
-        documentUrl,
-        chain: tokenAddress?.startsWith('0x') ? 'base' : 'unknown',
-        pageCount: resolved.pageCount,
-        status: 'VERIFIED',
-        selectionScore: 0,
-      });
+      // Upsert: check for existing whitepaper by project name
+      const existing = await this.deps.whitepaperRepo.findByProjectName(projectName);
+      const existingWithClaims = existing.length > 0
+        ? await (async () => {
+            for (const e of existing) {
+              const eClaims = await this.deps.claimsRepo.findByWhitepaperId(e.id);
+              if (eClaims.length > 0) return { wp: e, claimCount: eClaims.length };
+            }
+            return null;
+          })()
+        : null;
 
-      // Store claims
-      for (const claim of claims) {
-        await this.deps.claimsRepo.create({
-          whitepaperId: wp.id,
-          category: claim.category,
-          claimText: claim.claimText,
-          statedEvidence: claim.statedEvidence,
-          sourceSection: claim.sourceSection,
-          mathProofPresent: claim.mathematicalProofPresent,
-          evaluationJson: claim.regulatoryRelevance ? { regulatoryRelevance: true } : undefined,
+      if (existingWithClaims && existingWithClaims.claimCount >= claims.length) {
+        // Existing record has equal or more claims — reuse whitepaper, refresh verification
+        wp = existingWithClaims.wp;
+        await this.deps.verificationsRepo.deleteByWhitepaperId(wp.id);
+        log.info('Upsert: reusing whitepaper, refreshing verification', {
+          projectName, existingClaims: existingWithClaims.claimCount, newClaims: claims.length,
         });
+      } else {
+        // New result is better, or no existing record — create new
+        if (existingWithClaims) {
+          log.info('Upsert: replacing — new result has more claims', {
+            projectName, existingClaims: existingWithClaims.claimCount, newClaims: claims.length,
+          });
+          await this.deps.claimsRepo.deleteByWhitepaperId(existingWithClaims.wp.id);
+          await this.deps.verificationsRepo.deleteByWhitepaperId(existingWithClaims.wp.id);
+          await this.deps.whitepaperRepo.deleteById(existingWithClaims.wp.id);
+        } else if (existing.length > 0) {
+          // Existing records with 0 claims — clean them up
+          for (const e of existing) {
+            await this.deps.verificationsRepo.deleteByWhitepaperId(e.id);
+            await this.deps.whitepaperRepo.deleteById(e.id);
+          }
+        }
+
+        wp = await this.deps.whitepaperRepo.create({
+          projectName,
+          tokenAddress: tokenAddress ?? undefined,
+          documentUrl,
+          chain: tokenAddress?.startsWith('0x') ? 'base' : 'unknown',
+          pageCount: resolved.pageCount,
+          status: 'VERIFIED',
+          selectionScore: 0,
+        });
+
+        // Store claims — only when creating/replacing
+        for (const claim of claims) {
+          await this.deps.claimsRepo.create({
+            whitepaperId: wp.id,
+            category: claim.category,
+            claimText: claim.claimText,
+            statedEvidence: claim.statedEvidence,
+            sourceSection: claim.sourceSection,
+            mathProofPresent: claim.mathematicalProofPresent,
+            evaluationJson: claim.regulatoryRelevance ? { regulatoryRelevance: true } : undefined,
+          });
+        }
       }
     }
 

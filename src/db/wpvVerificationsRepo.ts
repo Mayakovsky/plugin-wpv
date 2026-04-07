@@ -9,6 +9,10 @@ import type { DrizzleDbLike } from '../types';
 export class WpvVerificationsRepo {
   constructor(private db: DrizzleDbLike) {}
 
+  async deleteByWhitepaperId(whitepaperId: string): Promise<void> {
+    await this.db.delete(wpvVerifications).where(eq(wpvVerifications.whitepaperId, whitepaperId));
+  }
+
   async create(data: WpvVerificationInsert): Promise<WpvVerificationRow> {
     const rows = await this.db
       .insert(wpvVerifications)

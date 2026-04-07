@@ -315,7 +315,7 @@ export type DrizzleDbLike = {
   select: (...args: unknown[]) => any;
   insert: (...args: unknown[]) => any;
   update: (...args: unknown[]) => any;
-  delete?: (...args: unknown[]) => any;
+  delete: (...args: unknown[]) => any;
 };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 

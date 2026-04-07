@@ -63,15 +63,18 @@ function createIntegrationDeps(): JobRouterDeps {
       create: vi.fn().mockImplementation((data: Record<string, unknown>) =>
         Promise.resolve({ id: 'wp-int-1', ...data }),
       ),
+      deleteById: vi.fn().mockResolvedValue(undefined),
     } as never,
     verificationsRepo: {
       findByWhitepaperId: vi.fn().mockResolvedValue(null),
       getLatestDailyBatch: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockResolvedValue({ id: 'v-int-1' }),
+      deleteByWhitepaperId: vi.fn().mockResolvedValue(undefined),
     } as never,
     claimsRepo: {
       findByWhitepaperId: vi.fn().mockResolvedValue(claims),
       create: vi.fn().mockResolvedValue({ id: 'c-new' }),
+      deleteByWhitepaperId: vi.fn().mockResolvedValue(undefined),
     } as never,
     structuralAnalyzer: new StructuralAnalyzer(),
     claimExtractor: {
