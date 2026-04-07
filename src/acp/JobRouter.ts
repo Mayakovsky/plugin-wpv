@@ -879,8 +879,14 @@ export class JobRouter {
 
     let batch;
     if (requestedDate) {
-      // Date-specific: filter verifications to the requested date only (no backfill)
+      // Date-specific: filter verifications to the requested date
       batch = await this.deps.verificationsRepo.getVerificationsByDate(requestedDate);
+      // If no verifications for the exact date, backfill from recent activity
+      // An empty briefing for a valid date indicates a discovery pipeline gap
+      if (batch.length === 0) {
+        log.info('Briefing: no verifications for requested date — backfilling from recent', { requestedDate });
+        batch = await this.deps.verificationsRepo.getMostRecent(MAX_BRIEFING_SIZE);
+      }
     } else {
       // No date specified: use latest batch + backfill with recent
       batch = await this.deps.verificationsRepo.getLatestDailyBatch();

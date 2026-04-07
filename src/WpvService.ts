@@ -528,6 +528,31 @@ export class WpvService extends Service {
       WpvService.extractFromUnknownFields(requirement);
     }
 
+    // Extract document_url from plain text requirements
+    // extractFromUnknownFields is skipped for plain text, AND it would exit early
+    // anyway because project_name is already set (hasStandard guard).
+    // URLs embedded in plain text must be extracted separately.
+    if (isPlainText && !requirement.document_url) {
+      const allStrings = Object.values(requirement)
+        .filter((v): v is string => typeof v === 'string');
+      for (const text of allStrings) {
+        const urlMatch = text.match(/https?:\/\/[^\s"'<>]+/i);
+        if (urlMatch) {
+          const extractedUrl = urlMatch[0].replace(/[.,;:!?)]+$/, ''); // trim trailing punctuation
+          // Only set document_url if it looks like a document, not a homepage
+          if (/\.(pdf|html|htm|md|txt)(\?|$)/i.test(extractedUrl) ||
+              /\/(docs|whitepaper|paper|specification|technical)/i.test(extractedUrl) ||
+              /github\.com\/.+\/.+\//i.test(extractedUrl) ||
+              /gitbook/i.test(extractedUrl) ||
+              /arxiv\.org/i.test(extractedUrl)) {
+            requirement.document_url = extractedUrl;
+            break; // Found a valid document URL — stop looking
+          }
+          // URL found but doesn't look like a document — keep checking other strings
+        }
+      }
+    }
+
     // Fix 5: Reject JSON requirements missing all identifying fields
     if (!isPlainText) {
       const hasTokenAddress = requirement?.token_address !== undefined && requirement?.token_address !== null;
@@ -714,10 +739,24 @@ export class WpvService extends Service {
             throw err;
           }
 
-          if (hasDocUrl || hasMeaningfulName) {
-            // Soft fail: strip bad address, proceed with other fields
+          if (hasDocUrl) {
+            // Has a document URL — strip bad address, proceed with document analysis
             delete requirement.token_address;
             return;
+          }
+          if (hasMeaningfulName) {
+            // Only soft-strip if the project name is a recognized protocol
+            // Nonsense names + null addresses should be hard-rejected
+            const KNOWN_PROTOCOL_PATTERN = /\b(Bitcoin|Ethereum|Solana|Cardano|Polkadot|Avalanche|Cosmos|Toncoin|Tron|Near|Algorand|Aptos|Sui|Sei|Hedera|Fantom|Stellar|XRP|Litecoin|Monero|Filecoin|Internet\s*Computer|Kaspa|Injective|Celestia|Mantle|Arbitrum|Optimism|Base|Polygon|zkSync|Starknet|Scroll|Linea|Blast|Manta|Mode|Uniswap|Aave|Compound|MakerDAO|Maker|Curve|Synthetix|SushiSwap|Balancer|Yearn|Chainlink|Lido|Rocket\s*Pool|Frax|Convex|Euler|Morpho|Radiant|Pendle|GMX|dYdX|Virtuals\s*Protocol|Aerodrome|Jupiter|Raydium|Orca|Marinade|Jito|Drift|1inch|PancakeSwap|Pancake\s*Swap|Trader\s*Joe|Camelot|Stargate|LayerZero|Layer\s*Zero|Wormhole|Across|Hop\s*Protocol|The\s*Graph|Arweave|Akash|Render|Pyth|API3|Ethena|USDe|Hyperliquid|EigenLayer|Eigen\s*Layer|Pepe|Shiba|Dogecoin|Floki|Bonk)\b/i;
+            if (KNOWN_PROTOCOL_PATTERN.test(projectName)) {
+              // Known protocol — strip bad address, proceed with project analysis
+              delete requirement.token_address;
+              return;
+            }
+            // Unknown name + burn address → reject
+            const rejectErr = new Error(`Invalid: burn/null address with unrecognized project name '${projectName.slice(0, 50)}'`);
+            rejectErr.name = 'InputValidationError';
+            throw rejectErr;
           }
           const err = new Error(`Invalid token_address: burn/null address rejected — '${trimmed.slice(0, 50)}'`);
           err.name = 'InputValidationError';
