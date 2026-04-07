@@ -21,6 +21,13 @@ const MAX_CRAWL_TIME_MS = 45000;
  * Returns concatenated content from the landing page + scored sub-pages.
  */
 export class DocsSiteCrawler {
+  constructor(
+    private headlessResolver?: {
+      resolve: (url: string) => Promise<ResolvedContent | null>;
+      resolveLinks: (url: string) => Promise<string[]>;
+    } | null,
+  ) {}
+
   /**
    * Detect whether a URL is a documentation site that would benefit from sub-page crawling.
    * Used by CryptoContentResolver to decide whether to invoke the crawler.
@@ -50,6 +57,25 @@ export class DocsSiteCrawler {
   }
 
   /**
+   * Detect docs sites by URL pattern when text-based detection fails (SPA shells).
+   */
+  static isDocsSiteUrl(url: string): boolean {
+    try {
+      const parsed = new URL(url);
+      const hostname = parsed.hostname.toLowerCase();
+      const pathname = parsed.pathname.toLowerCase();
+      if (hostname.startsWith('docs.')) return true;
+      if (hostname.includes('gitbook.io')) return true;
+      if (hostname.includes('readthedocs.io')) return true;
+      if (hostname.includes('notion.site')) return true;
+      if (pathname.startsWith('/docs/') || pathname === '/docs') return true;
+      if (pathname.startsWith('/documentation')) return true;
+      if (pathname.startsWith('/wiki')) return true;
+      return false;
+    } catch { return false; }
+  }
+
+  /**
    * Crawl a documentation site starting from the landing page URL.
    * Fetches raw HTML for link extraction, scores links by MiCA/whitepaper relevance,
    * follows top-scoring sub-pages, and returns concatenated content.
@@ -63,10 +89,27 @@ export class DocsSiteCrawler {
     try {
       // Fetch raw HTML for link extraction (Issue A: separate from stripped text)
       const rawHtml = await this.fetchRawHtml(url);
-      if (!rawHtml) return null;
+      if (!rawHtml && !this.headlessResolver) return null;
 
       // Extract and score internal links
-      const links = this.extractLinks(rawHtml, url);
+      let links = rawHtml ? this.extractLinks(rawHtml, url) : [];
+
+      // SPA shell — no links in raw HTML. Use Playwright DOM extraction.
+      if (links.length === 0 && this.headlessResolver) {
+        log.info('No links in raw HTML — using Playwright DOM extraction', { url });
+        const domLinks = await this.headlessResolver.resolveLinks(url);
+        const origin = new URL(url).origin;
+        const seen = new Set<string>([url.split('#')[0]]);
+        for (const href of domLinks) {
+          const canonical = href.split('#')[0];
+          if (canonical.startsWith(origin) && !seen.has(canonical)) {
+            seen.add(canonical);
+            links.push(canonical);
+          }
+        }
+        log.info('DOM link extraction complete', { url, linkCount: links.length });
+      }
+
       const scoredLinks = links
         .map((href) => ({ href, score: this.scoreLink(href) }))
         .filter((l) => l.score > 0)
@@ -166,8 +209,23 @@ export class DocsSiteCrawler {
 
   private async fetchAndStrip(url: string): Promise<string | null> {
     const html = await this.fetchRawHtml(url);
-    if (!html) return null;
-    return this.stripHtml(html);
+    if (html) {
+      const stripped = this.stripHtml(html);
+      if (stripped.length >= 200) return stripped;
+    }
+    // Plain HTTP returned thin/empty content — try Playwright if available
+    if (this.headlessResolver) {
+      try {
+        const rendered = await this.headlessResolver.resolve(url);
+        if (rendered && rendered.text.length >= 100) {
+          log.info('Playwright fallback for sub-page', { url, chars: rendered.text.length });
+          return rendered.text;
+        }
+      } catch {
+        // Playwright failed — return whatever we got from HTTP
+      }
+    }
+    return html ? this.stripHtml(html) : null;
   }
 
   private stripHtml(html: string): string {

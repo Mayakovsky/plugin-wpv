@@ -26,7 +26,7 @@ export class CryptoContentResolver {
   private llmsTxtResolver = new LlmsTxtResolver();
   private siteRegistry = new SiteSpecificRegistry();
   private headlessBrowser = new HeadlessBrowserResolver();
-  private docsCrawler = new DocsSiteCrawler();
+  private docsCrawler = new DocsSiteCrawler(this.headlessBrowser);
 
   constructor(private contentResolver: IContentResolver) {}
 
@@ -96,6 +96,19 @@ export class CryptoContentResolver {
 
       const enhanced = await this.enhancedResolve(url, isSpaDetected);
       if (enhanced) {
+        // If enhanced resolution returned content for a docs-site URL,
+        // route through DocsSiteCrawler for comprehensive sub-page crawling.
+        // Skip if HeadlessBrowserResolver already followed links (would double-crawl).
+        const alreadyCrawled = enhanced.diagnostics?.includes('LINKS_FOLLOWED');
+        if (!alreadyCrawled && DocsSiteCrawler.isDocsSiteUrl(url) && enhanced.text.length >= 200) {
+          log.info('SPA docs site — routing enhanced content through DocsSiteCrawler', {
+            url, enhancedChars: enhanced.text.length,
+          });
+          const crawled = await this.docsCrawler.crawl(url, enhanced.text);
+          if (crawled && crawled.text.length > enhanced.text.length * 1.5) {
+            return this.buildResult(crawled, url, crawled.resolvedUrl ?? url, 'docs-crawl');
+          }
+        }
         // Preserve actual layer attribution — do NOT use a generic label.
         const enhancedSource = this.mapSource(enhanced.source);
         return this.buildResult(enhanced, url, enhanced.resolvedUrl, enhancedSource);
