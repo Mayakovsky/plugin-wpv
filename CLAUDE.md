@@ -234,4 +234,4 @@ pm2 restart grey
 
 ---
 
-*Last updated: 2026-04-07 (concurrency architecture + Playwright DocsSiteCrawler + 404 soft-fallback + upsert at write time. All eval 30 failures addressed. 309 tests / 24 files.)*
+*Last updated: 2026-04-07 (eval 31 fixes: prompt hardening, calendar validation, empty {} guard, tokenAddress preservation. DB fully purged — live pipeline handles all requests. 309 tests / 24 files.)*

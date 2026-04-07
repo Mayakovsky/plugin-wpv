@@ -1,7 +1,7 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-04-07 (concurrency architecture + Playwright DocsSiteCrawler + eval 30 fixes)
+> Last updated: 2026-04-07 (eval 31 fixes + full DB purge)
 > Updated by: Claude Opus 4.6 — Kovsky session
-> Session label: Major architecture update. Part A: Job mutex (serialized processing), per-job CostTracker (no shared state), Playwright mutex + resolveLinks(). Part B: Playwright DocsSiteCrawler — SPA docs sites get browser rendering for sub-pages. Part C: Fix 5 (404 soft-fallback for known protocols), Fix 6 (upsert at write time — no more duplicate DB entries). Part D: Shared KNOWN_PROTOCOL_PATTERN constant. 309/309 tests. DB: 4 quality entries (Aave/Uniswap/Lido/Chainlink).
+> Session label: Eval 31: 13/21. Chainlink f<n/2 LLM error (5 failures), Feb 30 accepted (1), empty {} rejected (2), tokenAddress:None (secondary). Fixes: ClaimExtractor prompt hardened, calendar round-trip validation, empty {} passes through (hasAnyField guard), _originalTokenAddress preservation, upsert reuse no longer deletes verification. Full DB purge — 0 cached entries. Live pipeline handles all requests fresh.
 > Staleness gate: 2026-04-07 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
@@ -105,10 +105,10 @@
 - **wpv-agent: 11 tests / 1 file, 0 failures** (verified 2026-04-05, was 13 — removed 2 tests for deleted plugins)
 
 ## DB State (post-purge 2026-04-07)
-- **4 whitepapers** — Aave (16 claims), Lido (14), Uniswap (12), Chainlink (10)
-- **4 verifications** — all with confidence scores, all from current Sonnet pipeline
-- **52 claims** — all real, extracted by Claude Sonnet
-- Full purge: removed 78 garbage whitepapers (old seed data with null confidence, 0-claim eval artifacts, meme tokens with INSUFFICIENT_DATA). Only current-pipeline quality data remains.
+- **0 whitepapers, 0 verifications, 0 claims** — full purge
+- Cached data caused version mismatch failures (Chainlink V2 claims served for V1 tests, Aave V1 claims served for V3 tests)
+- Live pipeline handles all requests correctly — no cache needed for eval
+- **BLOCKING ISSUE:** Daily briefing backfill needs entries with totalClaims>0. Empty DB = empty briefings = evaluator rejection. Need pre-seeded data or live pipeline entries from earlier eval tests.
 
 ## Graduation Eval History
 | Run | Score | Passed | Failed | Key Issue |
@@ -140,10 +140,11 @@
 | 27 | 14/16 | scan 4/4, briefing 4/4, full 2/4, verify 4/4 | Chainlink V2 wrong version served (cache poison + no non-adjacent version extraction). Bitcoin price query not rejected (no scope validation). | Fixes deployed — awaiting eval 28 |
 | 28 | 8/16 | ALL accept EXPIRED | **SDK version mismatch**: wpv-agent had `0.3.0-beta-subscription.2` instead of `0.3.0-beta.39`. deliver() silently failed on-chain. All 8 deliveries logged success but never confirmed. | SDK replaced, deliver() logging added (userOpHash+txnHash) |
 | 29 | 13/16 | scan 3/4, briefing 2/4, full 2/4, verify 4/4 | Empty briefing (no backfill), Aave V1→V3 cache (URL not extracted from plain text), nonsense+burn accepted. | Plain-text URL extraction, burn+nonsense rejection, briefing backfill |
-| 30 | 18/22 | scan 4/4, briefing 5/7, full 6/7, verify 3/4 | Expanded 22-test matrix. Aerodrome SPA 0 claims (F4), briefing 0-claim entries (F1), Aerodrome full_tech INSUFFICIENT_DATA (F4), Aave 404 URL (F4). | Briefing quality filter (totalClaims>0). DB purged to 4 quality entries. Fix 4 (Playwright DocsSiteCrawler) pending. |
+| 30 | 18/22 | scan 4/4, briefing 5/7, full 6/7, verify 3/4 | Aerodrome SPA 0 claims, briefing 0-claim entries, Aave 404 URL. | Briefing quality filter, Playwright DocsSiteCrawler, 404 soft-fallback, upsert, concurrency |
+| 31 | 13/21 | scan 4/4, briefing 4/8, full 3/6, verify 2/3 | Chainlink f<n/2 LLM error (5 failures), Feb 30 accepted, empty {} rejected, tokenAddress:None. | Prompt hardened, calendar validation, hasAnyField guard, _originalTokenAddress, upsert fix. DB fully purged. |
 
 ## Next Actions (ordered)
-1. **Trigger eval 31** — all eval 30 failures addressed: Playwright DocsSiteCrawler, 404 soft-fallback, upsert, concurrency
+1. **BLOCKING: Seed DB for daily_briefing** — empty DB = empty briefings = evaluator rejection. Need strategy for seeding quality data before eval.
 2. **After graduation:** close ports 3000+3001, set production prices, wire DiscoveryCron, full hygiene service, render cache
 3. **LAUNCH** — outreach, pinned thread, monitor
 
@@ -223,7 +224,8 @@
 | 2026-04-06 | Claude Opus 4.6 (Kovsky) | Eval 28: 8/16 — ALL accept EXPIRED. Root cause: ACP SDK `0.3.0-beta-subscription.2` in wpv-agent (wrong branch). deliver() returned success but UserOps never hit chain (wallet nonce=1). Fixed: replaced SDK with correct `0.3.0-beta.39`, added deliver() txnHash logging. | SDK fixed, deployed |
 | 2026-04-06 | Claude Opus 4.6 (Kovsky) | Eval 29: 13/16. Fix 2: plain-text URL extraction (document-quality filter). Fix 3: burn+nonsense name rejection (known protocol gate). Fix 1: briefing backfill from recent. Hotfix: _requirementText before validation. Scope check tests (6/6). | 309/309, deployed |
 | 2026-04-07 | Claude Opus 4.6 (Kovsky) | Eval 30: 18/22 (expanded matrix). DB purged to 4 quality entries (Aave/Uniswap/Lido/Chainlink). Briefing quality filter: totalClaims>0 on both backfill paths. Removed debug log. SLA comments updated in AgentCardConfig.ts + CLAUDE.md. Nonsense row purged. | 309/309, deployed |
-| 2026-04-07 | Claude Opus 4.6 (Kovsky) | Concurrency + Playwright + eval 30 fixes. Part A: job mutex (promise-chain serialization), per-job CostTracker (35 refs replaced), Playwright mutex + resolveLinks(). Part B: DocsSiteCrawler Playwright integration (isDocsSiteUrl, fetchAndStrip fallback, DOM link extraction, LINKS_FOLLOWED anti-double-crawl). Part C: Fix 5 (404 soft-fallback for known protocols), Fix 6 (upsert at write time — both runL1L2 + handleLegitimacyScan). Part D: shared KNOWN_PROTOCOL_PATTERN, DrizzleDbLike.delete required, repo delete methods. | 309/309, deployed |
+| 2026-04-07 | Claude Opus 4.6 (Kovsky) | Concurrency + Playwright + eval 30 fixes. Part A: job mutex, per-job CostTracker, Playwright mutex + resolveLinks(). Part B: DocsSiteCrawler Playwright. Part C: Fix 5 (404 soft-fallback), Fix 6 (upsert). Part D: shared KNOWN_PROTOCOL_PATTERN. | 309/309, deployed |
+| 2026-04-07 | Claude Opus 4.6 (Kovsky) | Eval 31: 13/21. F1: ClaimExtractor prompt hardened (BFT math consistency). F2: Calendar date round-trip (Feb 30 rejection). F3: Empty {} passes (hasAnyField guard). F4: _originalTokenAddress preservation. Upsert reuse no longer deletes verification. Full DB purge — cached data caused version mismatch failures across all evals. | 309/309, deployed |
 
 ## Quick Commands
 ```bash
