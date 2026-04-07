@@ -337,10 +337,9 @@ export class JobRouter {
         : null;
 
       if (existingWithClaims && existingWithClaims.claimCount >= claims.length) {
-        // Existing record has equal or more claims — reuse whitepaper, refresh verification
+        // Existing record has equal or more claims — reuse whitepaper and verification
         wp = existingWithClaims.wp;
-        await this.deps.verificationsRepo.deleteByWhitepaperId(wp.id);
-        log.info('Upsert: reusing whitepaper, refreshing verification', {
+        log.info('Upsert: reusing existing record', {
           projectName, existingClaims: existingWithClaims.claimCount, newClaims: claims.length,
         });
       } else {
