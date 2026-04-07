@@ -1,9 +1,10 @@
-# Kovsky Execution Plan — Fix 4: Playwright Integration in DocsSiteCrawler
+# Kovsky Execution Plan — Eval 30 Remaining Fixes (Fix 4 + Fix 5 + Fix 6)
 
 > **Date:** 2026-04-07
 > **Author:** Kovsky (for Forces review)
-> **Goal:** SPA docs sites (Aerodrome, etc.) produce meaningful content instead of 17-char shells.
+> **Goal:** Fix all remaining eval failures + prevent DB pollution. No more deferring.
 > **Depends on:** Eval 30 fixes deployed (briefing quality filter, plain-text URL extraction, burn+nonsense rejection)
+> **Fixes:** Fix 4 (Playwright DocsSiteCrawler), Fix 5 (404 soft-fallback), Fix 6 (upsert at write time)
 
 ---
 
@@ -271,12 +272,232 @@ const RATE_LIMIT_PER_HOUR = 30;
 
 ---
 
+## Fix 5: 404 Soft-Fallback for verify_project_whitepaper
+
+### The Problem
+
+Eval 30 failure: evaluator sent `document_url: "https://aave.com/papers/Aave_Protocol_Whitepaper_v1_0.pdf"` — a broken URL that returns 404. Grey hard-rejected it. The evaluator expected Grey to find the Aave whitepaper anyway.
+
+This URL is broken on Aave's side — it's not at `aave.com/papers/`, it's at `github.com/aave/aave-protocol/raw/master/docs/`. But the evaluator's position is: a verification service should recover from stale URLs, not reject the entire job.
+
+We had soft-fallback in eval 23, reverted to hard-reject in eval 26 because friend.tech 404 was a legitimate rejection. The evaluator now tests BOTH patterns — Aave (known protocol, should recover) and friend.tech-style garbage (should reject).
+
+### The Fix
+
+Split behavior: 404 on known protocol → soft-fallback (clear URL, discover via known URL map). 404 on unknown project → hard-reject.
+
+**File:** `src/WpvService.ts` — in the HEAD check section (~line 652)
+
+**Find:**
+```typescript
+if (headResp.status === 404 || headResp.status === 410) {
+  const err = new Error(`Invalid document_url: URL returned HTTP ${headResp.status} — document not found`);
+  err.name = 'InputValidationError';
+  throw err;
+}
+```
+
+**Replace with:**
+```typescript
+if (headResp.status === 404 || headResp.status === 410) {
+  // Known protocol with stale URL → soft-fallback to discovery
+  // Unknown project with 404 URL → hard-reject
+  const projectName = typeof requirement.project_name === 'string' ? requirement.project_name.trim() : '';
+  const KNOWN_PROTOCOL_PATTERN = /\b(Bitcoin|Ethereum|Solana|Cardano|Polkadot|Avalanche|Cosmos|Toncoin|Tron|Near|Algorand|Aptos|Sui|Sei|Hedera|Fantom|Stellar|XRP|Litecoin|Monero|Filecoin|Internet\s*Computer|Kaspa|Injective|Celestia|Mantle|Arbitrum|Optimism|Base|Polygon|zkSync|Starknet|Scroll|Linea|Blast|Manta|Mode|Uniswap|Aave|Compound|MakerDAO|Maker|Curve|Synthetix|SushiSwap|Balancer|Yearn|Chainlink|Lido|Rocket\s*Pool|Frax|Convex|Euler|Morpho|Radiant|Pendle|GMX|dYdX|Virtuals\s*Protocol|Aerodrome|Jupiter|Raydium|Orca|Marinade|Jito|Drift|1inch|PancakeSwap|Pancake\s*Swap|Trader\s*Joe|Camelot|Stargate|LayerZero|Layer\s*Zero|Wormhole|Across|Hop\s*Protocol|The\s*Graph|Arweave|Akash|Render|Pyth|API3|Ethena|USDe|Hyperliquid|EigenLayer|Eigen\s*Layer|Pepe|Shiba|Dogecoin|Floki|Bonk)\b/i;
+  if (KNOWN_PROTOCOL_PATTERN.test(projectName)) {
+    logger.warn('document_url returned ' + headResp.status + ' for known protocol — clearing for discovery fallback', {
+      url: trimmedUrl.slice(0, 80), projectName,
+    });
+    delete requirement.document_url;
+  } else {
+    const err = new Error(`Invalid document_url: URL returned HTTP ${headResp.status} — document not found`);
+    err.name = 'InputValidationError';
+    throw err;
+  }
+}
+```
+
+**How this fixes F4 (Aave 404):**
+1. Evaluator sends `{"project_name": "Aave", "document_url": "https://aave.com/papers/..."}`
+2. HEAD check → 404
+3. `KNOWN_PROTOCOL_PATTERN.test("Aave")` → true → soft-fallback
+4. `document_url` cleared → `handleVerifyWhitepaper` proceeds without URL
+5. Cache lookup finds Aave → returns cached verification (or discovery finds it via known URL map)
+
+**How friend.tech-style garbage still gets rejected:**
+1. Evaluator sends `{"project_name": "FriendTech", "document_url": "https://friend.tech/no-whitepaper"}`
+2. HEAD check → 404
+3. `KNOWN_PROTOCOL_PATTERN.test("FriendTech")` → false → hard-reject
+
+### Self-Audit: Fourth copy of protocol regex
+
+Yes, this is the fourth copy. Extracting to a shared constant is post-graduation work. The regex is identical across all locations. For graduation, correctness > DRY.
+
+---
+
+## Fix 6: Upsert at Write Time
+
+### The Problem
+
+Every live pipeline run creates a new whitepaper + verification + claims via blind `whitepaperRepo.create()`. No dedup check. Each eval run that tests the same project creates duplicate rows. The DB has been manually purged 5+ times because of this.
+
+This is the root cause of:
+- Multiple Aave/Uniswap entries after every eval
+- 0-claim entries from L1-only scans sitting alongside good L2 entries
+- Briefing backfill pulling the wrong entry
+- Repeated manual DB cleanups
+
+### The Fix
+
+Before creating a new whitepaper record, check if one already exists for the same project. If the new result has more claims, update the existing record. If not, skip the write.
+
+**File:** `src/acp/JobRouter.ts` — in the live pipeline write section (~line 283)
+
+**Find:**
+```typescript
+    } else {
+      wp = await this.deps.whitepaperRepo.create({
+        projectName,
+        tokenAddress: tokenAddress ?? undefined,
+        documentUrl,
+        chain: tokenAddress?.startsWith('0x') ? 'base' : 'unknown',
+        pageCount: resolved.pageCount,
+        status: 'VERIFIED',
+        selectionScore: 0,
+      });
+
+      // Store claims
+      for (const claim of claims) {
+        await this.deps.claimsRepo.create({
+```
+
+**Replace with:**
+```typescript
+    } else {
+      // Upsert: check for existing whitepaper by project name
+      // If existing has fewer claims, replace it. If more, reuse it.
+      const existing = await this.deps.whitepaperRepo.findByProjectName(projectName);
+      const existingWithClaims = existing.length > 0
+        ? await (async () => {
+            for (const e of existing) {
+              const eClaims = await this.deps.claimsRepo.findByWhitepaperId(e.id);
+              if (eClaims.length > 0) return { wp: e, claimCount: eClaims.length };
+            }
+            return null;
+          })()
+        : null;
+
+      if (existingWithClaims && existingWithClaims.claimCount >= claims.length) {
+        // Existing record has equal or more claims — reuse it, don't create duplicate
+        wp = existingWithClaims.wp;
+        log.info('Upsert: existing record has sufficient claims — reusing', {
+          projectName, existingClaims: existingWithClaims.claimCount, newClaims: claims.length,
+        });
+      } else {
+        if (existingWithClaims) {
+          // New result is better — delete old record first
+          log.info('Upsert: new result has more claims — replacing', {
+            projectName, existingClaims: existingWithClaims.claimCount, newClaims: claims.length,
+          });
+          await this.deps.claimsRepo.deleteByWhitepaperId(existingWithClaims.wp.id);
+          await this.deps.verificationsRepo.deleteByWhitepaperId(existingWithClaims.wp.id);
+          await this.deps.whitepaperRepo.deleteById(existingWithClaims.wp.id);
+        } else if (existing.length > 0) {
+          // Existing records with 0 claims — clean them up
+          for (const e of existing) {
+            await this.deps.verificationsRepo.deleteByWhitepaperId(e.id);
+            await this.deps.whitepaperRepo.deleteById(e.id);
+          }
+        }
+
+        wp = await this.deps.whitepaperRepo.create({
+          projectName,
+          tokenAddress: tokenAddress ?? undefined,
+          documentUrl,
+          chain: tokenAddress?.startsWith('0x') ? 'base' : 'unknown',
+          pageCount: resolved.pageCount,
+          status: 'VERIFIED',
+          selectionScore: 0,
+        });
+      }
+
+      // Store claims (only if we created a new record or are replacing)
+      if (!existingWithClaims || existingWithClaims.claimCount < claims.length) {
+        for (const claim of claims) {
+          await this.deps.claimsRepo.create({
+```
+
+**Repo methods needed (add if missing):**
+
+**`wpvClaimsRepo.ts`:**
+```typescript
+async findByWhitepaperId(whitepaperId: string): Promise<WpvClaimRow[]> {
+  return this.db.select().from(wpvClaims).where(eq(wpvClaims.whitepaperId, whitepaperId));
+}
+
+async deleteByWhitepaperId(whitepaperId: string): Promise<void> {
+  await this.db.delete(wpvClaims).where(eq(wpvClaims.whitepaperId, whitepaperId));
+}
+```
+
+**`wpvVerificationsRepo.ts`:**
+```typescript
+async deleteByWhitepaperId(whitepaperId: string): Promise<void> {
+  await this.db.delete(wpvVerifications).where(eq(wpvVerifications.whitepaperId, whitepaperId));
+}
+```
+
+**`wpvWhitepapersRepo.ts`:**
+```typescript
+async deleteById(id: string): Promise<void> {
+  await this.db.delete(wpvWhitepapers).where(eq(wpvWhitepapers.id, id));
+}
+```
+
+### Self-Audit: Upsert only in one live pipeline path
+
+**Problem:** There are multiple `whitepaperRepo.create()` call sites (lines 209, 289). The fix above only covers line 289 (the main live pipeline in `handleVerifyWhitepaper`/`handleFullVerification`).
+
+**Resolution:** Line 209 is in `handleLegitimacyScan` — it creates L1-only entries (0 claims). With Fix 6, if a later verify/full_tech run creates a better entry, it replaces the L1 one. The L1 path doesn't need upsert because L1 entries should be overwritten by L2+ entries, never the reverse. The briefing quality filter already excludes 0-claim entries from briefings.
+
+**Post-graduation:** Apply the same upsert pattern to all create() call sites for full coverage.
+
+### Self-Audit: Closing brace for claims loop
+
+**Problem:** The `for (const claim of claims)` loop has a closing brace that needs to be outside the new conditional. Kov needs to verify the exact brace placement matches the existing code structure.
+
+**Resolution:** Check the existing code at implementation time. The guard `if (!existingWithClaims || existingWithClaims.claimCount < claims.length)` wraps the entire claims-writing block. The verification `create()` call that follows the claims loop also needs to be inside or outside this guard depending on whether we're reusing an existing record.
+
+---
+
+## Execution Order
+
+1. **Fix 4:** Playwright DocsSiteCrawler (Changes 1-4)
+2. **Fix 5:** 404 soft-fallback for known protocols
+3. **Fix 6:** Upsert at write time + repo delete methods
+4. **Build + test + deploy**
+
+---
+
+## Files Changed (all fixes)
+
+| File | Change |
+|------|--------|
+| `src/discovery/DocsSiteCrawler.ts` | `isDocsSiteUrl()` static; constructor accepts HeadlessBrowserResolver; `fetchAndStrip` Playwright fallback; Playwright link extraction in `crawl()` |
+| `src/discovery/CryptoContentResolver.ts` | SPA docs routing after `enhancedResolve`; pass `headlessBrowser` to DocsSiteCrawler |
+| `src/discovery/HeadlessBrowserResolver.ts` | `RATE_LIMIT_PER_HOUR` 10 → 30 |
+| `src/WpvService.ts` | 404 soft-fallback split: known protocol → clear URL, unknown → hard-reject |
+| `src/acp/JobRouter.ts` | Upsert before create: check existing, replace if better, reuse if equal |
+| `src/db/wpvClaimsRepo.ts` | Add `findByWhitepaperId`, `deleteByWhitepaperId` |
+| `src/db/wpvVerificationsRepo.ts` | Add `deleteByWhitepaperId` |
+| `src/db/wpvWhitepapersRepo.ts` | Add `deleteById` |
+
 ## DB Rules
 
-- No DB changes needed
-- No purges required
+- No manual DB changes needed
+- Fix 6 prevents future pollution automatically
 - New entries created during eval will have claims if Fix 4 works → briefing quality filter allows them
 
 ---
 
-*Pending Forces review. Implement as: Change 1 → Change 3A → Change 3B → Change 3C → Change 2 → Change 4 → build → test → deploy.*
+*Pending Forces review. Implement in order: Fix 4 → Fix 5 → Fix 6 → build → test → deploy.*
