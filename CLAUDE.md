@@ -16,7 +16,7 @@
 | **Framework** | ElizaOS v1.x (`@elizaos/core` 1.6.5) |
 | **Database** | Supabase Pro (PostgreSQL + pgvector, $25/mo) |
 | **Package Manager** | `bun` (required) |
-| **Test Framework** | Vitest (303 tests, 23 files) |
+| **Test Framework** | Vitest (309 tests, 24 files) |
 | **Peer Dependencies** | `@elizaos/plugin-autognostic` (optional), `@elizaos/plugin-acp` (optional — ACP marketplace connection) |
 | **LLM** | Claude Sonnet via Anthropic API (`claude-sonnet-4-20250514`). Set via `WPV_MODEL` env var. Haiku tested but insufficient for claim extraction on technical whitepapers — returned 0 claims on Aave v1 PDF. |
 | **Chain** | Base (Virtuals Protocol) |
@@ -125,13 +125,12 @@ enum Verdict {
 
 **Role:** Provider
 
-| offering_id | Price | Pipeline | SLA |
-|-------------|-------|----------|-----|
-| project_legitimacy_scan | $0.25 | Cache-only | 2s |
-| tokenomics_sustainability_audit | $1.50 | Cache-only | 2s |
-| verify_project_whitepaper | $2.00 | Cache or live L1+L2 | 10min |
-| full_technical_verification | $3.00 | Cache or live L1+L2+L3 | 15min |
-| daily_technical_briefing | $8.00 | Cron summary | 5s |
+| offering_id | Test Price | Production Price | Pipeline | SLA |
+|-------------|-----------|-----------------|----------|-----|
+| project_legitimacy_scan | $0.01 | $0.25 | Cache or live L1 | 5min |
+| verify_project_whitepaper | $0.02 | $1.50 | Cache or live L1+L2 | 10min |
+| full_technical_verification | $0.03 | $3.00 | Cache or live L1+L2+L3 | 15min |
+| daily_technical_briefing | $0.04 | $8.00 | Cron summary | 5min |
 
 **2 Free Resources:** Daily Greenlight List, Scam Alert Feed
 
@@ -221,13 +220,18 @@ pm2 restart grey
 
 - `heartbeat.md` — Live session state
 - `BUILD DOCS and DATA/F5_Aave_V3_Diagnostic_Report.md` — Aave V3 discovery diagnostic + recommendations
-- `BUILD DOCS and DATA/SPA_Headless_Browser_Design_Plan.md` — Playwright headless browser for SPA whitepapers (Forces review)
+- `BUILD DOCS and DATA/SPA_Headless_Browser_Design_Plan_v3.md` — Playwright headless browser for SPA whitepapers (implemented)
+- `BUILD DOCS and DATA/Database_Hygiene_Service_Plan_v2.md` — Automated DB cleanup (deferred post-graduation)
+- `BUILD DOCS and DATA/Forces_Context_Handoff_2026-04-04.md` — Context handoff for Forces new session
 - `BUILD DOCS and DATA/Grey_Kovsky_Execution.md` — Current execution plan (includes plugin-acp build spec)
 - `BUILD DOCS and DATA/Grey_PreLaunch_Checklist.md` — Forces tasks
 - `BUILD DOCS and DATA/Grey_50_Test_Regimen.md` — 66 Test specification
 - `BUILD DOCS and DATA/WPV_Agent_Technical_Architecture_v1.3.md` — Full architecture
+- `BUILD DOCS and DATA/Eval_Run_24_Analysis.md` — Eval 24 failure analysis + DocsSiteCrawler architecture sketch
+- `BUILD DOCS and DATA/Grey_Kovsky_Execution_PreEval24.md` — Pre-eval 24 hardening plan (5 tasks, all implemented)
+- `BUILD DOCS and DATA/Grey_Kovsky_Execution_ChainlinkPendle.md` — Redirect detection + SPA link-following plan
 - `README.md` — Setup and usage
 
 ---
 
-*Last updated: 2026-04-04 (eval run 20: 13/15, Sonnet restored, tokenAddress fix, SPA design plan for Forces review)*
+*Last updated: 2026-04-07 (eval 30: 18/22. SDK fix, DB purge, briefing quality filter, plain-text URL extraction, burn+nonsense rejection. Fix 4 Playwright DocsSiteCrawler pending.)*

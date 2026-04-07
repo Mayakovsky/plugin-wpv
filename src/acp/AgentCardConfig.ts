@@ -38,7 +38,7 @@ export const AGENT_CARD = {
     'Free Resources — No Job Required: Browse our Daily Greenlight List for today\'s verified projects. Check the Scam Alert Feed for flagged high-risk projects.\n\n' +
     'Core Capabilities: Whitepaper Verification — Claim extraction and evaluation against on-chain reality and published scientific literature. MiCA Compliance — Checks EU Markets in Crypto-Assets Regulation requirements for every whitepaper. Tokenomics Auditing — Mathematical sanity checks on yield projections, emission schedules, and economic models. Technical Assessment — Protocol review, consensus logic evaluation, and due diligence for DeFi, Cross-Chain, and Treasury agents. Scientific Credibility Scoring — Hype vs. Tech ratio, citation verification, plagiarism detection, and structural analysis for any project PDF or URL.\n\n' +
     'Designed for Autonomous Hedge Fund clusters, Treasury Management agents, Risk Assessment pipelines, and Butler users asking "Is this project a scam?", "Is the whitepaper math real?", "Is this MiCA compliant?", and "Check this project\'s tokenomics."\n\n' +
-    'Returns structured JSON. Sub-2-second response on cached verifications. Live verification for uncached tokens.',
+    'Returns structured JSON with structured verdict, claims, and evaluations.',
   capabilities: [
     'whitepaper_verification',
     'tokenomics_audit',
@@ -75,7 +75,8 @@ const LEGITIMACY_SCAN_FIELDS: FieldSpec[] = [
 
 const LEGITIMACY_SCAN_SPEC: DeliverableSpec = {
   offering_id: 'project_legitimacy_scan',
-  max_response_time_ms: 2000,
+  // SLA: 5 minutes (matches Virtuals UI setting)
+  max_response_time_ms: 300000,
   required_fields: LEGITIMACY_SCAN_FIELDS,
 };
 
@@ -88,7 +89,7 @@ const VERIFY_WHITEPAPER_FIELDS: FieldSpec[] = [
 
 const VERIFY_WHITEPAPER_SPEC: DeliverableSpec = {
   offering_id: 'verify_project_whitepaper',
-  // SLA: 10 minutes (cached: 2s, live pipeline: 3-8 min)
+  // SLA: 10 minutes (matches Virtuals UI setting)
   max_response_time_ms: 600000,
   inherits_from: 'project_legitimacy_scan',
   required_fields: VERIFY_WHITEPAPER_FIELDS,
@@ -96,7 +97,7 @@ const VERIFY_WHITEPAPER_SPEC: DeliverableSpec = {
 
 const FULL_VERIFICATION_SPEC: DeliverableSpec = {
   offering_id: 'full_technical_verification',
-  // SLA: 15 minutes (cached: 2s, live pipeline: 3-10 min)
+  // SLA: 15 minutes (matches Virtuals UI setting)
   max_response_time_ms: 900000,
   inherits_from: 'verify_project_whitepaper',
   required_fields: [
@@ -111,7 +112,8 @@ const FULL_VERIFICATION_SPEC: DeliverableSpec = {
 
 const DAILY_BRIEFING_SPEC: DeliverableSpec = {
   offering_id: 'daily_technical_briefing',
-  max_response_time_ms: 5000,
+  // SLA: 5 minutes (matches Virtuals UI setting)
+  max_response_time_ms: 300000,
   required_fields: [
     { path: 'date', type: 'string', required: true },
     { path: 'totalVerified', type: 'number', min: 0, required: true },

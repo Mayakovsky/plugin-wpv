@@ -1,8 +1,8 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-04-06 (eval 27 fixes — non-adjacent version extraction + out-of-scope detector)
+> Last updated: 2026-04-07 (eval 30 fixes — briefing quality filter, DB purge, SDK fix)
 > Updated by: Claude Opus 4.6 — Kovsky session
-> Session label: Eval 27 scored 14/16. Fix 1: Non-adjacent version extraction ("Chainlink...V2 whitepaper" → "Chainlink v2") + Chainlink v1/v2 version-specific known URL entries. Fix 2: Out-of-scope detector rejects market data/trading queries on full_technical_verification plain text. 303/303 tests, deployed to VPS.
-> Staleness gate: 2026-04-06 — if today is >3 days past this,
+> Session label: Eval 28: 8/16 (SDK version mismatch — all deliveries EXPIRED). Eval 29: 13/16 (SDK fixed, 3 content failures). Eval 30: 18/22 (expanded matrix, 4 failures: briefing quality, Aerodrome SPA, Aave 404). DB purged to 4 quality entries. Briefing backfill now filters totalClaims>0. Plain-text URL extraction + burn/nonsense rejection deployed. 309/309 tests.
+> Staleness gate: 2026-04-07 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
 ## Focus (1-3 goals, testable)
@@ -104,11 +104,11 @@
 - **plugin-acp: 59 tests / 2 files, 0 failures** (verified 2026-04-05)
 - **wpv-agent: 11 tests / 1 file, 0 failures** (verified 2026-04-05, was 13 — removed 2 tests for deleted plugins)
 
-## DB State (post-purge 2026-04-05)
-- **64 whitepapers** (seed entries only — all evaluator-tested projects purged for fresh re-extraction)
-- **63 verifications**
-- **132 claims**
-- Purged 24 entries for 10 evaluator-tested projects (Uniswap, Aave, Ethena, Seamless, Aerodrome, Virtuals, JUP, Pyth, Solana, Ethereum)
+## DB State (post-purge 2026-04-07)
+- **4 whitepapers** — Aave (16 claims), Lido (14), Uniswap (12), Chainlink (10)
+- **4 verifications** — all with confidence scores, all from current Sonnet pipeline
+- **52 claims** — all real, extracted by Claude Sonnet
+- Full purge: removed 78 garbage whitepapers (old seed data with null confidence, 0-claim eval artifacts, meme tokens with INSUFFICIENT_DATA). Only current-pipeline quality data remains.
 
 ## Graduation Eval History
 | Run | Score | Passed | Failed | Key Issue |
@@ -138,11 +138,16 @@
 | 25 | 12/16 | — | Placeholder name detection (empty/burn addr), Uniswap v4/v3 known URLs, requirement-aware pipeline (rawContent→_requirementText→synthesis). | 4 failures: 2 version mismatches + 2 scope issues |
 | 26 | 13/16 | — | DB purge (24 entries), 404 hard-reject, version-aware cache filtering, case-insensitive findByProjectName, synthesis on cached path. | 3 failures fixed → 14/16 in eval 27 |
 | 27 | 14/16 | scan 4/4, briefing 4/4, full 2/4, verify 4/4 | Chainlink V2 wrong version served (cache poison + no non-adjacent version extraction). Bitcoin price query not rejected (no scope validation). | Fixes deployed — awaiting eval 28 |
+| 28 | 8/16 | ALL accept EXPIRED | **SDK version mismatch**: wpv-agent had `0.3.0-beta-subscription.2` instead of `0.3.0-beta.39`. deliver() silently failed on-chain. All 8 deliveries logged success but never confirmed. | SDK replaced, deliver() logging added (userOpHash+txnHash) |
+| 29 | 13/16 | scan 3/4, briefing 2/4, full 2/4, verify 4/4 | Empty briefing (no backfill), Aave V1→V3 cache (URL not extracted from plain text), nonsense+burn accepted. | Plain-text URL extraction, burn+nonsense rejection, briefing backfill |
+| 30 | 18/22 | scan 4/4, briefing 5/7, full 6/7, verify 3/4 | Expanded 22-test matrix. Aerodrome SPA 0 claims (F4), briefing 0-claim entries (F1), Aerodrome full_tech INSUFFICIENT_DATA (F4), Aave 404 URL (F4). | Briefing quality filter (totalClaims>0). DB purged to 4 quality entries. Fix 4 (Playwright DocsSiteCrawler) pending. |
 
 ## Next Actions (ordered)
-1. **Trigger eval 28** — Target 16/16. Both fixes deployed.
-2. **After graduation:** close ports 3000+3001, set production prices, hygiene service
-3. **LAUNCH** — outreach, pinned thread, monitor
+1. **Fix 4: Playwright in DocsSiteCrawler** — SPA docs sites (Aerodrome) get 17 chars from HTTP, need browser rendering for sub-pages
+2. **Upsert at write time** — prevent duplicate DB entries from eval runs (currently blind INSERT every time)
+3. **Revert 404→soft-fallback for verify_project_whitepaper** — evaluator sends broken Aave URLs, expects Grey to find the doc anyway
+4. **After graduation:** close ports 3000+3001, set production prices, wire DiscoveryCron, hygiene service
+5. **LAUNCH** — outreach, pinned thread, monitor
 
 ## Test Pricing (pre-graduation)
 | Offering | Test Price | Production Price |
@@ -217,6 +222,9 @@
 | 2026-04-05 | Claude Opus 4.6 (Kovsky) | Eval 24 recovery (5 phases). P0: Plugin trim (ollama/knowledge/autognostic removed, Ollama killed, RAM 148→329MB free). P1: DocsSiteCrawler — crawls docs-site sub-pages via plain HTTP (8 pages, 80k chars, 45s wall). P2: Known URLs — Seamless, Aerodrome, Pyth added; Jupiter fixed to station.jup.ag/docs. P3: Date-specific briefings (getVerificationsByDate). P4: 0-claim briefing quality filter. wpv-agent tests updated (13→11, removed deleted plugin checks). | 303/303 + 59/59 + 11/11, deployed |
 | 2026-04-05 | Claude Opus 4.6 (Kovsky) | Eval 25: 12/16. Fix 1: Placeholder name detection (Empty Address + burn addr → hard reject, ADDRESS_DESCRIPTOR_PATTERN). Fix 2: Uniswap v4/v3 version-specific known URLs. Fix 3: Requirement-aware pipeline — rawContent passthrough (AcpService), _requirementText (WpvService→JobRouter), options object (ClaimExtractor/ClaimEvaluator), generateSynthesis L4 (both handlers). Cross-repo deploy (plugin-acp SCP). DB: 1 "Empty Address" entry cleaned. | 303/303 + 59/59 + 11/11, deployed |
 | 2026-04-06 | Claude Opus 4.6 (Kovsky) | Eval 27: 14/16. Fix 1: Non-adjacent version extraction (secondary regex scan for "V2 whitepaper" → "Chainlink v2") + Chainlink v1/v2 version-specific known URLs. Fix 2: Out-of-scope detector (dual pattern: OUT_OF_SCOPE && !IN_SCOPE → reject). Verification: raw_instruction carries full text, both Chainlink PDFs serve 200. | 303/303, deployed |
+| 2026-04-06 | Claude Opus 4.6 (Kovsky) | Eval 28: 8/16 — ALL accept EXPIRED. Root cause: ACP SDK `0.3.0-beta-subscription.2` in wpv-agent (wrong branch). deliver() returned success but UserOps never hit chain (wallet nonce=1). Fixed: replaced SDK with correct `0.3.0-beta.39`, added deliver() txnHash logging. | SDK fixed, deployed |
+| 2026-04-06 | Claude Opus 4.6 (Kovsky) | Eval 29: 13/16. Fix 2: plain-text URL extraction (document-quality filter). Fix 3: burn+nonsense name rejection (known protocol gate). Fix 1: briefing backfill from recent. Hotfix: _requirementText before validation. Scope check tests (6/6). | 309/309, deployed |
+| 2026-04-07 | Claude Opus 4.6 (Kovsky) | Eval 30: 18/22 (expanded matrix). DB purged to 4 quality entries (Aave/Uniswap/Lido/Chainlink). Briefing quality filter: totalClaims>0 on both backfill paths. Removed debug log. SLA comments updated in AgentCardConfig.ts + CLAUDE.md. Nonsense row purged. | 309/309, deployed |
 
 ## Quick Commands
 ```bash
