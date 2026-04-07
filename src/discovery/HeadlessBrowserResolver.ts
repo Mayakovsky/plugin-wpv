@@ -20,8 +20,8 @@ const POST_RENDER_WAIT_MS = 3000;
 const MAX_CONTENT_LENGTH = 100000;
 const BROWSER_RESTART_THRESHOLD = 20;
 const MAX_REDIRECTS = 3;
-const RATE_LIMIT_PER_HOUR = 10;
-const MIN_FREE_RAM_BYTES = 400 * 1024 * 1024; // 400MB
+const RATE_LIMIT_PER_HOUR = 30;
+const MIN_FREE_RAM_BYTES = 250 * 1024 * 1024; // 250MB — Linux freemem() includes reclaimable cache
 const CONTEXT_CLOSE_TIMEOUT_MS = 5000;
 const THIN_SPA_THRESHOLD = 2000;
 const MAX_SUBPAGES = 5;
@@ -49,6 +49,8 @@ export class HeadlessBrowserResolver {
   private rateLimit: RateLimitState = { timestamps: [] };
   private available = false;
   private initPromise: Promise<void> | null = null;
+  private _renderLock: Promise<void> = Promise.resolve();
+  private _lastResolveFollowedLinks = false;
 
   constructor() {
     // Lazy dynamic import — deferred to first use via ensureBrowser().
@@ -56,6 +58,19 @@ export class HeadlessBrowserResolver {
   }
 
   async resolve(url: string): Promise<ResolvedContent | null> {
+    let release: () => void;
+    const acquired = new Promise<void>(r => { release = r; });
+    const previous = this._renderLock;
+    this._renderLock = acquired;
+    await previous;
+    try {
+      return await this._resolveImpl(url);
+    } finally {
+      release!();
+    }
+  }
+
+  private async _resolveImpl(url: string): Promise<ResolvedContent | null> {
     // Lazy init: attempt to load playwright-core on first call
     if (!this.initPromise && !this.available && !this.chromium) {
       this.initPromise = this.loadPlaywright();
@@ -75,13 +90,14 @@ export class HeadlessBrowserResolver {
     if (freeRam < MIN_FREE_RAM_BYTES) {
       log.warn('Insufficient free RAM for headless browser', {
         freeRamMB: Math.round(freeRam / 1024 / 1024),
-        requiredMB: 400,
+        requiredMB: 250,
       });
       return null;
     }
 
     try {
       await this.ensureBrowser();
+      this._lastResolveFollowedLinks = false;
       const text = await this.renderAndExtract(url);
 
       if (!text || text.length < 100) {
@@ -94,18 +110,107 @@ export class HeadlessBrowserResolver {
 
       this.recordRateLimitHit();
 
+      const diagnostics = [
+        `HeadlessBrowserResolver: rendered SPA, ${text.length} chars extracted`,
+      ];
+      if (this._lastResolveFollowedLinks) {
+        diagnostics.push('LINKS_FOLLOWED');
+      }
+
       return {
         text: text.slice(0, MAX_CONTENT_LENGTH),
         contentType: 'text/html',
         source: 'headless-browser',
         resolvedUrl: url,
-        diagnostics: [
-          `HeadlessBrowserResolver: rendered SPA, ${text.length} chars extracted`,
-        ],
+        diagnostics,
       };
     } catch (err) {
       log.warn('Headless browser render failed', { url });
       return null;
+    }
+  }
+
+  /**
+   * Render a page and extract internal <a href> links from the DOM.
+   * Used by DocsSiteCrawler when raw HTML has no links (SPA shell).
+   * Acquires the same render lock as resolve().
+   */
+  async resolveLinks(url: string): Promise<string[]> {
+    let release: () => void;
+    const acquired = new Promise<void>(r => { release = r; });
+    const previous = this._renderLock;
+    this._renderLock = acquired;
+    await previous;
+    try {
+      return await this._resolveLinksImpl(url);
+    } finally {
+      release!();
+    }
+  }
+
+  private async _resolveLinksImpl(url: string): Promise<string[]> {
+    if (!this.initPromise && !this.available && !this.chromium) {
+      this.initPromise = this.loadPlaywright();
+      await this.initPromise;
+    }
+    if (!this.available) return [];
+    if (this.isRateLimited()) return [];
+
+    const freeRam = os.freemem();
+    if (freeRam < MIN_FREE_RAM_BYTES) return [];
+
+    try {
+      await this.ensureBrowser();
+      const browser = this.browser as { newContext: (opts: unknown) => Promise<unknown> };
+      const context = await browser.newContext({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        javaScriptEnabled: true,
+      }) as { newPage: () => Promise<unknown>; close: () => Promise<void> };
+
+      const page = await context.newPage() as {
+        route: (pattern: string, handler: (route: unknown) => void) => Promise<void>;
+        goto: (url: string, opts: unknown) => Promise<void>;
+        evaluate: <T>(fn: (() => T) | ((arg: unknown) => T), arg?: unknown) => Promise<T>;
+      };
+
+      try {
+        await page.route('**/*', (route: unknown) => {
+          const r = route as { request: () => { resourceType: () => string }; abort: () => Promise<void>; continue: () => Promise<void> };
+          if (BLOCKED_RESOURCE_TYPES.has(r.request().resourceType())) return r.abort();
+          return r.continue();
+        });
+
+        await page.goto(url, { waitUntil: 'networkidle', timeout: PAGE_LOAD_TIMEOUT_MS });
+        const origin = new URL(url).origin;
+
+        const links: string[] = await page.evaluate((originStr) => {
+          const anchors = Array.from(document.querySelectorAll('a[href]'));
+          return anchors
+            .map((a) => {
+              try {
+                const href = (a as HTMLAnchorElement).href;
+                if (href.startsWith(originStr as string)) return href;
+                return null;
+              } catch { return null; }
+            })
+            .filter((href): href is string => href !== null)
+            .filter((href, i, arr) => arr.indexOf(href) === i);
+        }, origin);
+
+        this.recordRateLimitHit();
+        this.pageCount++;
+
+        log.info('resolveLinks completed', { url, linkCount: links.length });
+        return links;
+      } finally {
+        await Promise.race([
+          context.close(),
+          new Promise<void>((resolve) => setTimeout(resolve, CONTEXT_CLOSE_TIMEOUT_MS)),
+        ]);
+      }
+    } catch (err) {
+      log.warn('resolveLinks failed', { url, error: (err as Error).message });
+      return [];
     }
   }
 
@@ -246,6 +351,7 @@ export class HeadlessBrowserResolver {
         });
         const deepContent = await this.followInternalLinks(page, url);
         if (deepContent && deepContent.length > contentForCheck.length) {
+          this._lastResolveFollowedLinks = true;
           return deepContent;
         }
       }
