@@ -56,7 +56,7 @@ function createMockDeps(): JobRouterDeps {
       generateFullVerification: vi.fn().mockReturnValue({ projectName: 'Test', verdict: 'PASS', confidenceScore: 75 }),
       generateDailyBriefing: vi.fn().mockReturnValue({ date: '2026-03-11', totalVerified: 0, whitepapers: [] }),
     } as never,
-    costTracker: new CostTracker(LLM_PRICING.inputPerToken, LLM_PRICING.outputPerToken),
+    pricingConfig: { inputPerToken: LLM_PRICING.inputPerToken, outputPerToken: LLM_PRICING.outputPerToken },
     cryptoResolver: {
       resolveWhitepaper: vi.fn().mockResolvedValue({ text: 'whitepaper text', pageCount: 10, isImageOnly: false, isPasswordProtected: false, source: 'direct', originalUrl: 'url', resolvedUrl: 'url' }),
     } as never,

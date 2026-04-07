@@ -109,10 +109,11 @@ export class ClaimExtractor {
   async extractClaims(
     text: string,
     projectName: string,
-    options?: { maxRetries?: number; requirementText?: string | null },
+    options?: { maxRetries?: number; requirementText?: string | null; costTracker?: CostTracker },
   ): Promise<ExtractedClaim[]> {
     const maxRetries = options?.maxRetries ?? 2;
     const requirementText = options?.requirementText ?? null;
+    const tracker = options?.costTracker ?? this.costTracker;
 
     if (!text || text.trim().length === 0) return [];
 
@@ -136,7 +137,7 @@ export class ClaimExtractor {
         });
 
         // Track token usage
-        this.costTracker.recordUsage(
+        tracker.recordUsage(
           response.usage.input_tokens,
           response.usage.output_tokens,
         );

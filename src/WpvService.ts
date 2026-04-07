@@ -204,7 +204,7 @@ export class WpvService extends Service {
         claimEvaluator: claimEvaluator as never,
         scoreAggregator,
         reportGenerator,
-        costTracker,
+        pricingConfig: { inputPerToken: LLM_PRICING.inputPerToken, outputPerToken: LLM_PRICING.outputPerToken },
         cryptoResolver,
         tieredDiscovery,
         anthropicClient: anthropicApiKey ? createAnthropicClient(anthropicApiKey) : undefined,

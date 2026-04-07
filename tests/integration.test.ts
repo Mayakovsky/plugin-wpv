@@ -85,7 +85,7 @@ function createIntegrationDeps(): JobRouterDeps {
     } as never,
     scoreAggregator: new ScoreAggregator(),
     reportGenerator: new ReportGenerator(),
-    costTracker: new CostTracker(LLM_PRICING.inputPerToken, LLM_PRICING.outputPerToken),
+    pricingConfig: { inputPerToken: LLM_PRICING.inputPerToken, outputPerToken: LLM_PRICING.outputPerToken },
     cryptoResolver: {
       resolveWhitepaper: vi.fn().mockResolvedValue({
         text: SAMPLE_WHITEPAPER_TEXT,

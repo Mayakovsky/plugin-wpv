@@ -45,7 +45,7 @@ export class ClaimEvaluator {
   /**
    * Evaluate a single claim across all applicable methods.
    */
-  async evaluateClaim(claim: ExtractedClaim, fullText: string, requirementText?: string | null): Promise<ClaimEvaluation> {
+  async evaluateClaim(claim: ExtractedClaim, fullText: string, requirementText?: string | null, tracker?: CostTracker): Promise<ClaimEvaluation> {
     const evaluation: ClaimEvaluation = { claimId: claim.claimId };
 
     try {
@@ -55,7 +55,7 @@ export class ClaimEvaluator {
         : false;
 
       if (claim.mathematicalProofPresent || (requiresMathAnalysis && this.hasQuantitativeContent(claim))) {
-        evaluation.mathValidity = await this.evaluateMathSanity(claim, fullText, requirementText);
+        evaluation.mathValidity = await this.evaluateMathSanity(claim, fullText, requirementText, tracker);
       }
 
       // Benchmark comparison
@@ -81,7 +81,7 @@ export class ClaimEvaluator {
    * Evaluate consistency across ALL claims (batch operation).
    * Checks for contradictions in the claim set.
    */
-  async evaluateConsistency(claims: ExtractedClaim[]): Promise<Map<string, Consistency>> {
+  async evaluateConsistency(claims: ExtractedClaim[], tracker?: CostTracker): Promise<Map<string, Consistency>> {
     const result = new Map<string, Consistency>();
 
     if (claims.length < 2) {
@@ -123,7 +123,7 @@ export class ClaimEvaluator {
         }],
       });
 
-      this.costTracker.recordUsage(
+      (tracker ?? this.costTracker).recordUsage(
         response.usage.input_tokens,
         response.usage.output_tokens,
       );
@@ -163,22 +163,23 @@ export class ClaimEvaluator {
   async evaluateAll(
     claims: ExtractedClaim[],
     fullText: string,
-    options?: { requirementText?: string | null },
+    options?: { requirementText?: string | null; costTracker?: CostTracker },
   ): Promise<{
     evaluations: ClaimEvaluation[];
     scores: Map<string, number>;
   }> {
     const requirementText = options?.requirementText ?? null;
+    const tracker = options?.costTracker ?? this.costTracker;
 
     // Individual evaluations
     const evaluations: ClaimEvaluation[] = [];
     for (const claim of claims) {
-      const evaluation = await this.evaluateClaim(claim, fullText, requirementText);
+      const evaluation = await this.evaluateClaim(claim, fullText, requirementText, tracker);
       evaluations.push(evaluation);
     }
 
     // Batch consistency check (runs AFTER individual evaluations)
-    const consistencyMap = await this.evaluateConsistency(claims);
+    const consistencyMap = await this.evaluateConsistency(claims, tracker);
 
     // Merge consistency into evaluations
     for (const evaluation of evaluations) {
@@ -202,7 +203,7 @@ export class ClaimEvaluator {
     );
   }
 
-  private async evaluateMathSanity(claim: ExtractedClaim, fullText: string, requirementText?: string | null): Promise<MathValidity> {
+  private async evaluateMathSanity(claim: ExtractedClaim, fullText: string, requirementText?: string | null, tracker?: CostTracker): Promise<MathValidity> {
     const system = requirementText
       ? `You are a mathematical auditor for DeFi protocols. The buyer requested: "${requirementText}". Evaluate the mathematical validity of this claim in that context. Analyze whether the quantitative assertions hold and whether the mathematical model is sound. Reply with VALID, FLAWED, or UNVERIFIABLE, and explain your reasoning.`
       : 'Evaluate whether the mathematical proof in the document supports the claim. Reply with VALID, FLAWED, or UNVERIFIABLE.';
@@ -227,7 +228,7 @@ export class ClaimEvaluator {
         }],
       });
 
-      this.costTracker.recordUsage(response.usage.input_tokens, response.usage.output_tokens);
+      (tracker ?? this.costTracker).recordUsage(response.usage.input_tokens, response.usage.output_tokens);
 
       for (const block of response.content) {
         if (block.type === 'tool_use' && block.input) {

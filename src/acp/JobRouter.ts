@@ -13,7 +13,7 @@ import type { ClaimExtractor } from '../verification/ClaimExtractor';
 import type { ClaimEvaluator } from '../verification/ClaimEvaluator';
 import type { ScoreAggregator } from '../verification/ScoreAggregator';
 import type { ReportGenerator } from '../verification/ReportGenerator';
-import type { CostTracker } from '../verification/CostTracker';
+import { CostTracker } from '../verification/CostTracker';
 import type { CryptoContentResolver } from '../discovery/CryptoContentResolver';
 import type { TieredDocumentDiscovery } from '../discovery/TieredDocumentDiscovery';
 import { Verdict, ClaimCategory } from '../types';
@@ -113,7 +113,7 @@ export interface JobRouterDeps {
   claimEvaluator: ClaimEvaluator;
   scoreAggregator: ScoreAggregator;
   reportGenerator: ReportGenerator;
-  costTracker: CostTracker;
+  pricingConfig: { inputPerToken: number; outputPerToken: number };
   cryptoResolver: CryptoContentResolver;
   tieredDiscovery: TieredDocumentDiscovery | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -121,21 +121,41 @@ export interface JobRouterDeps {
 }
 
 export class JobRouter {
+  private _jobLock: Promise<void> = Promise.resolve();
+
   constructor(private deps: JobRouterDeps) {}
 
   async handleJob(offeringId: OfferingId, input: Record<string, unknown>): Promise<unknown> {
+    // Serialize job processing — prevents CostTracker data corruption,
+    // Playwright race conditions, and DB upsert TOCTOU.
+    let release: () => void;
+    const acquired = new Promise<void>(r => { release = r; });
+    const previous = this._jobLock;
+    this._jobLock = acquired;
+    await previous;
+    try {
+      return await this._handleJobImpl(offeringId, input);
+    } finally {
+      release!();
+    }
+  }
+
+  private async _handleJobImpl(offeringId: OfferingId, input: Record<string, unknown>): Promise<unknown> {
     log.info('Routing job', { offeringId });
 
-    // Reset cost tracker for this job — prevents cross-contamination between concurrent jobs
-    this.deps.costTracker.reset();
+    // Per-job cost tracker — scoped to this invocation, no shared state
+    const costTracker = new CostTracker(
+      this.deps.pricingConfig.inputPerToken,
+      this.deps.pricingConfig.outputPerToken,
+    );
 
     switch (offeringId) {
       case 'project_legitimacy_scan':
-        return this.handleLegitimacyScan(input);
+        return this.handleLegitimacyScan(input, costTracker);
       case 'verify_project_whitepaper':
-        return this.handleVerifyWhitepaper(input);
+        return this.handleVerifyWhitepaper(input, costTracker);
       case 'full_technical_verification':
-        return this.handleFullVerification(input);
+        return this.handleFullVerification(input, costTracker);
       case 'daily_technical_briefing':
         return this.handleDailyBriefing(input);
       default:
@@ -143,7 +163,7 @@ export class JobRouter {
     }
   }
 
-  private async handleLegitimacyScan(input: Record<string, unknown>) {
+  private async handleLegitimacyScan(input: Record<string, unknown>, costTracker: CostTracker) {
     // Try cache first
     const wp = await this.findWhitepaper(input);
     if (wp) {
@@ -190,15 +210,15 @@ export class JobRouter {
         const discovered = await this.deps.tieredDiscovery.discover(metadata, tokenAddress);
         if (discovered) {
           // L1: Structural analysis
-          this.deps.costTracker.reset();
-          this.deps.costTracker.startStage('l1');
+          costTracker.reset();
+          costTracker.startStage('l1');
           const analysis = await this.deps.structuralAnalyzer.analyze(
             discovered.resolved.text,
             discovered.resolved.pageCount,
           );
           const structuralScore = this.deps.structuralAnalyzer.computeQuickFilterScore(analysis);
           const hypeTechRatio = this.deps.structuralAnalyzer.computeHypeTechRatio(discovered.resolved.text);
-          this.deps.costTracker.endStage('l1', 0, 0);
+          costTracker.endStage('l1', 0, 0);
 
           // Cache the result — guard against violation keywords
           let newWpId: string;
@@ -262,20 +282,20 @@ export class JobRouter {
    * Shared by handleVerifyWhitepaper and handleFullVerification.
    * Returns intermediate results for further processing.
    */
-  private async runL1L2(documentUrl: string, projectName: string, tokenAddress?: string | null, requirementText?: string | null) {
+  private async runL1L2(documentUrl: string, projectName: string, tokenAddress: string | null | undefined, requirementText: string | null | undefined, costTracker: CostTracker) {
     // Resolve the document
     const resolved = await this.deps.cryptoResolver.resolveWhitepaper(normalizeGitHubUrl(documentUrl));
 
     // L1: Structural analysis (timed)
-    this.deps.costTracker.startStage('l1');
+    costTracker.startStage('l1');
     const analysis = await this.deps.structuralAnalyzer.analyze(resolved.text, resolved.pageCount);
     const structuralScore = this.deps.structuralAnalyzer.computeQuickFilterScore(analysis);
     const hypeTechRatio = this.deps.structuralAnalyzer.computeHypeTechRatio(resolved.text);
-    this.deps.costTracker.endStage('l1', 0, 0); // L1 uses no LLM tokens
+    costTracker.endStage('l1', 0, 0); // L1 uses no LLM tokens
 
     // L2: Claim extraction (timed + token tracked)
-    this.deps.costTracker.startStage('l2');
-    const claims = await this.deps.claimExtractor.extractClaims(resolved.text, projectName, { requirementText });
+    costTracker.startStage('l2');
+    const claims = await this.deps.claimExtractor.extractClaims(resolved.text, projectName, { requirementText, costTracker });
     // Note: ClaimExtractor calls costTracker.recordUsage() internally
     // We capture the delta via getStageMetrics() after the verification
 
@@ -313,7 +333,7 @@ export class JobRouter {
     return { resolved, analysis, structuralScore, hypeTechRatio, claims, wp };
   }
 
-  private async handleVerifyWhitepaper(input: Record<string, unknown>) {
+  private async handleVerifyWhitepaper(input: Record<string, unknown>, costTracker: CostTracker) {
     const documentUrl = (input.document_url as string | undefined)?.trim();
     const requestedTokenAddress = (input.token_address as string | undefined)?.trim() ?? null;
     let projectName = (input.project_name as string | undefined)?.trim() || '';
@@ -370,7 +390,7 @@ export class JobRouter {
                   log.warn('Could not re-fetch document for synthesis — using claims only', { docUrl });
                 }
               }
-              const synthesis = await this.generateSynthesis(requirementText, projectName, mappedClaims as never, docText);
+              const synthesis = await this.generateSynthesis(requirementText, projectName, mappedClaims as never, docText, costTracker);
               if (synthesis) {
                 report.logicSummary = synthesis;
                 log.info('Synthesis attached to cached verify result', { projectName, synthesisLength: synthesis.length });
@@ -396,10 +416,10 @@ export class JobRouter {
           const discovered = await this.deps.tieredDiscovery.discover(metadata, requestedTokenAddress ?? '');
           if (discovered) {
             // Use discovered document URL for L1+L2+L3
-            const { resolved: discResolved, analysis: discAnalysis, structuralScore: discScore, hypeTechRatio: discHype, claims: discClaims, wp: discWp } = await this.runL1L2(discovered.documentUrl, projectName, requestedTokenAddress, requirementText);
-            this.deps.costTracker.startStage('l3');
-            const { evaluations: discEvals, scores: discScores } = await this.deps.claimEvaluator.evaluateAll(discClaims, discResolved.text, { requirementText });
-            this.deps.costTracker.endStage('l3', 0, 0);
+            const { resolved: discResolved, analysis: discAnalysis, structuralScore: discScore, hypeTechRatio: discHype, claims: discClaims, wp: discWp } = await this.runL1L2(discovered.documentUrl, projectName, requestedTokenAddress, requirementText, costTracker);
+            costTracker.startStage('l3');
+            const { evaluations: discEvals, scores: discScores } = await this.deps.claimEvaluator.evaluateAll(discClaims, discResolved.text, { requirementText, costTracker });
+            costTracker.endStage('l3', 0, 0);
             const discClaimScores = discClaims.map((c) => ({ category: c.category as never, score: discScores.get(c.claimId) ?? 50 }));
             const discAggregate = this.deps.scoreAggregator.aggregate(discClaimScores);
             const report = this.deps.reportGenerator.generateTokenomicsAudit(
@@ -432,7 +452,7 @@ export class JobRouter {
       return { error: 'invalid_url', message: 'document_url exceeds maximum length (2048)' };
     }
 
-    let { resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = await this.runL1L2(documentUrl, projectName, requestedTokenAddress, requirementText);
+    let { resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = await this.runL1L2(documentUrl, projectName, requestedTokenAddress, requirementText, costTracker);
 
     // If provided document_url yielded 0 claims (e.g. JavaScript SPA, empty page),
     // try discovery as fallback before giving up
@@ -449,7 +469,7 @@ export class JobRouter {
         };
         const discovered = await this.deps.tieredDiscovery.discover(metadata, requestedTokenAddress ?? '');
         if (discovered && discovered.documentUrl !== documentUrl) {
-          const fallback = await this.runL1L2(discovered.documentUrl, projectName, requestedTokenAddress, requirementText);
+          const fallback = await this.runL1L2(discovered.documentUrl, projectName, requestedTokenAddress, requirementText, costTracker);
           if (fallback.claims.length > 0) {
             log.info('Discovery fallback succeeded', { projectName, discoveredUrl: discovered.documentUrl.slice(0, 80), claims: fallback.claims.length });
             ({ resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = fallback);
@@ -461,9 +481,9 @@ export class JobRouter {
     }
 
     // L3: Claim evaluation (timed)
-    this.deps.costTracker.startStage('l3');
-    const { evaluations, scores } = await this.deps.claimEvaluator.evaluateAll(claims, resolved.text, { requirementText });
-    this.deps.costTracker.endStage('l3', 0, 0); // L3 tokens tracked via recordUsage internally
+    costTracker.startStage('l3');
+    const { evaluations, scores } = await this.deps.claimEvaluator.evaluateAll(claims, resolved.text, { requirementText, costTracker });
+    costTracker.endStage('l3', 0, 0); // L3 tokens tracked via recordUsage internally
 
     // Build score array from evaluation results
     const claimScores = claims.map((c) => ({
@@ -474,8 +494,8 @@ export class JobRouter {
     const aggregate = this.deps.scoreAggregator.aggregate(claimScores);
 
     // Store verification with structural analysis + cost metrics
-    const tokens = this.deps.costTracker.getTotalTokens();
-    const stageMetrics = this.deps.costTracker.getStageMetrics();
+    const tokens = costTracker.getTotalTokens();
+    const stageMetrics = costTracker.getStageMetrics();
     if (!wp.id.startsWith('tmp-')) {
       await this.deps.verificationsRepo.create({
         whitepaperId: wp.id,
@@ -486,7 +506,7 @@ export class JobRouter {
         totalClaims: claims.length,
         verifiedClaims: evaluations.length,
         llmTokensUsed: tokens.input + tokens.output,
-        computeCostUsd: this.deps.costTracker.getTotalCostUsd(),
+        computeCostUsd: costTracker.getTotalCostUsd(),
         structuralAnalysisJson: analysis as unknown as Record<string, unknown>,
         triggerSource: (input._triggerSource as string) ?? 'manual',
         cacheHit: false,
@@ -512,7 +532,7 @@ export class JobRouter {
         totalClaims: claims.length,
         verifiedClaims: evaluations.length,
         llmTokensUsed: tokens.input + tokens.output,
-        computeCostUsd: this.deps.costTracker.getTotalCostUsd(),
+        computeCostUsd: costTracker.getTotalCostUsd(),
       },
       claims,
       wp as never,
@@ -522,7 +542,7 @@ export class JobRouter {
 
     // Requirement-aware synthesis: focused analysis addressing buyer's specific question
     if (requirementText && /\b(math|evaluat|audit|analys|mechan|architect|impact|stress|volatil)/i.test(requirementText)) {
-      const synthesis = await this.generateSynthesis(requirementText, projectName, claims, resolved.text);
+      const synthesis = await this.generateSynthesis(requirementText, projectName, claims, resolved.text, costTracker);
       if (synthesis) report.logicSummary = synthesis;
     }
 
@@ -536,13 +556,13 @@ export class JobRouter {
       projectName: (wp as Record<string, unknown>).projectName ?? projectName,
       totalClaims: claims.length,
       llmTokensUsed: tokens.input + tokens.output,
-      computeCostUsd: this.deps.costTracker.getTotalCostUsd().toFixed(4),
+      computeCostUsd: costTracker.getTotalCostUsd().toFixed(4),
     });
 
     return report;
   }
 
-  private async handleFullVerification(input: Record<string, unknown>) {
+  private async handleFullVerification(input: Record<string, unknown>, costTracker: CostTracker) {
     const reqAddr = input.token_address as string | undefined;
     let reqName = (input.project_name as string | undefined)?.trim();
     const requirementText = this.extractRequirementText(input);
@@ -605,7 +625,7 @@ export class JobRouter {
                 log.warn('Could not re-fetch document for synthesis — using claims only', { docUrl });
               }
             }
-            const synthesis = await this.generateSynthesis(requirementText, wpName, mappedClaims as never, docText);
+            const synthesis = await this.generateSynthesis(requirementText, wpName, mappedClaims as never, docText, costTracker);
             if (synthesis) {
               fullReport.logicSummary = synthesis;
               log.info('Synthesis attached to cached result', { projectName: wpName, synthesisLength: synthesis.length });
@@ -623,20 +643,20 @@ export class JobRouter {
               log.info('Enriching cached L1 result with L2+L3', { projectName: wpName, docUrl: docUrl.slice(0, 80) });
               const resolved = await this.deps.cryptoResolver.resolveWhitepaper(normalizeGitHubUrl(docUrl));
               if (resolved.text.length > 100) {
-                this.deps.costTracker.reset();
-                this.deps.costTracker.startStage('l2');
-                const newClaims = await this.deps.claimExtractor.extractClaims(resolved.text, wpName);
-                this.deps.costTracker.endStage('l2', 0, 0);
+                costTracker.reset();
+                costTracker.startStage('l2');
+                const newClaims = await this.deps.claimExtractor.extractClaims(resolved.text, wpName, { costTracker });
+                costTracker.endStage('l2', 0, 0);
 
                 // L3 if available
                 let evaluations: unknown[] = [];
                 let scores = new Map<string, number>();
                 if (this.deps.claimEvaluator) {
-                  this.deps.costTracker.startStage('l3');
-                  const evalResult = await this.deps.claimEvaluator.evaluateAll(newClaims, resolved.text, { requirementText });
+                  costTracker.startStage('l3');
+                  const evalResult = await this.deps.claimEvaluator.evaluateAll(newClaims, resolved.text, { requirementText, costTracker });
                   evaluations = evalResult.evaluations;
                   scores = evalResult.scores;
-                  this.deps.costTracker.endStage('l3', 0, 0);
+                  costTracker.endStage('l3', 0, 0);
                 }
 
                 // Store enriched claims
@@ -741,15 +761,15 @@ export class JobRouter {
       try {
         const discovered = await this.deps.tieredDiscovery.discover(metadata, reqAddr ?? '');
         if (discovered) {
-          const { resolved, analysis, structuralScore, hypeTechRatio, claims: discClaims, wp: discWp } = await this.runL1L2(discovered.documentUrl, projectName, reqAddr, requirementText);
+          const { resolved, analysis, structuralScore, hypeTechRatio, claims: discClaims, wp: discWp } = await this.runL1L2(discovered.documentUrl, projectName, reqAddr, requirementText, costTracker);
           const { evaluations, scores } = this.deps.claimEvaluator
-            ? await this.deps.claimEvaluator.evaluateAll(discClaims, resolved.text, { requirementText })
+            ? await this.deps.claimEvaluator.evaluateAll(discClaims, resolved.text, { requirementText, costTracker })
             : { evaluations: [], scores: new Map<string, number>() };
           const claimScores = discClaims.map((c) => ({ category: c.category as never, score: scores.get(c.claimId) ?? 50 }));
           const aggregate = this.deps.scoreAggregator.aggregate(claimScores);
-          const tokens = this.deps.costTracker.getTotalTokens();
+          const tokens = costTracker.getTotalTokens();
           const report = this.deps.reportGenerator.generateFullVerification(
-            { structuralScore, confidenceScore: aggregate.confidenceScore, hypeTechRatio, verdict: aggregate.verdict, focusAreaScores: aggregate.focusAreaScores, totalClaims: discClaims.length, verifiedClaims: evaluations.length, llmTokensUsed: tokens.input + tokens.output, computeCostUsd: this.deps.costTracker.getTotalCostUsd() },
+            { structuralScore, confidenceScore: aggregate.confidenceScore, hypeTechRatio, verdict: aggregate.verdict, focusAreaScores: aggregate.focusAreaScores, totalClaims: discClaims.length, verifiedClaims: evaluations.length, llmTokensUsed: tokens.input + tokens.output, computeCostUsd: costTracker.getTotalCostUsd() },
             discClaims, evaluations as never, discWp as never, scores, analysis,
           );
           if (reqAddr) report.tokenAddress = reqAddr;
@@ -776,7 +796,7 @@ export class JobRouter {
     }
 
     // Run L1+L2
-    let { resolved, analysis, structuralScore, hypeTechRatio, claims, wp: newWp } = await this.runL1L2(documentUrl, projectName, reqAddr, requirementText);
+    let { resolved, analysis, structuralScore, hypeTechRatio, claims, wp: newWp } = await this.runL1L2(documentUrl, projectName, reqAddr, requirementText, costTracker);
 
     // If provided document_url yielded 0 claims (e.g. landing page, SPA), try discovery fallback
     if (claims.length === 0 && this.deps.tieredDiscovery && projectName !== 'Unknown') {
@@ -792,7 +812,7 @@ export class JobRouter {
         };
         const discovered = await this.deps.tieredDiscovery.discover(metadata, reqAddr ?? '');
         if (discovered && discovered.documentUrl !== documentUrl) {
-          const fallback = await this.runL1L2(discovered.documentUrl, projectName, reqAddr, requirementText);
+          const fallback = await this.runL1L2(discovered.documentUrl, projectName, reqAddr, requirementText, costTracker);
           if (fallback.claims.length > 0) {
             log.info('Discovery fallback succeeded for full_tech', { projectName, discoveredUrl: discovered.documentUrl.slice(0, 80), claims: fallback.claims.length });
             ({ resolved, analysis, structuralScore, hypeTechRatio, claims, wp: newWp } = fallback);
@@ -804,7 +824,7 @@ export class JobRouter {
     }
 
     // L3: Full claim evaluation
-    const { evaluations, scores } = await this.deps.claimEvaluator.evaluateAll(claims, resolved.text, { requirementText });
+    const { evaluations, scores } = await this.deps.claimEvaluator.evaluateAll(claims, resolved.text, { requirementText, costTracker });
 
     // Build score array from evaluation results
     const claimScores = claims.map((c) => ({
@@ -815,7 +835,7 @@ export class JobRouter {
     const aggregate = this.deps.scoreAggregator.aggregate(claimScores);
 
     // Store verification with structural analysis (includes MiCA data)
-    const tokens = this.deps.costTracker.getTotalTokens();
+    const tokens = costTracker.getTotalTokens();
     if (!newWp.id.startsWith('tmp-')) {
       await this.deps.verificationsRepo.create({
         whitepaperId: newWp.id,
@@ -826,7 +846,7 @@ export class JobRouter {
         totalClaims: claims.length,
         verifiedClaims: evaluations.length,
         llmTokensUsed: tokens.input + tokens.output,
-        computeCostUsd: this.deps.costTracker.getTotalCostUsd(),
+        computeCostUsd: costTracker.getTotalCostUsd(),
         focusAreaScores: aggregate.focusAreaScores,
         structuralAnalysisJson: analysis as unknown as Record<string, unknown>,
       });
@@ -837,7 +857,7 @@ export class JobRouter {
       projectName,
       totalClaims: claims.length,
       llmTokensUsed: tokens.input + tokens.output,
-      computeCostUsd: this.deps.costTracker.getTotalCostUsd().toFixed(4),
+      computeCostUsd: costTracker.getTotalCostUsd().toFixed(4),
     });
 
     const fullReport = this.deps.reportGenerator.generateFullVerification(
@@ -850,7 +870,7 @@ export class JobRouter {
         totalClaims: claims.length,
         verifiedClaims: evaluations.length,
         llmTokensUsed: tokens.input + tokens.output,
-        computeCostUsd: this.deps.costTracker.getTotalCostUsd(),
+        computeCostUsd: costTracker.getTotalCostUsd(),
       },
       claims,
       evaluations,
@@ -861,7 +881,7 @@ export class JobRouter {
 
     // Requirement-aware synthesis: focused analysis addressing buyer's specific question
     if (requirementText && /\b(math|evaluat|audit|analys|mechan|architect|impact|stress|volatil)/i.test(requirementText)) {
-      const synthesis = await this.generateSynthesis(requirementText, projectName, claims, resolved.text);
+      const synthesis = await this.generateSynthesis(requirementText, projectName, claims, resolved.text, costTracker);
       if (synthesis) fullReport.logicSummary = synthesis;
     }
 
@@ -999,6 +1019,7 @@ export class JobRouter {
     projectName: string,
     claims: Array<{ category: string; claimText: string; statedEvidence: string }>,
     documentText: string,
+    costTracker: CostTracker,
   ): Promise<string | null> {
     if (!this.deps.anthropicClient) return null;
 
@@ -1015,7 +1036,7 @@ export class JobRouter {
       });
 
       // Track cost regardless of response content shape
-      this.deps.costTracker.recordUsage(
+      costTracker.recordUsage(
         response.usage.input_tokens,
         response.usage.output_tokens,
       );
