@@ -234,4 +234,4 @@ pm2 restart grey
 
 ---
 
-*Last updated: 2026-04-07 (eval 31 fixes: prompt hardening, calendar validation, empty {} guard, tokenAddress preservation. DB fully purged — live pipeline handles all requests. 309 tests / 24 files.)*
+*Last updated: 2026-04-07 (pre-eval 32: prompt hardened, calendar validation, empty {} guard, tokenAddress preservation, upsert fix. DB seeded with 3 verified + 1 live-only project. Chainlink V1 f<n/3 verified. 309 tests / 24 files.)*
