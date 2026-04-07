@@ -504,6 +504,15 @@ export class WpvService extends Service {
         err.name = 'InputValidationError';
         throw err;
       }
+      // Calendar validity: detect dates that JS silently rolls (e.g., Feb 30 → Mar 1)
+      const [yearStr, monthStr, dayStr] = dateStr.split('-');
+      if (parsed.getUTCFullYear() !== Number(yearStr) ||
+          parsed.getUTCMonth() + 1 !== Number(monthStr) ||
+          parsed.getUTCDate() !== Number(dayStr)) {
+        const err = new Error(`Invalid date: '${dateStr}' does not exist`);
+        err.name = 'InputValidationError';
+        throw err;
+      }
       const today = new Date();
       today.setHours(23, 59, 59, 999);
       if (parsed > today) {
@@ -556,12 +565,15 @@ export class WpvService extends Service {
       }
     }
 
-    // Fix 5: Reject JSON requirements missing all identifying fields
-    if (!isPlainText) {
+    // Fix 5: Reject JSON requirements with non-standard fields but no identifying fields
+    // Empty {} passes through — handler returns INSUFFICIENT_DATA gracefully.
+    // {"garbage": "..."} is rejected — has fields but none are standard.
+    if (!isPlainText && offeringId !== 'daily_technical_briefing') {
       const hasTokenAddress = requirement?.token_address !== undefined && requirement?.token_address !== null;
       const hasProjectName = requirement?.project_name !== undefined && requirement?.project_name !== null;
       const hasDocumentUrl = requirement?.document_url !== undefined && requirement?.document_url !== null;
-      if (!hasTokenAddress && !hasProjectName && !hasDocumentUrl) {
+      const hasAnyField = Object.keys(requirement).filter(k => !k.startsWith('_')).length > 0;
+      if (!hasTokenAddress && !hasProjectName && !hasDocumentUrl && hasAnyField) {
         const err = new Error('Invalid requirement: must include at least one of token_address, project_name, or document_url');
         err.name = 'InputValidationError';
         throw err;
@@ -751,6 +763,7 @@ export class WpvService extends Service {
 
           if (hasDocUrl) {
             // Has a document URL — strip bad address, proceed with document analysis
+            requirement._originalTokenAddress = requirement.token_address;
             delete requirement.token_address;
             return;
           }
@@ -759,6 +772,7 @@ export class WpvService extends Service {
             // Nonsense names + null addresses should be hard-rejected
             if (KNOWN_PROTOCOL_PATTERN.test(projectName)) {
               // Known protocol — strip bad address, proceed with project analysis
+              requirement._originalTokenAddress = requirement.token_address;
               delete requirement.token_address;
               return;
             }
@@ -790,6 +804,7 @@ export class WpvService extends Service {
           }
 
           // Soft fail: strip bad address, proceed with other legitimate fields
+          requirement._originalTokenAddress = requirement.token_address;
           delete requirement.token_address;
           return;
         }

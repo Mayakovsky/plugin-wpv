@@ -391,6 +391,7 @@ export class JobRouter {
   private async handleVerifyWhitepaper(input: Record<string, unknown>, costTracker: CostTracker) {
     const documentUrl = (input.document_url as string | undefined)?.trim();
     const requestedTokenAddress = (input.token_address as string | undefined)?.trim() ?? null;
+    const originalTokenAddress = ((input._originalTokenAddress ?? input.token_address) as string | undefined)?.trim() ?? null;
     let projectName = (input.project_name as string | undefined)?.trim() || '';
     const requirementText = this.extractRequirementText(input);
 
@@ -431,7 +432,7 @@ export class JobRouter {
               undefined,
               analysis,
             );
-            if (requestedTokenAddress) report.tokenAddress = requestedTokenAddress;
+            if (originalTokenAddress) report.tokenAddress = originalTokenAddress;
 
             // Requirement-aware synthesis on cached data
             if (requirementText && /\b(math|evaluat|audit|analys|mechan|architect|impact|stress|volatil|risk|attack|exploit|vulnerab)/i.test(requirementText)) {
@@ -481,7 +482,7 @@ export class JobRouter {
               { structuralScore: discScore, confidenceScore: discAggregate.confidenceScore, hypeTechRatio: discHype, verdict: discAggregate.verdict, focusAreaScores: discAggregate.focusAreaScores, totalClaims: discClaims.length, verifiedClaims: discEvals.length, llmTokensUsed: 0, computeCostUsd: 0 },
               discClaims, discWp as never, discScores, discAnalysis,
             );
-            if (requestedTokenAddress) report.tokenAddress = requestedTokenAddress;
+            if (originalTokenAddress) report.tokenAddress = originalTokenAddress;
             return report;
           }
         } catch (err) {
@@ -489,7 +490,7 @@ export class JobRouter {
         }
       }
       const insuffResult = this.insufficientData(input);
-      if (requestedTokenAddress) insuffResult.tokenAddress = requestedTokenAddress;
+      if (originalTokenAddress) insuffResult.tokenAddress = originalTokenAddress;
       return insuffResult;
     }
 
@@ -603,7 +604,7 @@ export class JobRouter {
 
     // Ensure requested token_address is in the report
     if (requestedTokenAddress) {
-      report.tokenAddress = requestedTokenAddress;
+      report.tokenAddress = originalTokenAddress;
     }
 
     log.info('Pipeline complete', {
@@ -619,6 +620,7 @@ export class JobRouter {
 
   private async handleFullVerification(input: Record<string, unknown>, costTracker: CostTracker) {
     const reqAddr = input.token_address as string | undefined;
+    const originalAddr = (input._originalTokenAddress ?? input.token_address) as string | undefined;
     let reqName = (input.project_name as string | undefined)?.trim();
     const requirementText = this.extractRequirementText(input);
 
@@ -666,7 +668,7 @@ export class JobRouter {
             undefined,
             analysis,
           );
-          if (reqAddr) fullReport.tokenAddress = reqAddr;
+          if (originalAddr) fullReport.tokenAddress = originalAddr;
 
           // Requirement-aware synthesis on cached data
           if (requirementText && /\b(math|evaluat|audit|analys|mechan|architect|impact|stress|volatil|risk|attack|exploit|vulnerab)/i.test(requirementText)) {
@@ -745,7 +747,7 @@ export class JobRouter {
                     scores,
                     analysis,
                   );
-                  if (reqAddr) enrichedReport.tokenAddress = reqAddr;
+                  if (originalAddr) enrichedReport.tokenAddress = originalAddr;
                   log.info('L2+L3 enrichment complete', { projectName: wpName, claims: newClaims.length });
                   return enrichedReport;
                 }
@@ -787,13 +789,13 @@ export class JobRouter {
             undefined,
             analysis,
           );
-          if (reqAddr) fullReport.tokenAddress = reqAddr;
+          if (originalAddr) fullReport.tokenAddress = originalAddr;
           return fullReport;
         }
 
         log.info('Cached result has 0 claims and enrichment failed/skipped — trying live discovery', {
           projectName: wpName,
-          tokenAddress: reqAddr,
+          tokenAddress: originalAddr,
         });
         // Fall through to discovery pipeline below ↓
       }
@@ -827,7 +829,7 @@ export class JobRouter {
             { structuralScore, confidenceScore: aggregate.confidenceScore, hypeTechRatio, verdict: aggregate.verdict, focusAreaScores: aggregate.focusAreaScores, totalClaims: discClaims.length, verifiedClaims: evaluations.length, llmTokensUsed: tokens.input + tokens.output, computeCostUsd: costTracker.getTotalCostUsd() },
             discClaims, evaluations as never, discWp as never, scores, analysis,
           );
-          if (reqAddr) report.tokenAddress = reqAddr;
+          if (originalAddr) report.tokenAddress = originalAddr;
           return report;
         }
       } catch (err) {
@@ -940,7 +942,7 @@ export class JobRouter {
       if (synthesis) fullReport.logicSummary = synthesis;
     }
 
-    if (reqAddr) fullReport.tokenAddress = reqAddr;
+    if (originalAddr) fullReport.tokenAddress = originalAddr;
     return fullReport;
   }
 

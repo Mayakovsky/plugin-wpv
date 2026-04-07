@@ -44,6 +44,7 @@ Categorize each claim into one of these categories:
 For each claim, extract:
 - claimText: The exact claim being made
 - statedEvidence: What evidence the whitepaper provides
+- CRITICAL: When extracting mathematical claims (fault tolerance thresholds, node requirements, performance bounds), verify that the claimed threshold is mathematically consistent with the cited evidence. For example, if an algorithm requires 3f+1 nodes, the fault tolerance is f < n/3 (not f < n/2). If the whitepaper text states one threshold but the cited formula implies a different one, report the threshold that is mathematically correct based on the formula, and note the discrepancy in statedEvidence.
 - mathematicalProofPresent: Whether a mathematical proof accompanies the claim
 - sourceSection: Which section of the document contains this claim
 - regulatoryRelevance: Whether this claim EXPLICITLY relates to regulatory compliance (MiCA, EU regulation, KYC/AML, ESMA requirements, investor protection, risk disclosure obligations, or legal compliance frameworks). Set true ONLY for claims that explicitly mention regulatory standards or legal requirements by name. A technical whitepaper describing protocol mechanics is NOT regulatory compliance — do not conflate technical descriptions with MiCA compliance. Also flag risk disclosures — note whether they are substantive (specific, quantified risks) or boilerplate (generic, vague warnings).
