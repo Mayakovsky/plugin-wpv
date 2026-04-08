@@ -502,8 +502,28 @@ export class JobRouter {
             costTracker.endStage('l3', 0, 0);
             const discClaimScores = discClaims.map((c) => ({ category: c.category as never, score: discScores.get(c.claimId) ?? 50 }));
             const discAggregate = this.deps.scoreAggregator.aggregate(discClaimScores);
+            const discTokens = costTracker.getTotalTokens();
+
+            // Persist verification so cached path works on subsequent requests
+            if (!discWp.id.startsWith('tmp-')) {
+              await this.deps.verificationsRepo.deleteByWhitepaperId(discWp.id);
+              await this.deps.verificationsRepo.create({
+                whitepaperId: discWp.id,
+                structuralScore: discScore,
+                confidenceScore: discAggregate.confidenceScore,
+                hypeTechRatio: discHype,
+                verdict: discAggregate.verdict,
+                totalClaims: discClaims.length,
+                verifiedClaims: discEvals.length,
+                llmTokensUsed: discTokens.input + discTokens.output,
+                computeCostUsd: costTracker.getTotalCostUsd(),
+                focusAreaScores: discAggregate.focusAreaScores,
+                structuralAnalysisJson: discAnalysis as unknown as Record<string, unknown>,
+              });
+            }
+
             const report = this.deps.reportGenerator.generateTokenomicsAudit(
-              { structuralScore: discScore, confidenceScore: discAggregate.confidenceScore, hypeTechRatio: discHype, verdict: discAggregate.verdict, focusAreaScores: discAggregate.focusAreaScores, totalClaims: discClaims.length, verifiedClaims: discEvals.length, llmTokensUsed: 0, computeCostUsd: 0 },
+              { structuralScore: discScore, confidenceScore: discAggregate.confidenceScore, hypeTechRatio: discHype, verdict: discAggregate.verdict, focusAreaScores: discAggregate.focusAreaScores, totalClaims: discClaims.length, verifiedClaims: discEvals.length, llmTokensUsed: discTokens.input + discTokens.output, computeCostUsd: costTracker.getTotalCostUsd() },
               discClaims, discWp as never, discScores, discAnalysis,
             );
             if (originalTokenAddress) report.tokenAddress = originalTokenAddress;
@@ -861,6 +881,25 @@ export class JobRouter {
           const claimScores = discClaims.map((c) => ({ category: c.category as never, score: scores.get(c.claimId) ?? 50 }));
           const aggregate = this.deps.scoreAggregator.aggregate(claimScores);
           const tokens = costTracker.getTotalTokens();
+
+          // Persist verification so cached path works on subsequent requests
+          if (!discWp.id.startsWith('tmp-')) {
+            await this.deps.verificationsRepo.deleteByWhitepaperId(discWp.id);
+            await this.deps.verificationsRepo.create({
+              whitepaperId: discWp.id,
+              structuralScore,
+              confidenceScore: aggregate.confidenceScore,
+              hypeTechRatio,
+              verdict: aggregate.verdict,
+              totalClaims: discClaims.length,
+              verifiedClaims: evaluations.length,
+              llmTokensUsed: tokens.input + tokens.output,
+              computeCostUsd: costTracker.getTotalCostUsd(),
+              focusAreaScores: aggregate.focusAreaScores,
+              structuralAnalysisJson: analysis as unknown as Record<string, unknown>,
+            });
+          }
+
           const report = this.deps.reportGenerator.generateFullVerification(
             { structuralScore, confidenceScore: aggregate.confidenceScore, hypeTechRatio, verdict: aggregate.verdict, focusAreaScores: aggregate.focusAreaScores, totalClaims: discClaims.length, verifiedClaims: evaluations.length, llmTokensUsed: tokens.input + tokens.output, computeCostUsd: costTracker.getTotalCostUsd() },
             discClaims, evaluations as never, discWp as never, scores, analysis,
