@@ -262,6 +262,7 @@ export class JobRouter {
             : Verdict.FAIL;
 
           if (!newWpId.startsWith('tmp-')) {
+            await this.deps.verificationsRepo.deleteByWhitepaperId(newWpId);
             await this.deps.verificationsRepo.create({
               whitepaperId: newWpId,
             structuralScore,
@@ -553,6 +554,7 @@ export class JobRouter {
     const tokens = costTracker.getTotalTokens();
     const stageMetrics = costTracker.getStageMetrics();
     if (!wp.id.startsWith('tmp-')) {
+      await this.deps.verificationsRepo.deleteByWhitepaperId(wp.id);
       await this.deps.verificationsRepo.create({
         whitepaperId: wp.id,
         structuralScore,
@@ -894,6 +896,7 @@ export class JobRouter {
     // Store verification with structural analysis (includes MiCA data)
     const tokens = costTracker.getTotalTokens();
     if (!newWp.id.startsWith('tmp-')) {
+      await this.deps.verificationsRepo.deleteByWhitepaperId(newWp.id);
       await this.deps.verificationsRepo.create({
         whitepaperId: newWp.id,
         structuralScore,
