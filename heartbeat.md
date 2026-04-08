@@ -1,8 +1,8 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-04-07 (pre-eval 32 — seeded + verified)
+> Last updated: 2026-04-08 (eval 32 fixes deployed — tokenAddress, name filter, search engine blocklist)
 > Updated by: Claude Opus 4.6 — Kovsky session
-> Session label: Pre-eval 32 readiness. DB seeded with 3 projects (Uniswap 10, Aave 18, Lido 9 claims) + Chainlink 10 claims (no verification — forces live L3 pipeline on eval). All robustness checks passed: Feb 30 rejected, empty {} → INSUFFICIENT_DATA, garbage rejected, truncated address echoed, Chainlink V1 PDF produces f<n/3 (not f<n/2). 309/309 tests.
-> Staleness gate: 2026-04-07 — if today is >3 days past this,
+> Session label: Eval 32: 18/24. 3 root causes fixed: (R1) scan+verify tokenAddress:None — _originalTokenAddress fallback on all paths + verify live guard fixed (requestedTokenAddress→originalTokenAddress). (R2) Project name safety check moved BEFORE token_address validation — was unreachable when valid address present. (R3) Search engine URL blocklist added. All 10 verification tests pass. 309/309 tests.
+> Staleness gate: 2026-04-08 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
 ## Focus (1-3 goals, testable)
@@ -143,9 +143,10 @@
 | 29 | 13/16 | scan 3/4, briefing 2/4, full 2/4, verify 4/4 | Empty briefing (no backfill), Aave V1→V3 cache (URL not extracted from plain text), nonsense+burn accepted. | Plain-text URL extraction, burn+nonsense rejection, briefing backfill |
 | 30 | 18/22 | scan 4/4, briefing 5/7, full 6/7, verify 3/4 | Aerodrome SPA 0 claims, briefing 0-claim entries, Aave 404 URL. | Briefing quality filter, Playwright DocsSiteCrawler, 404 soft-fallback, upsert, concurrency |
 | 31 | 13/21 | scan 4/4, briefing 4/8, full 3/6, verify 2/3 | Chainlink f<n/2 LLM error (5 failures), Feb 30 accepted, empty {} rejected, tokenAddress:None. | Prompt hardened, calendar validation, hasAnyField guard, _originalTokenAddress, upsert fix. DB fully purged. |
+| 32 | 18/24 | scan 3/6, briefing 6/6, full 6/6, verify 3/6 | tokenAddress:None on scan cached+live and verify live (3). ExplicitContentToken/MaliciousScam accepted (2). google.com/search accepted (1). | R1: _originalTokenAddress on all scan paths + verify live guard. R2: name check before token validation. R3: search engine blocklist. |
 
 ## Next Actions (ordered)
-1. **Trigger eval 32** — DB seeded, all robustness checks passed, Chainlink V1 verified clean
+1. **Trigger eval 33** — all 3 root causes fixed, 10/10 verification tests pass
 2. **After graduation:** close ports 3000+3001, set production prices, wire DiscoveryCron, full hygiene service, render cache
 3. **LAUNCH** — outreach, pinned thread, monitor
 
@@ -227,7 +228,8 @@
 | 2026-04-07 | Claude Opus 4.6 (Kovsky) | Eval 30: 18/22 (expanded matrix). DB purged to 4 quality entries (Aave/Uniswap/Lido/Chainlink). Briefing quality filter: totalClaims>0 on both backfill paths. Removed debug log. SLA comments updated in AgentCardConfig.ts + CLAUDE.md. Nonsense row purged. | 309/309, deployed |
 | 2026-04-07 | Claude Opus 4.6 (Kovsky) | Concurrency + Playwright + eval 30 fixes. Part A: job mutex, per-job CostTracker, Playwright mutex + resolveLinks(). Part B: DocsSiteCrawler Playwright. Part C: Fix 5 (404 soft-fallback), Fix 6 (upsert). Part D: shared KNOWN_PROTOCOL_PATTERN. | 309/309, deployed |
 | 2026-04-07 | Claude Opus 4.6 (Kovsky) | Eval 31: 13/21. F1: ClaimExtractor prompt hardened (BFT math consistency). F2: Calendar date round-trip (Feb 30 rejection). F3: Empty {} passes (hasAnyField guard). F4: _originalTokenAddress preservation. Upsert reuse no longer deletes verification. Full DB purge — cached data caused version mismatch failures across all evals. | 309/309, deployed |
-| 2026-04-07 | Claude Opus 4.6 (Kovsky) | Pre-eval 32: DB seeded (Uniswap/Aave/Lido via HTTP full_tech). Chainlink V1 PDF verified — prompt fix produces f<n/3 (5 CONSENSUS claims, no f<n/2). All robustness checks passed: Feb 30, empty {}, garbage, truncated address, verify+empty, unknown project. Chainlink left without verification to force live L3 on eval. | 309/309, ready |
+| 2026-04-07 | Claude Opus 4.6 (Kovsky) | Pre-eval 32: DB seeded (Uniswap/Aave/Lido via HTTP full_tech). Chainlink V1 PDF verified — prompt fix produces f<n/3 (5 CONSENSUS claims, no f<n/2). All robustness checks passed. | 309/309, ready |
+| 2026-04-08 | Claude Opus 4.6 (Kovsky) | Eval 32: 18/24. R1: scan _originalTokenAddress fallback (cached+live), verify live guard fixed (requestedTokenAddress→originalTokenAddress). R2: project name safety check moved before token_address validation (was unreachable). Added "malicious","fraud","terror" to keywords. R3: search engine URL blocklist (google/bing/yahoo/ddg/baidu/yandex). 10/10 verification tests pass. | 309/309, deployed |
 
 ## Quick Commands
 ```bash

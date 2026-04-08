@@ -234,4 +234,4 @@ pm2 restart grey
 
 ---
 
-*Last updated: 2026-04-07 (pre-eval 32: prompt hardened, calendar validation, empty {} guard, tokenAddress preservation, upsert fix. DB seeded with 3 verified + 1 live-only project. Chainlink V1 f<n/3 verified. 309 tests / 24 files.)*
+*Last updated: 2026-04-08 (eval 32 fixes: tokenAddress on all scan+verify paths, name check before token validation, search engine URL blocklist. 309 tests / 24 files.)*
