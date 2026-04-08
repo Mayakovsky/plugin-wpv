@@ -120,12 +120,21 @@ export interface JobRouterDeps {
   anthropicClient?: any;
 }
 
+/** 4 minutes — leaves 1 min for ACP delivery overhead within the 5-min SLA */
+const PIPELINE_TIMEOUT_MS = 4 * 60 * 1000;
+
 export class JobRouter {
   private _jobLock: Promise<void> = Promise.resolve();
 
   constructor(private deps: JobRouterDeps) {}
 
   async handleJob(offeringId: OfferingId, input: Record<string, unknown>): Promise<unknown> {
+    // Briefings are read-only (no DB writes, no Playwright, no Sonnet).
+    // Exempt from mutex to prevent SLA violations when slow pipeline jobs block the queue.
+    if (offeringId === 'daily_technical_briefing') {
+      return this._handleJobImpl(offeringId, input);
+    }
+
     // Serialize job processing — prevents CostTracker data corruption,
     // Playwright race conditions, and DB upsert TOCTOU.
     let release: () => void;
@@ -189,8 +198,9 @@ export class JobRouter {
     const originalTokenAddress = ((input._originalTokenAddress ?? input.token_address) as string | undefined)?.trim() ?? '';
 
     // Resolve project name from token address if missing
-    if (!projectName && tokenAddress) {
-      const resolved = await resolveTokenName(tokenAddress);
+    // Use originalTokenAddress as fallback — tokenAddress is empty after soft-strip
+    if (!projectName && (tokenAddress || originalTokenAddress)) {
+      const resolved = await resolveTokenName((tokenAddress || originalTokenAddress)!);
       if (resolved) {
         projectName = resolved;
         input.project_name = resolved;
@@ -198,18 +208,23 @@ export class JobRouter {
     }
     if (!projectName) projectName = 'Unknown';
 
+    // Use the best available address for discovery and DB writes
+    const effectiveTokenAddress = tokenAddress || originalTokenAddress;
+
     if (this.deps.tieredDiscovery) {
       try {
-        const metadata: ProjectMetadata = {
-          agentName: projectName,
-          entityId: null,
-          description: null,
-          linkedUrls: [],
-          category: null,
-          graduationStatus: null,
-        };
-        const discovered = await this.deps.tieredDiscovery.discover(metadata, tokenAddress);
-        if (discovered) {
+        const scanReport = await this.withTimeout(async () => {
+          const metadata: ProjectMetadata = {
+            agentName: projectName,
+            entityId: null,
+            description: null,
+            linkedUrls: [],
+            category: null,
+            graduationStatus: null,
+          };
+          const discovered = await this.deps.tieredDiscovery!.discover(metadata, effectiveTokenAddress);
+          if (!discovered) return null;
+
           // L1: Structural analysis
           costTracker.reset();
           costTracker.startStage('l1');
@@ -229,10 +244,11 @@ export class JobRouter {
           } else {
             // Upsert: if existing whitepaper with claims exists, reuse it (L1 scan shouldn't overwrite L2 data)
             const existing = await this.deps.whitepaperRepo.findByProjectName(projectName);
-            const existingWithClaims = existing.find(async (e) => {
+            let existingWithClaims: typeof existing[0] | undefined;
+            for (const e of existing) {
               const eClaims = await this.deps.claimsRepo.findByWhitepaperId(e.id);
-              return eClaims.length > 0;
-            });
+              if (eClaims.length > 0) { existingWithClaims = e; break; }
+            }
             if (existingWithClaims) {
               // Existing record with L2 claims — reuse, refresh verification
               newWpId = existingWithClaims.id;
@@ -246,9 +262,9 @@ export class JobRouter {
               }
               const newWp = await this.deps.whitepaperRepo.create({
                 projectName,
-                tokenAddress,
+                tokenAddress: effectiveTokenAddress || undefined,
                 documentUrl: discovered.documentUrl,
-                chain: tokenAddress.startsWith('0x') ? 'base' : 'solana',
+                chain: effectiveTokenAddress?.startsWith('0x') ? 'base' : 'unknown',
                 pageCount: discovered.resolved.pageCount,
                 status: 'VERIFIED',
                 selectionScore: 0,
@@ -265,31 +281,36 @@ export class JobRouter {
             await this.deps.verificationsRepo.deleteByWhitepaperId(newWpId);
             await this.deps.verificationsRepo.create({
               whitepaperId: newWpId,
-            structuralScore,
-            confidenceScore: 0,
-            hypeTechRatio,
-            verdict,
-            totalClaims: 0,
-            verifiedClaims: 0,
-            llmTokensUsed: 0,
-            computeCostUsd: 0,
-            structuralAnalysisJson: analysis as unknown as Record<string, unknown>,
-            triggerSource: 'acp_live_l1',
-            cacheHit: false,
-          });
+              structuralScore,
+              confidenceScore: 0,
+              hypeTechRatio,
+              verdict,
+              totalClaims: 0,
+              verifiedClaims: 0,
+              llmTokensUsed: 0,
+              computeCostUsd: 0,
+              structuralAnalysisJson: analysis as unknown as Record<string, unknown>,
+              triggerSource: 'acp_live_l1',
+              cacheHit: false,
+            });
           }
 
           const report = this.deps.reportGenerator.generateLegitimacyScan(
             { structuralScore, confidenceScore: 0, hypeTechRatio, verdict, focusAreaScores: { [ClaimCategory.TOKENOMICS]: 0, [ClaimCategory.PERFORMANCE]: 0, [ClaimCategory.CONSENSUS]: 0, [ClaimCategory.SCIENTIFIC]: 0 }, totalClaims: 0, verifiedClaims: 0, llmTokensUsed: 0, computeCostUsd: 0 },
             analysis,
-            { id: newWpId, projectName, tokenAddress } as never,
+            { id: newWpId, projectName, effectiveTokenAddress } as never,
           );
           if (originalTokenAddress) report.tokenAddress = originalTokenAddress;
           log.info('Live L1 scan completed', { projectName, structuralScore, verdict });
           return report;
-        }
+        });
+        if (scanReport) return scanReport;
       } catch (err) {
-        log.warn('Live L1 discovery failed — returning INSUFFICIENT_DATA', { projectName, error: (err as Error).message });
+        if ((err as Error).message === 'Pipeline timeout') {
+          log.warn('Pipeline timeout in scan — returning INSUFFICIENT_DATA', { projectName });
+        } else {
+          log.warn('Live L1 discovery failed — returning INSUFFICIENT_DATA', { projectName, error: (err as Error).message });
+        }
       }
     }
 
@@ -397,8 +418,9 @@ export class JobRouter {
     const requirementText = this.extractRequirementText(input);
 
     // Resolve project name from token address if missing
-    if (!projectName && requestedTokenAddress) {
-      const resolved = await resolveTokenName(requestedTokenAddress);
+    // Use originalTokenAddress as fallback — requestedTokenAddress is null after soft-strip
+    if (!projectName && (requestedTokenAddress || originalTokenAddress)) {
+      const resolved = await resolveTokenName((requestedTokenAddress || originalTokenAddress)!);
       if (resolved) {
         projectName = resolved;
         input.project_name = resolved; // propagate to discovery metadata
@@ -462,16 +484,17 @@ export class JobRouter {
 
       if (this.deps.tieredDiscovery) {
         try {
-          const metadata: ProjectMetadata = {
-            agentName: projectName,
-            entityId: null,
-            description: null,
-            linkedUrls: [],
-            category: null,
-            graduationStatus: null,
-          };
-          const discovered = await this.deps.tieredDiscovery.discover(metadata, requestedTokenAddress ?? '');
-          if (discovered) {
+          const discReport = await this.withTimeout(async () => {
+            const metadata: ProjectMetadata = {
+              agentName: projectName,
+              entityId: null,
+              description: null,
+              linkedUrls: [],
+              category: null,
+              graduationStatus: null,
+            };
+            const discovered = await this.deps.tieredDiscovery!.discover(metadata, requestedTokenAddress ?? '');
+            if (!discovered) return null;
             // Use discovered document URL for L1+L2+L3
             const { resolved: discResolved, analysis: discAnalysis, structuralScore: discScore, hypeTechRatio: discHype, claims: discClaims, wp: discWp } = await this.runL1L2(discovered.documentUrl, projectName, requestedTokenAddress, requirementText, costTracker);
             costTracker.startStage('l3');
@@ -485,9 +508,14 @@ export class JobRouter {
             );
             if (originalTokenAddress) report.tokenAddress = originalTokenAddress;
             return report;
-          }
+          });
+          if (discReport) return discReport;
         } catch (err) {
-          log.warn('Discovery failed for verify_project_whitepaper (no document_url)', { projectName, error: (err as Error).message });
+          if ((err as Error).message === 'Pipeline timeout') {
+            log.warn('Pipeline timeout in verify discovery — returning INSUFFICIENT_DATA', { projectName });
+          } else {
+            log.warn('Discovery failed for verify_project_whitepaper (no document_url)', { projectName, error: (err as Error).message });
+          }
         }
       }
       const insuffResult = this.insufficientData(input);
@@ -509,115 +537,119 @@ export class JobRouter {
       return { error: 'invalid_url', message: 'document_url exceeds maximum length (2048)' };
     }
 
-    let { resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = await this.runL1L2(documentUrl, projectName, requestedTokenAddress, requirementText, costTracker);
+    try {
+      return await this.withTimeout(async () => {
+        let { resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = await this.runL1L2(documentUrl, projectName, requestedTokenAddress, requirementText, costTracker);
 
-    // If provided document_url yielded 0 claims (e.g. JavaScript SPA, empty page),
-    // try discovery as fallback before giving up
-    if (claims.length === 0 && this.deps.tieredDiscovery && projectName !== 'Unknown') {
-      try {
-        log.info('document_url yielded 0 claims — trying discovery fallback', { projectName, documentUrl: documentUrl.slice(0, 80) });
-        const metadata: ProjectMetadata = {
-          agentName: projectName,
-          entityId: null,
-          description: null,
-          linkedUrls: [],
-          category: null,
-          graduationStatus: null,
-        };
-        const discovered = await this.deps.tieredDiscovery.discover(metadata, requestedTokenAddress ?? '');
-        if (discovered && discovered.documentUrl !== documentUrl) {
-          const fallback = await this.runL1L2(discovered.documentUrl, projectName, requestedTokenAddress, requirementText, costTracker);
-          if (fallback.claims.length > 0) {
-            log.info('Discovery fallback succeeded', { projectName, discoveredUrl: discovered.documentUrl.slice(0, 80), claims: fallback.claims.length });
-            ({ resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = fallback);
+        // If provided document_url yielded 0 claims (e.g. JavaScript SPA, empty page),
+        // try discovery as fallback before giving up
+        if (claims.length === 0 && this.deps.tieredDiscovery && projectName !== 'Unknown') {
+          try {
+            log.info('document_url yielded 0 claims — trying discovery fallback', { projectName, documentUrl: documentUrl.slice(0, 80) });
+            const metadata: ProjectMetadata = {
+              agentName: projectName,
+              entityId: null,
+              description: null,
+              linkedUrls: [],
+              category: null,
+              graduationStatus: null,
+            };
+            const discovered = await this.deps.tieredDiscovery.discover(metadata, requestedTokenAddress ?? '');
+            if (discovered && discovered.documentUrl !== documentUrl) {
+              const fallback = await this.runL1L2(discovered.documentUrl, projectName, requestedTokenAddress, requirementText, costTracker);
+              if (fallback.claims.length > 0) {
+                log.info('Discovery fallback succeeded', { projectName, discoveredUrl: discovered.documentUrl.slice(0, 80), claims: fallback.claims.length });
+                ({ resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = fallback);
+              }
+            }
+          } catch (err) {
+            log.warn('Discovery fallback failed', { projectName, error: (err as Error).message });
           }
         }
-      } catch (err) {
-        log.warn('Discovery fallback failed', { projectName, error: (err as Error).message });
-      }
-    }
 
-    // L3: Claim evaluation (timed)
-    costTracker.startStage('l3');
-    const { evaluations, scores } = await this.deps.claimEvaluator.evaluateAll(claims, resolved.text, { requirementText, costTracker });
-    costTracker.endStage('l3', 0, 0); // L3 tokens tracked via recordUsage internally
+        // L3: Claim evaluation (timed)
+        costTracker.startStage('l3');
+        const { evaluations, scores } = await this.deps.claimEvaluator.evaluateAll(claims, resolved.text, { requirementText, costTracker });
+        costTracker.endStage('l3', 0, 0); // L3 tokens tracked via recordUsage internally
 
-    // Build score array from evaluation results
-    const claimScores = claims.map((c) => ({
-      category: c.category as never,
-      score: scores.get(c.claimId) ?? 50,
-    }));
+        // Build score array from evaluation results
+        const claimScores = claims.map((c) => ({
+          category: c.category as never,
+          score: scores.get(c.claimId) ?? 50,
+        }));
 
-    const aggregate = this.deps.scoreAggregator.aggregate(claimScores);
+        const aggregate = this.deps.scoreAggregator.aggregate(claimScores);
 
-    // Store verification with structural analysis + cost metrics
-    const tokens = costTracker.getTotalTokens();
-    const stageMetrics = costTracker.getStageMetrics();
-    if (!wp.id.startsWith('tmp-')) {
-      await this.deps.verificationsRepo.deleteByWhitepaperId(wp.id);
-      await this.deps.verificationsRepo.create({
-        whitepaperId: wp.id,
-        structuralScore,
-        confidenceScore: aggregate.confidenceScore,
-        hypeTechRatio,
-        verdict: aggregate.verdict,
-        totalClaims: claims.length,
-        verifiedClaims: evaluations.length,
-        llmTokensUsed: tokens.input + tokens.output,
-        computeCostUsd: costTracker.getTotalCostUsd(),
-        structuralAnalysisJson: analysis as unknown as Record<string, unknown>,
-        triggerSource: (input._triggerSource as string) ?? 'manual',
-        cacheHit: false,
-        l1DurationMs: stageMetrics.l1.durationMs,
-        l2InputTokens: stageMetrics.l2.inputTokens,
-        l2OutputTokens: stageMetrics.l2.outputTokens,
-        l2CostUsd: stageMetrics.l2.costUsd,
-        l2DurationMs: stageMetrics.l2.durationMs,
-        l3InputTokens: stageMetrics.l3.inputTokens,
-        l3OutputTokens: stageMetrics.l3.outputTokens,
-        l3CostUsd: stageMetrics.l3.costUsd,
-        l3DurationMs: stageMetrics.l3.durationMs,
+        // Store verification with structural analysis + cost metrics
+        const tokens = costTracker.getTotalTokens();
+        const stageMetrics = costTracker.getStageMetrics();
+        if (!wp.id.startsWith('tmp-')) {
+          await this.deps.verificationsRepo.deleteByWhitepaperId(wp.id);
+          await this.deps.verificationsRepo.create({
+            whitepaperId: wp.id,
+            structuralScore,
+            confidenceScore: aggregate.confidenceScore,
+            hypeTechRatio,
+            verdict: aggregate.verdict,
+            totalClaims: claims.length,
+            verifiedClaims: evaluations.length,
+            llmTokensUsed: tokens.input + tokens.output,
+            computeCostUsd: costTracker.getTotalCostUsd(),
+            structuralAnalysisJson: analysis as unknown as Record<string, unknown>,
+            triggerSource: (input._triggerSource as string) ?? 'manual',
+            cacheHit: false,
+            l1DurationMs: stageMetrics.l1.durationMs,
+            l2InputTokens: stageMetrics.l2.inputTokens,
+            l2OutputTokens: stageMetrics.l2.outputTokens,
+            l2CostUsd: stageMetrics.l2.costUsd,
+            l2DurationMs: stageMetrics.l2.durationMs,
+            l3InputTokens: stageMetrics.l3.inputTokens,
+            l3OutputTokens: stageMetrics.l3.outputTokens,
+            l3CostUsd: stageMetrics.l3.costUsd,
+            l3DurationMs: stageMetrics.l3.durationMs,
+          });
+        }
+
+        const report = this.deps.reportGenerator.generateTokenomicsAudit(
+          {
+            structuralScore,
+            confidenceScore: aggregate.confidenceScore,
+            hypeTechRatio,
+            verdict: aggregate.verdict,
+            focusAreaScores: aggregate.focusAreaScores,
+            totalClaims: claims.length,
+            verifiedClaims: evaluations.length,
+            llmTokensUsed: tokens.input + tokens.output,
+            computeCostUsd: costTracker.getTotalCostUsd(),
+          },
+          claims,
+          wp as never,
+          scores,
+          analysis,
+        );
+
+        // Requirement-aware synthesis: focused analysis addressing buyer's specific question
+        if (requirementText && /\b(math|evaluat|audit|analys|mechan|architect|impact|stress|volatil)/i.test(requirementText)) {
+          const synthesis = await this.generateSynthesis(requirementText, projectName, claims, resolved.text, costTracker);
+          if (synthesis) report.logicSummary = synthesis;
+        }
+
+        // Ensure requested token_address is in the report
+        if (originalTokenAddress) {
+          report.tokenAddress = originalTokenAddress;
+        }
+
+        return report;
       });
+    } catch (err) {
+      if ((err as Error).message === 'Pipeline timeout') {
+        log.warn('Pipeline timeout in verify — returning INSUFFICIENT_DATA', { projectName });
+        const insuffResult = this.insufficientData(input);
+        if (originalTokenAddress) insuffResult.tokenAddress = originalTokenAddress;
+        return insuffResult;
+      }
+      throw err;
     }
-
-    const report = this.deps.reportGenerator.generateTokenomicsAudit(
-      {
-        structuralScore,
-        confidenceScore: aggregate.confidenceScore,
-        hypeTechRatio,
-        verdict: aggregate.verdict,
-        focusAreaScores: aggregate.focusAreaScores,
-        totalClaims: claims.length,
-        verifiedClaims: evaluations.length,
-        llmTokensUsed: tokens.input + tokens.output,
-        computeCostUsd: costTracker.getTotalCostUsd(),
-      },
-      claims,
-      wp as never,
-      scores,
-      analysis,
-    );
-
-    // Requirement-aware synthesis: focused analysis addressing buyer's specific question
-    if (requirementText && /\b(math|evaluat|audit|analys|mechan|architect|impact|stress|volatil)/i.test(requirementText)) {
-      const synthesis = await this.generateSynthesis(requirementText, projectName, claims, resolved.text, costTracker);
-      if (synthesis) report.logicSummary = synthesis;
-    }
-
-    // Ensure requested token_address is in the report
-    if (originalTokenAddress) {
-      report.tokenAddress = originalTokenAddress;
-    }
-
-    log.info('Pipeline complete', {
-      offering: 'verify_project_whitepaper',
-      projectName: (wp as Record<string, unknown>).projectName ?? projectName,
-      totalClaims: claims.length,
-      llmTokensUsed: tokens.input + tokens.output,
-      computeCostUsd: costTracker.getTotalCostUsd().toFixed(4),
-    });
-
-    return report;
   }
 
   private async handleFullVerification(input: Record<string, unknown>, costTracker: CostTracker) {
@@ -627,8 +659,9 @@ export class JobRouter {
     const requirementText = this.extractRequirementText(input);
 
     // Resolve project name from token address if missing
-    if (!reqName && reqAddr) {
-      const resolved = await resolveTokenName(reqAddr);
+    // Use originalAddr as fallback — reqAddr is undefined after soft-strip
+    if (!reqName && (reqAddr || originalAddr)) {
+      const resolved = await resolveTokenName((reqAddr || originalAddr)!);
       if (resolved) {
         reqName = resolved;
         input.project_name = resolved;
@@ -809,17 +842,18 @@ export class JobRouter {
 
     // If no document_url, try discovery
     if (!documentUrl && this.deps.tieredDiscovery) {
-      const metadata: ProjectMetadata = {
-        agentName: projectName,
-        entityId: null,
-        description: null,
-        linkedUrls: [],
-        category: null,
-        graduationStatus: null,
-      };
       try {
-        const discovered = await this.deps.tieredDiscovery.discover(metadata, reqAddr ?? '');
-        if (discovered) {
+        const discReport = await this.withTimeout(async () => {
+          const metadata: ProjectMetadata = {
+            agentName: projectName,
+            entityId: null,
+            description: null,
+            linkedUrls: [],
+            category: null,
+            graduationStatus: null,
+          };
+          const discovered = await this.deps.tieredDiscovery!.discover(metadata, reqAddr ?? '');
+          if (!discovered) return null;
           const { resolved, analysis, structuralScore, hypeTechRatio, claims: discClaims, wp: discWp } = await this.runL1L2(discovered.documentUrl, projectName, reqAddr, requirementText, costTracker);
           const { evaluations, scores } = this.deps.claimEvaluator
             ? await this.deps.claimEvaluator.evaluateAll(discClaims, resolved.text, { requirementText, costTracker })
@@ -833,9 +867,14 @@ export class JobRouter {
           );
           if (originalAddr) report.tokenAddress = originalAddr;
           return report;
-        }
+        });
+        if (discReport) return discReport;
       } catch (err) {
-        log.warn('Discovery failed for full_technical_verification', { error: (err as Error).message });
+        if ((err as Error).message === 'Pipeline timeout') {
+          log.warn('Pipeline timeout in full_tech discovery — returning INSUFFICIENT_DATA', { projectName });
+        } else {
+          log.warn('Discovery failed for full_technical_verification', { error: (err as Error).message });
+        }
       }
       return this.insufficientData(input);
     }
@@ -854,99 +893,102 @@ export class JobRouter {
       return { error: 'invalid_url', message: 'document_url is not a valid URL' };
     }
 
-    // Run L1+L2
-    let { resolved, analysis, structuralScore, hypeTechRatio, claims, wp: newWp } = await this.runL1L2(documentUrl, projectName, reqAddr, requirementText, costTracker);
+    // Run full pipeline with timeout
+    try {
+      return await this.withTimeout(async () => {
+        // Run L1+L2
+        let { resolved, analysis, structuralScore, hypeTechRatio, claims, wp: newWp } = await this.runL1L2(documentUrl, projectName, reqAddr, requirementText, costTracker);
 
-    // If provided document_url yielded 0 claims (e.g. landing page, SPA), try discovery fallback
-    if (claims.length === 0 && this.deps.tieredDiscovery && projectName !== 'Unknown') {
-      try {
-        log.info('full_tech document_url yielded 0 claims — trying discovery fallback', { projectName, documentUrl: documentUrl.slice(0, 80) });
-        const metadata: ProjectMetadata = {
-          agentName: projectName,
-          entityId: null,
-          description: null,
-          linkedUrls: [],
-          category: null,
-          graduationStatus: null,
-        };
-        const discovered = await this.deps.tieredDiscovery.discover(metadata, reqAddr ?? '');
-        if (discovered && discovered.documentUrl !== documentUrl) {
-          const fallback = await this.runL1L2(discovered.documentUrl, projectName, reqAddr, requirementText, costTracker);
-          if (fallback.claims.length > 0) {
-            log.info('Discovery fallback succeeded for full_tech', { projectName, discoveredUrl: discovered.documentUrl.slice(0, 80), claims: fallback.claims.length });
-            ({ resolved, analysis, structuralScore, hypeTechRatio, claims, wp: newWp } = fallback);
+        // If provided document_url yielded 0 claims (e.g. landing page, SPA), try discovery fallback
+        if (claims.length === 0 && this.deps.tieredDiscovery && projectName !== 'Unknown') {
+          try {
+            log.info('full_tech document_url yielded 0 claims — trying discovery fallback', { projectName, documentUrl: documentUrl.slice(0, 80) });
+            const metadata: ProjectMetadata = {
+              agentName: projectName,
+              entityId: null,
+              description: null,
+              linkedUrls: [],
+              category: null,
+              graduationStatus: null,
+            };
+            const discovered = await this.deps.tieredDiscovery.discover(metadata, reqAddr ?? '');
+            if (discovered && discovered.documentUrl !== documentUrl) {
+              const fallback = await this.runL1L2(discovered.documentUrl, projectName, reqAddr, requirementText, costTracker);
+              if (fallback.claims.length > 0) {
+                log.info('Discovery fallback succeeded for full_tech', { projectName, discoveredUrl: discovered.documentUrl.slice(0, 80), claims: fallback.claims.length });
+                ({ resolved, analysis, structuralScore, hypeTechRatio, claims, wp: newWp } = fallback);
+              }
+            }
+          } catch (err) {
+            log.warn('Discovery fallback failed for full_tech', { projectName, error: (err as Error).message });
           }
         }
-      } catch (err) {
-        log.warn('Discovery fallback failed for full_tech', { projectName, error: (err as Error).message });
-      }
-    }
 
-    // L3: Full claim evaluation
-    const { evaluations, scores } = await this.deps.claimEvaluator.evaluateAll(claims, resolved.text, { requirementText, costTracker });
+        // L3: Full claim evaluation
+        const { evaluations, scores } = await this.deps.claimEvaluator.evaluateAll(claims, resolved.text, { requirementText, costTracker });
 
-    // Build score array from evaluation results
-    const claimScores = claims.map((c) => ({
-      category: c.category as never,
-      score: scores.get(c.claimId) ?? 50,
-    }));
+        // Build score array from evaluation results
+        const claimScores = claims.map((c) => ({
+          category: c.category as never,
+          score: scores.get(c.claimId) ?? 50,
+        }));
 
-    const aggregate = this.deps.scoreAggregator.aggregate(claimScores);
+        const aggregate = this.deps.scoreAggregator.aggregate(claimScores);
 
-    // Store verification with structural analysis (includes MiCA data)
-    const tokens = costTracker.getTotalTokens();
-    if (!newWp.id.startsWith('tmp-')) {
-      await this.deps.verificationsRepo.deleteByWhitepaperId(newWp.id);
-      await this.deps.verificationsRepo.create({
-        whitepaperId: newWp.id,
-        structuralScore,
-        confidenceScore: aggregate.confidenceScore,
-        hypeTechRatio,
-        verdict: aggregate.verdict,
-        totalClaims: claims.length,
-        verifiedClaims: evaluations.length,
-        llmTokensUsed: tokens.input + tokens.output,
-        computeCostUsd: costTracker.getTotalCostUsd(),
-        focusAreaScores: aggregate.focusAreaScores,
-        structuralAnalysisJson: analysis as unknown as Record<string, unknown>,
+        // Store verification with structural analysis (includes MiCA data)
+        const tokens = costTracker.getTotalTokens();
+        if (!newWp.id.startsWith('tmp-')) {
+          await this.deps.verificationsRepo.deleteByWhitepaperId(newWp.id);
+          await this.deps.verificationsRepo.create({
+            whitepaperId: newWp.id,
+            structuralScore,
+            confidenceScore: aggregate.confidenceScore,
+            hypeTechRatio,
+            verdict: aggregate.verdict,
+            totalClaims: claims.length,
+            verifiedClaims: evaluations.length,
+            llmTokensUsed: tokens.input + tokens.output,
+            computeCostUsd: costTracker.getTotalCostUsd(),
+            focusAreaScores: aggregate.focusAreaScores,
+            structuralAnalysisJson: analysis as unknown as Record<string, unknown>,
+          });
+        }
+
+        const fullReport = this.deps.reportGenerator.generateFullVerification(
+          {
+            structuralScore,
+            confidenceScore: aggregate.confidenceScore,
+            hypeTechRatio,
+            verdict: aggregate.verdict,
+            focusAreaScores: aggregate.focusAreaScores,
+            totalClaims: claims.length,
+            verifiedClaims: evaluations.length,
+            llmTokensUsed: tokens.input + tokens.output,
+            computeCostUsd: costTracker.getTotalCostUsd(),
+          },
+          claims,
+          evaluations,
+          newWp as never,
+          scores,
+          analysis,
+        );
+
+        // Requirement-aware synthesis: focused analysis addressing buyer's specific question
+        if (requirementText && /\b(math|evaluat|audit|analys|mechan|architect|impact|stress|volatil)/i.test(requirementText)) {
+          const synthesis = await this.generateSynthesis(requirementText, projectName, claims, resolved.text, costTracker);
+          if (synthesis) fullReport.logicSummary = synthesis;
+        }
+
+        if (originalAddr) fullReport.tokenAddress = originalAddr;
+        return fullReport;
       });
+    } catch (err) {
+      if ((err as Error).message === 'Pipeline timeout') {
+        log.warn('Pipeline timeout in full_tech — returning INSUFFICIENT_DATA', { projectName });
+        return this.insufficientData(input);
+      }
+      throw err;
     }
-
-    log.info('Pipeline complete', {
-      offering: 'full_technical_verification',
-      projectName,
-      totalClaims: claims.length,
-      llmTokensUsed: tokens.input + tokens.output,
-      computeCostUsd: costTracker.getTotalCostUsd().toFixed(4),
-    });
-
-    const fullReport = this.deps.reportGenerator.generateFullVerification(
-      {
-        structuralScore,
-        confidenceScore: aggregate.confidenceScore,
-        hypeTechRatio,
-        verdict: aggregate.verdict,
-        focusAreaScores: aggregate.focusAreaScores,
-        totalClaims: claims.length,
-        verifiedClaims: evaluations.length,
-        llmTokensUsed: tokens.input + tokens.output,
-        computeCostUsd: costTracker.getTotalCostUsd(),
-      },
-      claims,
-      evaluations,
-      newWp as never,
-      scores,
-      analysis,
-    );
-
-    // Requirement-aware synthesis: focused analysis addressing buyer's specific question
-    if (requirementText && /\b(math|evaluat|audit|analys|mechan|architect|impact|stress|volatil)/i.test(requirementText)) {
-      const synthesis = await this.generateSynthesis(requirementText, projectName, claims, resolved.text, costTracker);
-      if (synthesis) fullReport.logicSummary = synthesis;
-    }
-
-    if (originalAddr) fullReport.tokenAddress = originalAddr;
-    return fullReport;
   }
 
   private async handleDailyBriefing(input: Record<string, unknown>) {
@@ -1061,6 +1103,22 @@ export class JobRouter {
     return briefing;
   }
 
+  /** Race a pipeline function against PIPELINE_TIMEOUT_MS. Clears the timer on both paths to prevent unhandled rejections. */
+  private async withTimeout<T>(fn: () => Promise<T>): Promise<T> {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('Pipeline timeout')), PIPELINE_TIMEOUT_MS);
+    });
+    try {
+      const result = await Promise.race([fn(), timeoutPromise]);
+      clearTimeout(timeoutId!);
+      return result;
+    } catch (err) {
+      clearTimeout(timeoutId!);
+      throw err;
+    }
+  }
+
   /** Extract buyer's analytical requirement from the input, if present. */
   private extractRequirementText(input: Record<string, unknown>): string | null {
     if (typeof input._requirementText === 'string' && input._requirementText.length > 10) {
@@ -1126,7 +1184,7 @@ export class JobRouter {
    */
   private async findWhitepaper(input: Record<string, unknown>) {
     const projectName = input.project_name as string | undefined;
-    const tokenAddress = input.token_address as string | undefined;
+    const tokenAddress = (input._originalTokenAddress ?? input.token_address) as string | undefined;
 
     const allCandidates: Array<{ id: string }> = [];
 
@@ -1190,7 +1248,7 @@ export class JobRouter {
    */
   private async findBestWhitepaper(input: Record<string, unknown>) {
     const projectName = input.project_name as string | undefined;
-    const tokenAddress = input.token_address as string | undefined;
+    const tokenAddress = (input._originalTokenAddress ?? input.token_address) as string | undefined;
 
     // Collect ALL candidate entries from both name and address lookups
     const candidates: Array<{ wp: Record<string, unknown>; claimCount: number }> = [];
