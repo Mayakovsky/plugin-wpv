@@ -175,7 +175,7 @@ export class JobRouter {
           analysis,
           wp as never,
         );
-        const requestedAddress = input.token_address as string | undefined;
+        const requestedAddress = (input._originalTokenAddress ?? input.token_address) as string | undefined;
         if (requestedAddress) {
           report.tokenAddress = requestedAddress;
         }
@@ -186,6 +186,7 @@ export class JobRouter {
     // Cache miss — run live L1 if discovery stack is available
     let projectName = (input.project_name as string | undefined)?.trim() ?? '';
     const tokenAddress = (input.token_address as string | undefined)?.trim() ?? '';
+    const originalTokenAddress = ((input._originalTokenAddress ?? input.token_address) as string | undefined)?.trim() ?? '';
 
     // Resolve project name from token address if missing
     if (!projectName && tokenAddress) {
@@ -282,7 +283,7 @@ export class JobRouter {
             analysis,
             { id: newWpId, projectName, tokenAddress } as never,
           );
-          if (tokenAddress) report.tokenAddress = tokenAddress;
+          if (originalTokenAddress) report.tokenAddress = originalTokenAddress;
           log.info('Live L1 scan completed', { projectName, structuralScore, verdict });
           return report;
         }

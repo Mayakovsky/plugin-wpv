@@ -97,7 +97,7 @@ const MALICIOUS_PROJECT_NAME_KEYWORDS: string[] = [
   'rugpull', 'rug pull', 'ponzi', 'honeypot', 'drainer',
   'stealer', 'pyramid', 'laundering', 'money launder',
   'pump and dump', 'pump & dump',
-  'explicit',
+  'explicit', 'malicious', 'fraud', 'terror',
 ];
 
 /** Invalid project name patterns — indicate non-token/non-project inputs */
@@ -649,6 +649,20 @@ export class WpvService extends Service {
             }
           }
         } catch (e) { if (e instanceof Error && e.name === 'InputValidationError') throw e; }
+        // Reject search engine URLs — not valid document sources
+        const SEARCH_ENGINE_PATTERNS = [
+          /^https?:\/\/(www\.)?google\.\w+\/(search|webhp)/i,
+          /^https?:\/\/(www\.)?bing\.com\/(search|results)/i,
+          /^https?:\/\/search\.yahoo\.com/i,
+          /^https?:\/\/(www\.)?duckduckgo\.com\/(\?q=|search)/i,
+          /^https?:\/\/(www\.)?baidu\.com\/(s|search)/i,
+          /^https?:\/\/(www\.)?yandex\.\w+\/(search|yandsearch)/i,
+        ];
+        if (SEARCH_ENGINE_PATTERNS.some(p => p.test(trimmedUrl))) {
+          const err = new Error('Invalid document_url: search engine URLs are not valid document sources');
+          err.name = 'InputValidationError';
+          throw err;
+        }
         // Reject non-document file types
         const lowerUrl = trimmedUrl.toLowerCase();
         if (/\.(png|jpg|jpeg|gif|svg|ico|webp|bmp|mp4|mp3|avi|mov)(\?.*)?$/.test(lowerUrl)) {
@@ -712,6 +726,47 @@ export class WpvService extends Service {
         );
         err.name = 'InputValidationError';
         throw err;
+      }
+    }
+
+    // Content-based rejection on project_name — runs BEFORE token_address validation
+    // so it's not bypassed by early returns in the token validation flow.
+    const projectName = requirement?.project_name;
+    if (typeof projectName === 'string') {
+      const lower = projectName.toLowerCase();
+
+      // Reject NSFW / policy violation markers (e.g., "[NSFW_VIOLATION_CONTENT]")
+      if (/\[.*(?:nsfw|violation|banned|illegal|prohibited|explicit|adult|offensive).*\]/i.test(projectName)) {
+        const err = new Error('Request contains policy-violating content and cannot be processed');
+        err.name = 'InputValidationError';
+        throw err;
+      }
+
+      // NSFW keywords in project name
+      for (const pattern of NSFW_PATTERNS) {
+        if (pattern.test(projectName)) {
+          const err = new Error('Request contains policy-violating content and cannot be processed');
+          err.name = 'InputValidationError';
+          throw err;
+        }
+      }
+
+      // Reject names that explicitly indicate non-token / non-project inputs
+      for (const pattern of INVALID_NAME_PATTERNS) {
+        if (lower.includes(pattern)) {
+          const err = new Error(`Rejected: project name '${projectName.slice(0, 50)}' indicates invalid input — '${pattern}'`);
+          err.name = 'InputValidationError';
+          throw err;
+        }
+      }
+
+      // Reject obviously malicious project names
+      for (const keyword of MALICIOUS_PROJECT_NAME_KEYWORDS) {
+        if (lower.includes(keyword)) {
+          const err = new Error('Request contains policy-violating content and cannot be processed');
+          err.name = 'InputValidationError';
+          throw err;
+        }
       }
     }
 
@@ -832,51 +887,13 @@ export class WpvService extends Service {
       }
     }
 
-    // Content-based rejection on project_name
-    const projectName = requirement?.project_name;
-    if (typeof projectName === 'string') {
-      const lower = projectName.toLowerCase();
-
-      // Reject NSFW / policy violation markers (e.g., "[NSFW_VIOLATION_CONTENT]")
-      if (/\[.*(?:nsfw|violation|banned|illegal|prohibited|explicit|adult|offensive).*\]/i.test(projectName)) {
-        const err = new Error(`Rejected: project name '${projectName.slice(0, 50)}' contains policy-violating content`);
-        err.name = 'InputValidationError';
-        throw err;
-      }
-
-      // NSFW keywords in project name
-      for (const pattern of NSFW_PATTERNS) {
-        if (pattern.test(projectName)) {
-          const err = new Error(`Rejected: project name '${projectName.slice(0, 50)}' contains policy-violating content`);
-          err.name = 'InputValidationError';
-          throw err;
-        }
-      }
-
-      // Reject names that explicitly indicate non-token / non-project inputs
-      for (const pattern of INVALID_NAME_PATTERNS) {
-        if (lower.includes(pattern)) {
-          const err = new Error(`Rejected: project name '${projectName.slice(0, 50)}' indicates invalid input — '${pattern}'`);
-          err.name = 'InputValidationError';
-          throw err;
-        }
-      }
-
-      // Reject obviously malicious project names
-      for (const keyword of MALICIOUS_PROJECT_NAME_KEYWORDS) {
-        if (lower.includes(keyword)) {
-          const err = new Error(`Rejected: project name '${projectName.slice(0, 50)}' contains suspicious keyword '${keyword}'`);
-          err.name = 'InputValidationError';
-          throw err;
-        }
-      }
-
-      // Cross-reference: reject non-EVM L1 chain names paired with 0x EVM addresses.
-      // Bitcoin, Cardano, etc. don't use EVM — a 0x address is contradictory.
+    // Cross-reference: reject non-EVM L1 chain names paired with 0x EVM addresses.
+    if (typeof requirement?.project_name === 'string') {
+      const projLower = requirement.project_name.toLowerCase();
       const NON_EVM_CHAINS = ['bitcoin', 'btc', 'cardano', 'ada', 'ripple', 'xrp', 'litecoin', 'ltc', 'monero', 'xmr', 'dogecoin', 'doge', 'toncoin', 'ton', 'tron', 'trx', 'stellar', 'xlm', 'hedera', 'hbar', 'algorand', 'algo', 'kaspa', 'kas'];
       const tokenAddr = requirement?.token_address as string | undefined;
-      if (tokenAddr && tokenAddr.startsWith('0x') && NON_EVM_CHAINS.includes(lower)) {
-        const err = new Error(`Contradictory inputs: project '${projectName}' is a non-EVM chain but token_address '${tokenAddr.slice(0, 20)}...' is an EVM address`);
+      if (tokenAddr && tokenAddr.startsWith('0x') && NON_EVM_CHAINS.includes(projLower)) {
+        const err = new Error(`Contradictory inputs: project '${requirement.project_name}' is a non-EVM chain but token_address '${tokenAddr.slice(0, 20)}...' is an EVM address`);
         err.name = 'InputValidationError';
         throw err;
       }
