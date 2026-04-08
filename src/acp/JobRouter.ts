@@ -603,7 +603,7 @@ export class JobRouter {
     }
 
     // Ensure requested token_address is in the report
-    if (requestedTokenAddress) {
+    if (originalTokenAddress) {
       report.tokenAddress = originalTokenAddress;
     }
 
