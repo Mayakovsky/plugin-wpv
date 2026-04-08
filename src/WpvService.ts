@@ -565,15 +565,14 @@ export class WpvService extends Service {
       }
     }
 
-    // Fix 5: Reject JSON requirements with non-standard fields but no identifying fields
-    // Empty {} passes through — handler returns INSUFFICIENT_DATA gracefully.
-    // {"garbage": "..."} is rejected — has fields but none are standard.
+    // Fix 5: Reject JSON requirements missing all identifying fields
+    // Both {} and {"garbage": "..."} are rejected — no standard fields to work with.
+    // daily_technical_briefing excluded — handles empty input gracefully (returns today's briefing).
     if (!isPlainText && offeringId !== 'daily_technical_briefing') {
       const hasTokenAddress = requirement?.token_address !== undefined && requirement?.token_address !== null;
       const hasProjectName = requirement?.project_name !== undefined && requirement?.project_name !== null;
       const hasDocumentUrl = requirement?.document_url !== undefined && requirement?.document_url !== null;
-      const hasAnyField = Object.keys(requirement).filter(k => !k.startsWith('_')).length > 0;
-      if (!hasTokenAddress && !hasProjectName && !hasDocumentUrl && hasAnyField) {
+      if (!hasTokenAddress && !hasProjectName && !hasDocumentUrl) {
         const err = new Error('Invalid requirement: must include at least one of token_address, project_name, or document_url');
         err.name = 'InputValidationError';
         throw err;
