@@ -83,7 +83,7 @@ export class DocsSiteCrawler {
    * @param url - The landing page URL
    * @param landingPageText - Pre-stripped text from FetchContentResolver (included in output)
    */
-  async crawl(url: string, landingPageText: string): Promise<ResolvedContent | null> {
+  async crawl(url: string, landingPageText: string, signal?: AbortSignal): Promise<ResolvedContent | null> {
     const crawlStart = Date.now();
 
     try {
@@ -134,6 +134,7 @@ export class DocsSiteCrawler {
       const visited = new Set<string>([url.split('#')[0]]);
 
       for (const { href } of scoredLinks) {
+        if (signal?.aborted) break;
         if (totalChars >= MAX_TOTAL_CHARS) break;
         if (Date.now() - crawlStart > MAX_CRAWL_TIME_MS) {
           log.warn('Crawl wall time exceeded', { url, elapsed: Date.now() - crawlStart });

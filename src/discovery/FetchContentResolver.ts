@@ -5,13 +5,18 @@
 import type { IContentResolver, ResolvedContent } from '../types';
 
 export class FetchContentResolver implements IContentResolver {
-  async resolve(url: string): Promise<ResolvedContent> {
+  private combineSignal(pipelineSignal?: AbortSignal): AbortSignal {
+    const requestTimeout = AbortSignal.timeout(15000);
+    return pipelineSignal ? AbortSignal.any([pipelineSignal, requestTimeout]) : requestTimeout;
+  }
+
+  async resolve(url: string, signal?: AbortSignal): Promise<ResolvedContent> {
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'WhitepaperGrey/1.0 (whitepaper-verification)',
         'Accept': 'text/html,application/xhtml+xml,application/pdf,*/*',
       },
-      signal: AbortSignal.timeout(15000),
+      signal: this.combineSignal(signal),
       redirect: 'follow',
     });
 
@@ -30,7 +35,7 @@ export class FetchContentResolver implements IContentResolver {
             'User-Agent': 'WhitepaperGrey/1.0 (whitepaper-verification)',
             'Accept': 'application/pdf,*/*',
           },
-          signal: AbortSignal.timeout(15000),
+          signal: this.combineSignal(signal),
           redirect: 'follow',
         });
         const buffer = Buffer.from(await pdfResponse.arrayBuffer());

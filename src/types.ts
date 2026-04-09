@@ -334,5 +334,5 @@ export interface ResolvedContent {
 
 /** Interface for content resolution — implemented by autognostic's ContentResolver */
 export interface IContentResolver {
-  resolve(url: string): Promise<ResolvedContent>;
+  resolve(url: string, signal?: AbortSignal): Promise<ResolvedContent>;
 }

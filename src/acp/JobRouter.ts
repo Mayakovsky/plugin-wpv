@@ -199,7 +199,7 @@ export class JobRouter {
 
     // Resolve project name from token address if missing
     // Use originalTokenAddress as fallback — tokenAddress is empty after soft-strip
-    if (!projectName && (tokenAddress || originalTokenAddress)) {
+    if ((!projectName || projectName === 'Unknown') && (tokenAddress || originalTokenAddress)) {
       const resolved = await resolveTokenName((tokenAddress || originalTokenAddress)!);
       if (resolved) {
         projectName = resolved;
@@ -213,7 +213,7 @@ export class JobRouter {
 
     if (this.deps.tieredDiscovery) {
       try {
-        const scanReport = await this.withTimeout(async () => {
+        const scanReport = await this.withTimeout(async (signal) => {
           const metadata: ProjectMetadata = {
             agentName: projectName,
             entityId: null,
@@ -323,9 +323,9 @@ export class JobRouter {
    * Shared by handleVerifyWhitepaper and handleFullVerification.
    * Returns intermediate results for further processing.
    */
-  private async runL1L2(documentUrl: string, projectName: string, tokenAddress: string | null | undefined, requirementText: string | null | undefined, costTracker: CostTracker) {
+  private async runL1L2(documentUrl: string, projectName: string, tokenAddress: string | null | undefined, requirementText: string | null | undefined, costTracker: CostTracker, signal?: AbortSignal) {
     // Resolve the document
-    const resolved = await this.deps.cryptoResolver.resolveWhitepaper(normalizeGitHubUrl(documentUrl));
+    const resolved = await this.deps.cryptoResolver.resolveWhitepaper(normalizeGitHubUrl(documentUrl), signal);
 
     // L1: Structural analysis (timed)
     costTracker.startStage('l1');
@@ -419,7 +419,7 @@ export class JobRouter {
 
     // Resolve project name from token address if missing
     // Use originalTokenAddress as fallback — requestedTokenAddress is null after soft-strip
-    if (!projectName && (requestedTokenAddress || originalTokenAddress)) {
+    if ((!projectName || projectName === 'Unknown') && (requestedTokenAddress || originalTokenAddress)) {
       const resolved = await resolveTokenName((requestedTokenAddress || originalTokenAddress)!);
       if (resolved) {
         projectName = resolved;
@@ -484,7 +484,7 @@ export class JobRouter {
 
       if (this.deps.tieredDiscovery) {
         try {
-          const discReport = await this.withTimeout(async () => {
+          const discReport = await this.withTimeout(async (signal) => {
             const metadata: ProjectMetadata = {
               agentName: projectName,
               entityId: null,
@@ -496,7 +496,7 @@ export class JobRouter {
             const discovered = await this.deps.tieredDiscovery!.discover(metadata, requestedTokenAddress ?? '');
             if (!discovered) return null;
             // Use discovered document URL for L1+L2+L3
-            const { resolved: discResolved, analysis: discAnalysis, structuralScore: discScore, hypeTechRatio: discHype, claims: discClaims, wp: discWp } = await this.runL1L2(discovered.documentUrl, projectName, requestedTokenAddress, requirementText, costTracker);
+            const { resolved: discResolved, analysis: discAnalysis, structuralScore: discScore, hypeTechRatio: discHype, claims: discClaims, wp: discWp } = await this.runL1L2(discovered.documentUrl, projectName, requestedTokenAddress, requirementText, costTracker, signal);
             costTracker.startStage('l3');
             const { evaluations: discEvals, scores: discScores } = await this.deps.claimEvaluator.evaluateAll(discClaims, discResolved.text, { requirementText, costTracker });
             costTracker.endStage('l3', 0, 0);
@@ -558,12 +558,12 @@ export class JobRouter {
     }
 
     try {
-      return await this.withTimeout(async () => {
-        let { resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = await this.runL1L2(documentUrl, projectName, requestedTokenAddress, requirementText, costTracker);
+      return await this.withTimeout(async (signal) => {
+        let { resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = await this.runL1L2(documentUrl, projectName, requestedTokenAddress, requirementText, costTracker, signal);
 
         // If provided document_url yielded 0 claims (e.g. JavaScript SPA, empty page),
         // try discovery as fallback before giving up
-        if (claims.length === 0 && this.deps.tieredDiscovery && projectName !== 'Unknown') {
+        if (claims.length === 0 && this.deps.tieredDiscovery) {
           try {
             log.info('document_url yielded 0 claims — trying discovery fallback', { projectName, documentUrl: documentUrl.slice(0, 80) });
             const metadata: ProjectMetadata = {
@@ -576,7 +576,7 @@ export class JobRouter {
             };
             const discovered = await this.deps.tieredDiscovery.discover(metadata, requestedTokenAddress ?? '');
             if (discovered && discovered.documentUrl !== documentUrl) {
-              const fallback = await this.runL1L2(discovered.documentUrl, projectName, requestedTokenAddress, requirementText, costTracker);
+              const fallback = await this.runL1L2(discovered.documentUrl, projectName, requestedTokenAddress, requirementText, costTracker, signal);
               if (fallback.claims.length > 0) {
                 log.info('Discovery fallback succeeded', { projectName, discoveredUrl: discovered.documentUrl.slice(0, 80), claims: fallback.claims.length });
                 ({ resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = fallback);
@@ -680,7 +680,7 @@ export class JobRouter {
 
     // Resolve project name from token address if missing
     // Use originalAddr as fallback — reqAddr is undefined after soft-strip
-    if (!reqName && (reqAddr || originalAddr)) {
+    if ((!reqName || reqName === 'Unknown') && (reqAddr || originalAddr)) {
       const resolved = await resolveTokenName((reqAddr || originalAddr)!);
       if (resolved) {
         reqName = resolved;
@@ -863,7 +863,7 @@ export class JobRouter {
     // If no document_url, try discovery
     if (!documentUrl && this.deps.tieredDiscovery) {
       try {
-        const discReport = await this.withTimeout(async () => {
+        const discReport = await this.withTimeout(async (signal) => {
           const metadata: ProjectMetadata = {
             agentName: projectName,
             entityId: null,
@@ -874,7 +874,7 @@ export class JobRouter {
           };
           const discovered = await this.deps.tieredDiscovery!.discover(metadata, reqAddr ?? '');
           if (!discovered) return null;
-          const { resolved, analysis, structuralScore, hypeTechRatio, claims: discClaims, wp: discWp } = await this.runL1L2(discovered.documentUrl, projectName, reqAddr, requirementText, costTracker);
+          const { resolved, analysis, structuralScore, hypeTechRatio, claims: discClaims, wp: discWp } = await this.runL1L2(discovered.documentUrl, projectName, reqAddr, requirementText, costTracker, signal);
           const { evaluations, scores } = this.deps.claimEvaluator
             ? await this.deps.claimEvaluator.evaluateAll(discClaims, resolved.text, { requirementText, costTracker })
             : { evaluations: [], scores: new Map<string, number>() };
@@ -934,12 +934,12 @@ export class JobRouter {
 
     // Run full pipeline with timeout
     try {
-      return await this.withTimeout(async () => {
+      return await this.withTimeout(async (signal) => {
         // Run L1+L2
-        let { resolved, analysis, structuralScore, hypeTechRatio, claims, wp: newWp } = await this.runL1L2(documentUrl, projectName, reqAddr, requirementText, costTracker);
+        let { resolved, analysis, structuralScore, hypeTechRatio, claims, wp: newWp } = await this.runL1L2(documentUrl, projectName, reqAddr, requirementText, costTracker, signal);
 
         // If provided document_url yielded 0 claims (e.g. landing page, SPA), try discovery fallback
-        if (claims.length === 0 && this.deps.tieredDiscovery && projectName !== 'Unknown') {
+        if (claims.length === 0 && this.deps.tieredDiscovery) {
           try {
             log.info('full_tech document_url yielded 0 claims — trying discovery fallback', { projectName, documentUrl: documentUrl.slice(0, 80) });
             const metadata: ProjectMetadata = {
@@ -952,7 +952,7 @@ export class JobRouter {
             };
             const discovered = await this.deps.tieredDiscovery.discover(metadata, reqAddr ?? '');
             if (discovered && discovered.documentUrl !== documentUrl) {
-              const fallback = await this.runL1L2(discovered.documentUrl, projectName, reqAddr, requirementText, costTracker);
+              const fallback = await this.runL1L2(discovered.documentUrl, projectName, reqAddr, requirementText, costTracker, signal);
               if (fallback.claims.length > 0) {
                 log.info('Discovery fallback succeeded for full_tech', { projectName, discoveredUrl: discovered.documentUrl.slice(0, 80), claims: fallback.claims.length });
                 ({ resolved, analysis, structuralScore, hypeTechRatio, claims, wp: newWp } = fallback);
@@ -1143,17 +1143,19 @@ export class JobRouter {
   }
 
   /** Race a pipeline function against PIPELINE_TIMEOUT_MS. Clears the timer on both paths to prevent unhandled rejections. */
-  private async withTimeout<T>(fn: () => Promise<T>): Promise<T> {
-    let timeoutId: ReturnType<typeof setTimeout>;
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(() => reject(new Error('Pipeline timeout')), PIPELINE_TIMEOUT_MS);
-    });
+  private async withTimeout<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const controller = new AbortController();
+    const { signal } = controller;
+    const timeoutId = setTimeout(() => controller.abort(), PIPELINE_TIMEOUT_MS);
     try {
-      const result = await Promise.race([fn(), timeoutPromise]);
-      clearTimeout(timeoutId!);
+      const result = await fn(signal);
+      clearTimeout(timeoutId);
       return result;
     } catch (err) {
-      clearTimeout(timeoutId!);
+      clearTimeout(timeoutId);
+      if (signal.aborted) {
+        throw new Error('Pipeline timeout');
+      }
       throw err;
     }
   }

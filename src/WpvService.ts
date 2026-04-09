@@ -25,14 +25,10 @@ import { JobRouter } from './acp/JobRouter';
 import { ResourceHandlers } from './acp/ResourceHandlers';
 import { LLM_PRICING } from './constants';
 import type { DrizzleDbLike, OfferingId } from './types';
+import { KNOWN_PROTOCOL_PATTERN } from './constants/protocols';
 import { logger } from './utils/logger';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
-
-// ── Known Protocol Pattern ─────────────────
-// Single source of truth for protocol name recognition.
-// Used by: extractFromUnknownFields, burn-address soft-strip, 404 soft-fallback, out-of-scope detector.
-const KNOWN_PROTOCOL_PATTERN = /\b(Bitcoin|Ethereum|Solana|Cardano|Polkadot|Avalanche|Cosmos|Toncoin|Tron|Near|Algorand|Aptos|Sui|Sei|Hedera|Fantom|Stellar|XRP|Litecoin|Monero|Filecoin|Internet\s*Computer|Kaspa|Injective|Celestia|Mantle|Arbitrum|Optimism|Base|Polygon|zkSync|Starknet|Scroll|Linea|Blast|Manta|Mode|Uniswap|Aave|Compound|MakerDAO|Maker|Curve|Synthetix|SushiSwap|Balancer|Yearn|Chainlink|Lido|Rocket\s*Pool|Frax|Convex|Euler|Morpho|Radiant|Pendle|GMX|dYdX|Virtuals\s*Protocol|Aerodrome|Jupiter|Raydium|Orca|Marinade|Jito|Drift|1inch|PancakeSwap|Pancake\s*Swap|Trader\s*Joe|Camelot|Stargate|LayerZero|Layer\s*Zero|Wormhole|Across|Hop\s*Protocol|The\s*Graph|Arweave|Akash|Render|Pyth|API3|Ethena|USDe|Hyperliquid|EigenLayer|Eigen\s*Layer|Pepe|Shiba|Dogecoin|Floki|Bonk)\s*(v\d+)?\b/i;
 
 // ── Shared Content Filtering ─────────────────
 // Single source of truth for all content violation checks.

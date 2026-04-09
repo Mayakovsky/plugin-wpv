@@ -4,6 +4,9 @@ import { CostTracker } from '../src/verification/CostTracker';
 import { LLM_PRICING } from '../src/constants';
 import { ClaimCategory } from '../src/types';
 
+// Text must exceed ClaimExtractor's MIN_TEXT_FOR_EXTRACTION (200 chars)
+const SAMPLE_TEXT = 'This whitepaper describes the protocol architecture including tokenomics, consensus mechanisms, and performance optimizations. The system uses a novel bonding curve with mathematical proofs for price stability and slashing conditions for validator misbehavior.';
+
 function createMockClient(toolResponse?: Record<string, unknown>): AnthropicClient {
   return {
     messages: {
@@ -59,7 +62,7 @@ describe('ClaimExtractor', () => {
   });
 
   it('extracts valid claims from mock API response', async () => {
-    const claims = await extractor.extractClaims('Some whitepaper text...', 'TestProject');
+    const claims = await extractor.extractClaims(SAMPLE_TEXT, 'TestProject');
     expect(claims).toHaveLength(3);
     expect(claims[0].category).toBe('TOKENOMICS');
     expect(claims[0].claimText).toBe('APY of 12% is sustainable');
@@ -70,7 +73,7 @@ describe('ClaimExtractor', () => {
     client = createMockClient({ claims: [] });
     extractor = new ClaimExtractor({ client, costTracker });
 
-    const claims = await extractor.extractClaims('Some text', 'TestProject');
+    const claims = await extractor.extractClaims(SAMPLE_TEXT, 'TestProject');
     expect(claims).toEqual([]);
   });
 
@@ -85,12 +88,12 @@ describe('ClaimExtractor', () => {
     };
     extractor = new ClaimExtractor({ client: malformedClient, costTracker });
 
-    const claims = await extractor.extractClaims('Some text', 'TestProject');
+    const claims = await extractor.extractClaims(SAMPLE_TEXT, 'TestProject');
     expect(claims).toEqual([]);
   });
 
   it('tracks token usage with recordUsage', async () => {
-    await extractor.extractClaims('Some text', 'TestProject');
+    await extractor.extractClaims(SAMPLE_TEXT, 'TestProject');
 
     const tokens = costTracker.getTotalTokens();
     expect(tokens.input).toBe(2000);
@@ -108,7 +111,7 @@ describe('ClaimExtractor', () => {
     });
     extractor = new ClaimExtractor({ client: allCategories, costTracker });
 
-    const claims = await extractor.extractClaims('Text', 'TestProject');
+    const claims = await extractor.extractClaims(SAMPLE_TEXT, 'TestProject');
     expect(claims[0].category).toBe(ClaimCategory.TOKENOMICS);
     expect(claims[1].category).toBe(ClaimCategory.PERFORMANCE);
     expect(claims[2].category).toBe(ClaimCategory.CONSENSUS);
@@ -123,7 +126,7 @@ describe('ClaimExtractor', () => {
     };
     extractor = new ClaimExtractor({ client: errorClient, costTracker });
 
-    await expect(extractor.extractClaims('Text', 'TestProject')).rejects.toThrow('500');
+    await expect(extractor.extractClaims(SAMPLE_TEXT, 'TestProject')).rejects.toThrow('500');
   });
 
   it('returns empty array for empty text input', async () => {
@@ -134,7 +137,7 @@ describe('ClaimExtractor', () => {
   });
 
   it('assigns sequential claimIds', async () => {
-    const claims = await extractor.extractClaims('Text', 'TestProject');
+    const claims = await extractor.extractClaims(SAMPLE_TEXT, 'TestProject');
     expect(claims[0].claimId).toBe('claim-1');
     expect(claims[1].claimId).toBe('claim-2');
     expect(claims[2].claimId).toBe('claim-3');
@@ -149,7 +152,7 @@ describe('ClaimExtractor', () => {
     });
     extractor = new ClaimExtractor({ client: clientWithEmpty, costTracker });
 
-    const claims = await extractor.extractClaims('Text', 'TestProject');
+    const claims = await extractor.extractClaims(SAMPLE_TEXT, 'TestProject');
     expect(claims).toHaveLength(1);
     expect(claims[0].claimText).toBe('Valid claim');
   });
@@ -163,7 +166,7 @@ describe('ClaimExtractor', () => {
     });
     extractor = new ClaimExtractor({ client: regClient, costTracker });
 
-    const claims = await extractor.extractClaims('Text', 'TestProject');
+    const claims = await extractor.extractClaims(SAMPLE_TEXT, 'TestProject');
     expect(claims[0].regulatoryRelevance).toBe(false);
     expect(claims[1].regulatoryRelevance).toBe(true);
   });
@@ -176,13 +179,13 @@ describe('ClaimExtractor', () => {
     });
     extractor = new ClaimExtractor({ client: noRegClient, costTracker });
 
-    const claims = await extractor.extractClaims('Text', 'TestProject');
+    const claims = await extractor.extractClaims(SAMPLE_TEXT, 'TestProject');
     expect(claims[0].regulatoryRelevance).toBe(false);
   });
 
   it('accumulates cost across multiple calls', async () => {
-    await extractor.extractClaims('Text 1', 'Project1');
-    await extractor.extractClaims('Text 2', 'Project2');
+    await extractor.extractClaims(SAMPLE_TEXT, 'Project1');
+    await extractor.extractClaims(SAMPLE_TEXT, 'Project2');
 
     const tokens = costTracker.getTotalTokens();
     expect(tokens.input).toBe(4000);

@@ -46,7 +46,7 @@ const KNOWN_WHITEPAPER_URLS: Array<[RegExp, string]> = [
   [/\bethena\b/i, 'https://ethena-labs.gitbook.io/ethena-labs/solution-overview/usde-overview'],
   [/\bbalancer\b/i, 'https://docs.balancer.fi'],
   [/\bseamless\b/i, 'https://docs.seamlessprotocol.com'],
-  [/\baerodrome\b/i, 'https://aerodrome.finance/docs'],
+  [/\baerodrome\b/i, 'https://raw.githubusercontent.com/aerodrome-finance/docs/main/content/tokenomics.mdx'],
   [/\bpyth\b/i, 'https://docs.pyth.network'],
   // ── L1/L2 Chains ──
   [/\bsolana\b/i, 'https://solana.com/solana-whitepaper.pdf'],

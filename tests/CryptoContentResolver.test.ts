@@ -43,7 +43,8 @@ describe('CryptoContentResolver', () => {
     await cryptoResolver.resolveWhitepaper(ipfsUrl);
 
     expect(mockResolver.resolve).toHaveBeenCalledWith(
-      expect.stringContaining('ipfs.io/ipfs/QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG')
+      expect.stringContaining('ipfs.io/ipfs/QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG'),
+      undefined, // AbortSignal (optional)
     );
   });
 

@@ -118,6 +118,18 @@ export class ClaimExtractor {
 
     if (!text || text.trim().length === 0) return [];
 
+    // Minimum text threshold — SPA shells, empty pages, and image-only PDFs
+    // don't have enough text for meaningful claim extraction.
+    const MIN_TEXT_FOR_EXTRACTION = 200;
+    if (text.trim().length < MIN_TEXT_FOR_EXTRACTION) {
+      log.info('Text too short for claim extraction — skipping Sonnet call', {
+        textLength: text.trim().length,
+        threshold: MIN_TEXT_FOR_EXTRACTION,
+        projectName,
+      });
+      return [];
+    }
+
     const userContent = requirementText
       ? `The buyer has requested: "${requirementText}"\n\nExtract all testable claims from this ${projectName} whitepaper, with SPECIAL FOCUS on claims relevant to the buyer's request. If the request mentions mathematical evaluation, formulas, or quantitative analysis, prioritize extracting mathematical definitions, equations, model parameters, and quantitative assertions. Tag these with mathematicalProofPresent: true if they contain formal/quantitative content.\n\n${text.slice(0, 50000)}`
       : `Extract all testable claims from this ${projectName} whitepaper:\n\n${text.slice(0, 50000)}`;

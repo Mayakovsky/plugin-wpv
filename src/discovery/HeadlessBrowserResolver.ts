@@ -21,7 +21,7 @@ const MAX_CONTENT_LENGTH = 100000;
 const BROWSER_RESTART_THRESHOLD = 20;
 const MAX_REDIRECTS = 3;
 const RATE_LIMIT_PER_HOUR = 30;
-const MIN_FREE_RAM_BYTES = 250 * 1024 * 1024; // 250MB — Linux freemem() includes reclaimable cache
+const MIN_FREE_RAM_BYTES = 200 * 1024 * 1024; // 200MB — Playwright uses ~150MB, 50MB buffer
 const CONTEXT_CLOSE_TIMEOUT_MS = 5000;
 const THIN_SPA_THRESHOLD = 2000;
 const MAX_SUBPAGES = 5;
@@ -57,20 +57,23 @@ export class HeadlessBrowserResolver {
     // Cannot use require() in ESM context.
   }
 
-  async resolve(url: string): Promise<ResolvedContent | null> {
+  async resolve(url: string, signal?: AbortSignal): Promise<ResolvedContent | null> {
+    if (signal?.aborted) return null;
     let release: () => void;
     const acquired = new Promise<void>(r => { release = r; });
     const previous = this._renderLock;
     this._renderLock = acquired;
     await previous;
+    // Check again after lock wait — pipeline may have timed out while queued
+    if (signal?.aborted) { release!(); return null; }
     try {
-      return await this._resolveImpl(url);
+      return await this._resolveImpl(url, signal);
     } finally {
       release!();
     }
   }
 
-  private async _resolveImpl(url: string): Promise<ResolvedContent | null> {
+  private async _resolveImpl(url: string, signal?: AbortSignal): Promise<ResolvedContent | null> {
     // Lazy init: attempt to load playwright-core on first call
     if (!this.initPromise && !this.available && !this.chromium) {
       this.initPromise = this.loadPlaywright();
@@ -90,12 +93,13 @@ export class HeadlessBrowserResolver {
     if (freeRam < MIN_FREE_RAM_BYTES) {
       log.warn('Insufficient free RAM for headless browser', {
         freeRamMB: Math.round(freeRam / 1024 / 1024),
-        requiredMB: 250,
+        requiredMB: Math.round(MIN_FREE_RAM_BYTES / 1024 / 1024),
       });
       return null;
     }
 
     try {
+      if (signal?.aborted) return null;
       await this.ensureBrowser();
       this._lastResolveFollowedLinks = false;
       const text = await this.renderAndExtract(url);

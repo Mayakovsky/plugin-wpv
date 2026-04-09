@@ -33,7 +33,7 @@ export class CryptoContentResolver {
   /**
    * Resolve a whitepaper URL to extracted text with crypto-specific handling.
    */
-  async resolveWhitepaper(url: string): Promise<ResolvedWhitepaper> {
+  async resolveWhitepaper(url: string, signal?: AbortSignal): Promise<ResolvedWhitepaper> {
     let resolvedUrl = url;
     let source: ResolvedWhitepaper['source'] = 'direct';
 
@@ -45,7 +45,7 @@ export class CryptoContentResolver {
     }
 
     try {
-      const content = await this.contentResolver.resolve(resolvedUrl);
+      const content = await this.contentResolver.resolve(resolvedUrl, signal);
 
       // Redirect-to-homepage: original URL had a document path but landed on root.
       // Treat homepage content as empty to trigger enhanced resolution / discovery.
@@ -56,7 +56,7 @@ export class CryptoContentResolver {
           finalUrl: content.resolvedUrl,
         });
         // Force enhanced resolution regardless of text length
-        const enhanced = await this.enhancedResolve(url, false);
+        const enhanced = await this.enhancedResolve(url, false, signal);
         if (enhanced) {
           const enhancedSource = this.mapSource(enhanced.source);
           return this.buildResult(enhanced, url, enhanced.resolvedUrl, enhancedSource);
@@ -76,7 +76,7 @@ export class CryptoContentResolver {
           log.info('Docs site detected — attempting sub-page crawl', {
             url, textLength: content.text.length,
           });
-          const crawled = await this.docsCrawler.crawl(url, content.text);
+          const crawled = await this.docsCrawler.crawl(url, content.text, signal);
           if (crawled && crawled.text.length > content.text.length * 1.5) {
             return this.buildResult(crawled, url, crawled.resolvedUrl ?? url, 'docs-crawl');
           }
@@ -94,7 +94,7 @@ export class CryptoContentResolver {
         isSpaDetected,
       });
 
-      const enhanced = await this.enhancedResolve(url, isSpaDetected);
+      const enhanced = await this.enhancedResolve(url, isSpaDetected, signal);
       if (enhanced) {
         // If enhanced resolution returned content for a docs-site URL,
         // route through DocsSiteCrawler for comprehensive sub-page crawling.
@@ -104,7 +104,7 @@ export class CryptoContentResolver {
           log.info('SPA docs site — routing enhanced content through DocsSiteCrawler', {
             url, enhancedChars: enhanced.text.length,
           });
-          const crawled = await this.docsCrawler.crawl(url, enhanced.text);
+          const crawled = await this.docsCrawler.crawl(url, enhanced.text, signal);
           if (crawled && crawled.text.length > enhanced.text.length * 1.5) {
             return this.buildResult(crawled, url, crawled.resolvedUrl ?? url, 'docs-crawl');
           }
@@ -146,6 +146,7 @@ export class CryptoContentResolver {
   private async enhancedResolve(
     originalUrl: string,
     isSpaDetected: boolean,
+    signal?: AbortSignal,
   ): Promise<ResolvedContent | null> {
     // Layer 2: llms.txt probe (cheap — just HTTP fetches)
     const llmsContent = await this.llmsTxtResolver.resolve(originalUrl);
@@ -159,8 +160,17 @@ export class CryptoContentResolver {
     // Legitimately thin static pages (mostly images, short captions)
     // should NOT trigger an expensive Playwright render.
     if (isSpaDetected) {
-      const rendered = await this.headlessBrowser.resolve(originalUrl);
+      const rendered = await this.headlessBrowser.resolve(originalUrl, signal);
       if (rendered) return rendered;
+      // Playwright failed (RAM, timeout, crash) — signal this upstream
+      log.warn('SPA detected but Playwright failed — content will be thin', { url: originalUrl });
+      return {
+        text: '',
+        contentType: 'text/html',
+        source: 'headless-browser',
+        resolvedUrl: originalUrl,
+        diagnostics: ['SPA_DETECTED', 'PLAYWRIGHT_FAILED'],
+      };
     } else {
       log.debug('Skipping headless browser — no SPA markers detected', {
         url: originalUrl,
