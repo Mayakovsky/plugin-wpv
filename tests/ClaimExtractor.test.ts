@@ -136,6 +136,17 @@ describe('ClaimExtractor', () => {
     expect(client.messages.create).not.toHaveBeenCalled();
   });
 
+  it('returns empty array for text below minimum threshold (200 chars) without calling Sonnet', async () => {
+    // SPA shells, image-only PDFs, and empty pages produce < 200 chars.
+    // ClaimExtractor should skip the Sonnet API call entirely.
+    const thinContent = 'Aerodrome Finance — a next-generation AMM on Base. Built on the Velodrome model with ve(3,3) tokenomics.'; // 105 chars
+    expect(thinContent.length).toBeLessThan(200);
+
+    const claims = await extractor.extractClaims(thinContent, 'Aerodrome');
+    expect(claims).toEqual([]);
+    expect(client.messages.create).not.toHaveBeenCalled();
+  });
+
   it('assigns sequential claimIds', async () => {
     const claims = await extractor.extractClaims(SAMPLE_TEXT, 'TestProject');
     expect(claims[0].claimId).toBe('claim-1');
