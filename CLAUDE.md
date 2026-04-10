@@ -16,7 +16,7 @@
 | **Framework** | ElizaOS v1.x (`@elizaos/core` 1.6.5) |
 | **Database** | Supabase Pro (PostgreSQL + pgvector, $25/mo) |
 | **Package Manager** | `bun` (required) |
-| **Test Framework** | Vitest (309 tests, 24 files) |
+| **Test Framework** | Vitest (310 tests, 24 files) |
 | **Peer Dependencies** | `@elizaos/plugin-autognostic` (optional), `@elizaos/plugin-acp` (optional — ACP marketplace connection) |
 | **LLM** | Claude Sonnet via Anthropic API (`claude-sonnet-4-20250514`). Set via `WPV_MODEL` env var. Haiku tested but insufficient for claim extraction on technical whitepapers — returned 0 claims on Aave v1 PDF. |
 | **Chain** | Base (Virtuals Protocol) |
@@ -59,6 +59,8 @@ Read/Modify without confirmation: `**/*`
 src/
 ├── types.ts                          # All WPV type definitions, enums, interfaces
 ├── constants.ts                      # Config: cron schedule, thresholds, score weights, verdict cutoffs
+├── constants/
+│   └── protocols.ts                  # Canonical KNOWN_PROTOCOL_PATTERN (shared across repos)
 ├── index.ts                          # Plugin registration (6 actions + WpvService)
 ├── WpvService.ts                     # Central service — dependency container for all WPV subsystems
 │
@@ -230,8 +232,11 @@ pm2 restart grey
 - `BUILD DOCS and DATA/Eval_Run_24_Analysis.md` — Eval 24 failure analysis + DocsSiteCrawler architecture sketch
 - `BUILD DOCS and DATA/Grey_Kovsky_Execution_PreEval24.md` — Pre-eval 24 hardening plan (5 tasks, all implemented)
 - `BUILD DOCS and DATA/Grey_Kovsky_Execution_ChainlinkPendle.md` — Redirect detection + SPA link-following plan
+- `BUILD DOCS and DATA/Grey_Kovsky_Execution_Eval34_Fixes.md` — Eval 34 fix plan (mutex, timeout, resolveTokenName)
+- `BUILD DOCS and DATA/Grey_Kovsky_Execution_Eval35_Fixes_v3.md` — Eval 35 fix plan v3 (9-fix infrastructure overhaul)
+- `BUILD DOCS and DATA/Grey_Graduation_Report.md` — Graduation report and post-launch context
 - `README.md` — Setup and usage
 
 ---
 
-*Last updated: 2026-04-08 (eval 32 fixes: tokenAddress on all scan+verify paths, name check before token validation, search engine URL blocklist. 309 tests / 24 files.)*
+*Last updated: 2026-04-09 (GRADUATED 24/24 — eval 37. 9-fix infrastructure overhaul: parser rewrite, AbortController, min text threshold, SPA signal, protocol sync, RAM threshold, URL audit. 310 tests / 24 files.)*
