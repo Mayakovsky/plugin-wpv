@@ -1,8 +1,8 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-04-09 (GRADUATED — 24/24 perfect score on eval 37)
+> Last updated: 2026-04-11 (ACP v2 SDK migration — code complete, Grey STOPPED pending deploy)
 > Updated by: Claude Opus 4.6 — Kovsky session
-> Session label: Graduation. Eval 37: 24/24. 9-fix infrastructure overhaul (eval 35 fixes) deployed across 2 repos. Plain-text parser rewrite, AbortController threading, min text threshold, SPA signal, protocol sync, RAM threshold, URL audit. 310/310 tests.
-> Staleness gate: 2026-04-09 — if today is >3 days past this,
+> Session label: ACP v2 migration. Graduated 24/24 on v1 (eval 37). SDK migrated to @virtuals-protocol/acp-node-v2 with PrivyAlchemyEvmProviderAdapter. Code tested locally (45+310). Grey stopped on VPS. Forces leading manual credential deployment.
+> Staleness gate: 2026-04-11 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
 ## Focus (1-3 goals, testable)
@@ -36,15 +36,18 @@
 - [x] **Min text threshold** — ClaimExtractor skips Sonnet for text < 200 chars (SPA shells, empty pages)
 - [x] **Protocol sync** — shared KNOWN_PROTOCOL_PATTERN in src/constants/protocols.ts, synced to AcpService inline
 - [x] **GRADUATED** — 24/24 perfect score, eval 37 (2026-04-09)
+- [x] **ACP v2 SDK migration** — code complete, 45 tests passing (2026-04-11)
+- [ ] **ACP v2 deploy** — Forces deploying Privy credentials, then SCP + restart
+- [ ] **Re-graduation** — need perfect pass rate on v2 evaluator
 - [ ] **LAUNCH** — set production prices, close ports, fire outreach, monitor
 
 ## What Works (verified)
-- ✅ Build (`bun run build`) — 0 errors — verified 2026-04-09
-- ✅ Tests — plugin-wpv 310/310 (24 files), plugin-acp 59/59 — verified 2026-04-09
+- ✅ Build (`bun run build`) — 0 errors — verified 2026-04-11
+- ✅ Tests — plugin-wpv 310/310 (24 files), plugin-acp 45/45 (2 files) — verified 2026-04-11
 - ✅ Plugin registration: 6 actions + WpvService registered via Eliza Plugin interface
-- ✅ VPS deployed: AWS Lightsail us-west-2, Grey running 24/7 via PM2
-- ✅ Virtuals agent registered: Provider role, 4 job offerings, wallet funded
-- ✅ **plugin-acp** — 59/59 tests, HTTP handler + rejectPayable + InputValidationError
+- ⚠️ **VPS: Grey STOPPED** — pending ACP v2 credential deployment
+- ✅ Virtuals agent registered: Provider role, 4 job offerings, migrated to v2
+- ✅ **plugin-acp** — 45/45 tests, ACP v2 SDK, PrivyAlchemy adapter, event-driven dispatch
 - ✅ **plugin-wpv ↔ plugin-acp wired** — 4 offering handlers with prices, direct Supabase DB
 - ✅ **HTTP endpoint live** — `http://44.243.254.19:3001` — all 4 offerings responding
 - ✅ **Anthropic API Tier 2** — 450k TPM, 1000 RPM
@@ -52,15 +55,17 @@
 - ✅ **24/24 graduation eval** — all offerings perfect (2026-04-09)
 
 ## What's Broken
+- 🔴 **Grey is STOPPED on VPS** — ACP v2 migration in progress, waiting for Privy credentials
+- ⚠️ **VPS .env needs updating** — old Alchemy vars still present, need Privy vars added
+- ⚠️ **VPS plugin-acp needs SCP deploy** — new AcpService.ts + types.ts + constants.ts + package.json
+- ⚠️ **VPS plugin-acp needs `bun install`** — new deps (acp-node-v2, viem), remove old (acp-node)
 - ⚠️ **plugin-acp git pull broken on VPS** — private repo, deploy via SCP + rebuild.
 - ⚠️ **Ports 3000 + 3001 open** in Lightsail firewall — close for production.
-- ⚠️ Image-only PDF detection limited (deferred)
-- ⚠️ OCR gap — scanned PDFs return INSUFFICIENT_DATA (deferred)
 - ⚠️ Test prices still active ($0.01-$0.04) — switch to production prices for launch
 
 ## Test Count
-- **plugin-wpv: 310 tests / 24 files, 0 failures** (verified 2026-04-09)
-- **plugin-acp: 59 tests / 2 files, 0 failures** (verified 2026-04-09)
+- **plugin-wpv: 310 tests / 24 files, 0 failures** (verified 2026-04-11)
+- **plugin-acp: 45 tests / 2 files, 0 failures** (verified 2026-04-11)
 
 ## DB State (post-graduation, 2026-04-09)
 - **8 whitepapers:** Aave (18), Aave V3 (15), Aerodrome Finance (14), Chainlink (12), Chainlink v2 (12), Lido (14), Uniswap (20), Virtuals Protocol (6)

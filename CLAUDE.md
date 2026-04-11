@@ -25,11 +25,11 @@
 
 ## ACP Marketplace Connection
 
-**`plugin-acp`** (github.com/Mayakovsky/plugin-acp) bridges ElizaOS ↔ Virtuals ACP. Dual interface:
-- **HTTP job handler** (port 3001) — Virtuals sends POST `{job_id, offering_id, arguments}`, Grey returns `{status, deliverable}`. Used for Breakbot testing and sandbox graduation.
-- **WebSocket SDK** — `@virtuals-protocol/acp-node` `onNewTask` callback for production job dispatch.
+**`plugin-acp`** (github.com/Mayakovsky/plugin-acp) bridges ElizaOS ↔ Virtuals ACP v2. Dual interface:
+- **HTTP job handler** (port 3001) — Virtuals sends POST `{job_id, offering_id, arguments}`, Grey returns `{status, deliverable}`. Used for testing.
+- **ACP v2 SDK** — `@virtuals-protocol/acp-node-v2` event-driven `agent.on('entry')` with `SocketTransport` for production job dispatch. Uses `PrivyAlchemyEvmProviderAdapter` (Privy-managed wallet via Virtuals).
 
-`WpvService.start()` registers all 5 offering handlers with AcpService (retries after 3s if AcpService loads later). WpvService connects directly to Supabase via `WPV_DATABASE_URL` (not ElizaOS PGlite).
+`WpvService.start()` registers all 4 offering handlers with AcpService (retries after 3s if AcpService loads later). WpvService connects directly to Supabase via `WPV_DATABASE_URL` (not ElizaOS PGlite).
 
 **`AcpWrapper.ts` is a legacy stub** — retained for `IAcpClient` interface in tests. Not used in production.
 
@@ -149,11 +149,10 @@ enum Verdict {
 ```bash
 ANTHROPIC_API_KEY=sk-ant-...
 WPV_MODEL=claude-sonnet-4-20250514
-ACP_WALLET_PRIVATE_KEY=0x...
-ACP_SESSION_ENTITY_KEY_ID=...
-ACP_AGENT_WALLET_ADDRESS=0x...
+ACP_AGENT_WALLET_ADDRESS=0xa966...    # Privy-managed wallet (post-v2 migration)
+ACP_PRIVY_WALLET_ID=...               # Privy wallet ID (string, from Virtuals Signers tab)
+ACP_PRIVY_SIGNER_KEY=...              # Privy authorization key (from Virtuals Add Signer)
 BASE_RPC_URL=https://base-mainnet.g.alchemy.com/v2/your-key
-VIRTUALS_FACTORY_CONTRACT=0xF66DeA7b3e897cD44A5a231c61B6B4423d613259
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SECRET_KEY=sb_secret_...
 WPV_DATABASE_URL=postgresql://...
@@ -202,17 +201,27 @@ pm2 restart grey
 
 **plugin-acp** (PRIVATE repo — git pull broken, use SCP):
 ```bash
-# From local machine:
+# From local machine — SCP all changed files:
 scp -i C:\Users\kidco\.ssh\WhitepaperGrey.pem plugin-acp/src/AcpService.ts ubuntu@44.243.254.19:/opt/grey/plugin-acp/src/AcpService.ts
+scp -i C:\Users\kidco\.ssh\WhitepaperGrey.pem plugin-acp/src/types.ts ubuntu@44.243.254.19:/opt/grey/plugin-acp/src/types.ts
+scp -i C:\Users\kidco\.ssh\WhitepaperGrey.pem plugin-acp/src/constants.ts ubuntu@44.243.254.19:/opt/grey/plugin-acp/src/constants.ts
+scp -i C:\Users\kidco\.ssh\WhitepaperGrey.pem plugin-acp/package.json ubuntu@44.243.254.19:/opt/grey/plugin-acp/package.json
 # On VPS:
-cd /opt/grey/plugin-acp && bun run build
+cd /opt/grey/plugin-acp && bun install && bun run build
 # dist is SYMLINKED into wpv-agent/node_modules — no copy needed
 pm2 restart grey
 ```
 
 **CRITICAL:** plugin-acp dist is symlinked (`/opt/grey/wpv-agent/node_modules/@elizaos/plugin-acp/dist → /opt/grey/plugin-acp/dist`). Do NOT `bun install` in wpv-agent or the symlink may be replaced with a stale copy. ElizaOS re-bundles on startup from node_modules dist files.
 
-**After restart:** Wait for "Registered 4 offering handlers" in logs before triggering any tests.
+**ACP v2 env vars required** (set in wpv-agent/.env before restart):
+```
+ACP_AGENT_WALLET_ADDRESS=0xa9667116b4f4e9f1bae85f93a21b4b8ea45de98f
+ACP_PRIVY_WALLET_ID=<from Virtuals Signers tab>
+ACP_PRIVY_SIGNER_KEY=<from Virtuals Add Signer>
+```
+
+**After restart:** Wait for "SDK connected (v2, PrivyAlchemy, SocketTransport)" + "Registered 4 offering handlers" in logs before triggering any tests.
 
 **Use `vitest run` (not `vitest`)** for local tests — watch mode leaves orphaned processes.
 
@@ -239,4 +248,4 @@ pm2 restart grey
 
 ---
 
-*Last updated: 2026-04-09 (GRADUATED 24/24 — eval 37. 9-fix infrastructure overhaul: parser rewrite, AbortController, min text threshold, SPA signal, protocol sync, RAM threshold, URL audit. 310 tests / 24 files.)*
+*Last updated: 2026-04-11 (ACP v2 SDK migration in progress. Graduated 24/24 eval 37 on v1. Now migrating to acp-node-v2 + PrivyAlchemyEvmProviderAdapter. Code complete + tested locally (45+310 tests). Grey STOPPED on VPS pending credential deployment. 310 tests / 24 files.)*
