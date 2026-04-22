@@ -1,8 +1,8 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-04-11 (ACP v2 SDK migration — code complete, Grey STOPPED pending deploy)
-> Updated by: Claude Opus 4.6 — Kovsky session
-> Session label: ACP v2 migration. Graduated 24/24 on v1 (eval 37). SDK migrated to @virtuals-protocol/acp-node-v2 with PrivyAlchemyEvmProviderAdapter. Code tested locally (45+310). Grey stopped on VPS. Forces leading manual credential deployment.
-> Staleness gate: 2026-04-11 — if today is >3 days past this,
+> Last updated: 2026-04-22 (VIDEO GRADUATION 8/8 PASS — race condition fixed, all offerings end-to-end on-chain)
+> Updated by: Claude Opus 4.7 — Kovsky session
+> Session label: Video graduation tests complete. 8/8 PASS on the 4 offerings × (positive + negative). Pre-video, uncovered a race condition in plugin-acp v2 socket-path: buyer's SDK posts the `requirement` message via REST (`transport.postMessage`), not the socket, so `agent.on('entry')` never fires for it. Both `handleJobCreated` and `handleJobFunded` were reading requirement from empty `session.entries` → immediate reject / error-deliverable fallback. Fix: `waitForRequirement()` helper with 3-tier fallback (fast-path → poll → `transport.getHistory()` REST pull). Dual-trigger dispatch on `job.created` OR `requirement.message` entries. `__decided` sentinel prevents double-accept. Applied to both phase handlers. Deployed to VPS, SDK reconnected, 4 handlers re-registered, Grey ran 9 jobs without crash or restart. Video run: jobs #1049–#1055 + #1180 (Test 8 re-record). Total 0.13 USDC spent. Report: `BUILD DOCS and DATA/Video_Graduation_Test_Report_2026-04-22.md`.
+> Staleness gate: 2026-04-22 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
 ## Focus (1-3 goals, testable)
@@ -36,32 +36,45 @@
 - [x] **Min text threshold** — ClaimExtractor skips Sonnet for text < 200 chars (SPA shells, empty pages)
 - [x] **Protocol sync** — shared KNOWN_PROTOCOL_PATTERN in src/constants/protocols.ts, synced to AcpService inline
 - [x] **GRADUATED** — 24/24 perfect score, eval 37 (2026-04-09)
-- [x] **ACP v2 SDK migration** — code complete, 45 tests passing (2026-04-11)
-- [ ] **ACP v2 deploy** — Forces deploying Privy credentials, then SCP + restart
-- [ ] **Re-graduation** — need perfect pass rate on v2 evaluator
+- [x] **ACP v2 SDK migration COMPLETE** — AcpService.ts fully rewritten, 45 tests passing (2026-04-11)
+- [x] **ACP v2 deploy** — Privy credentials deployed, SCP'd files, Grey LIVE on VPS (2026-04-15)
+- [x] **Virtuals UI confirmation** — "Upgrade now" + "Confirm Work done" completed; Grey visible on platform (zero ACP tx on new wallet yet)
+- [x] **Pipeline untouched** — same JobRouter, ClaimExtractor, resolver stack, 4 offering handlers
+- [x] **ACP CLI setup** — configured, buyer agent created (0x22a3…56a6), USDC funded
+- [x] **ACP CLI add-signer UNBLOCKED** — Root cause: Windows `cmd /c start` truncates URL at `&`, stripping `publicKey`. Workaround: paste full URL from CLI terminal into fresh tab (attempt 8 succeeded). Permanent fix: `browser.ts` switched to `rundll32 url.dll,FileProtocolHandler`. Signer publicKey populated, walletId stored.
+- [x] **Browse Grey via CLI** — returns 4 offerings correctly
+- [x] **SELF-HIRE probe** — contract reverts at simulation (buyer==provider rejected). Script: /opt/grey/plugin-acp/self-hire-test.js. Kept as diagnostic reference.
+- [x] **Video graduation tests** — 8/8 PASS on-chain, jobs #1049–#1055 + #1180. See `BUILD DOCS and DATA/Video_Graduation_Test_Report_2026-04-22.md`.
+- [x] **Race condition fix** — `waitForRequirement()` 3-tier fallback, dual-trigger dispatch, `__decided` sentinel. `plugin-acp/src/AcpService.ts`.
+- [ ] **Re-graduation** — submit to Butler for v2 evaluator re-run.
 - [ ] **LAUNCH** — set production prices, close ports, fire outreach, monitor
 
 ## What Works (verified)
 - ✅ Build (`bun run build`) — 0 errors — verified 2026-04-11
 - ✅ Tests — plugin-wpv 310/310 (24 files), plugin-acp 45/45 (2 files) — verified 2026-04-11
 - ✅ Plugin registration: 6 actions + WpvService registered via Eliza Plugin interface
-- ⚠️ **VPS: Grey STOPPED** — pending ACP v2 credential deployment
+- ✅ **VPS: Grey LIVE** — PM2 online, SDK v2 connected, 4 handlers registered. Survived 9 on-chain jobs without restart.
 - ✅ Virtuals agent registered: Provider role, 4 job offerings, migrated to v2
 - ✅ **plugin-acp** — 45/45 tests, ACP v2 SDK, PrivyAlchemy adapter, event-driven dispatch
 - ✅ **plugin-wpv ↔ plugin-acp wired** — 4 offering handlers with prices, direct Supabase DB
 - ✅ **HTTP endpoint live** — `http://44.243.254.19:3001` — all 4 offerings responding
+- ✅ **Grey LIVE on VPS** — PM2 online, SDK connected, 4 handlers registered, 72MB RAM
 - ✅ **Anthropic API Tier 2** — 450k TPM, 1000 RPM
 - ✅ **plugin-acp dist symlinked** — single source of truth for VPS deployments
 - ✅ **24/24 graduation eval** — all offerings perfect (2026-04-09)
 
 ## What's Broken
-- 🔴 **Grey is STOPPED on VPS** — ACP v2 migration in progress, waiting for Privy credentials
-- ⚠️ **VPS .env needs updating** — old Alchemy vars still present, need Privy vars added
-- ⚠️ **VPS plugin-acp needs SCP deploy** — new AcpService.ts + types.ts + constants.ts + package.json
-- ⚠️ **VPS plugin-acp needs `bun install`** — new deps (acp-node-v2, viem), remove old (acp-node)
-- ⚠️ **plugin-acp git pull broken on VPS** — private repo, deploy via SCP + rebuild.
+- ⚠️ **Self-hire blocked at contract level** (not a blocker for graduation, kept as note): ACP contract on Base (`0x238E541B…32E0`) reverts at simulation when `buyer==provider`. Verified via `/opt/grey/plugin-acp/self-hire-test.js`. Must use an external buyer (which we now have — Grey Test Buyer).
+- ⚠️ **full_technical_verification offering schema** — requirements field is a string (description text), not JSON schema. AJV client-side validation skipped. Registration bug on Virtuals side.
 - ⚠️ **Ports 3000 + 3001 open** in Lightsail firewall — close for production.
 - ⚠️ Test prices still active ($0.01-$0.04) — switch to production prices for launch
+- ⚠️ **Grey stats "not yet tracked"** on Virtuals UI — new wallet has zero ACP transactions; will populate after first successful video test job.
+
+## What's Fixed (2026-04-22)
+- 🟢 **plugin-acp race condition (requirement message delivery)** — v2 buyer SDK posts requirement via REST, not socket, so Grey's `agent.on('entry')` never fires for it. Both `handleJobCreated` and `handleJobFunded` were reading empty `session.entries`. Fix: `waitForRequirement()` 3-tier fallback (fast-path → poll → `transport.getHistory()`), dual-trigger dispatch, `__decided` sentinel. `plugin-acp/src/AcpService.ts`. Deployed, verified across 9 live jobs.
+
+## What's Fixed (2026-04-20)
+- 🟢 **ACP CLI `openBrowser` URL truncation on Windows** — 1-line fix in `src/lib/browser.ts`: `cmd /c start` → `rundll32 url.dll,FileProtocolHandler`. Cmd.exe was truncating URLs at `&` (command separator), silently dropping `publicKey` from the add-signer approval URL. Applied locally, CLI runs via tsx so effective immediately. Report for upstream: `BUILD DOCS and DATA/ACP_CLI_Windows_URL_Truncation.md`.
 
 ## Test Count
 - **plugin-wpv: 310 tests / 24 files, 0 failures** (verified 2026-04-11)
@@ -87,9 +100,20 @@
 | **37** | **24/24** | **ALL** | **NONE** | **GRADUATED** |
 
 ## Next Actions (ordered)
-1. **LAUNCH** — set production prices, close ports 3000+3001, fire outreach
-2. **Post-graduation:** wire DiscoveryCron, full DB hygiene service, render cache
-3. **Monitor** — watch for edge cases from real buyers
+1. **Re-graduation via Butler** — submit on video + on-chain evidence. 8/8 PASS ready for evaluator review.
+2. **Fix full_technical_verification schema** — re-register with JSON schema instead of string.
+3. **LAUNCH** — set production prices, close ports 3000+3001, fire outreach.
+4. **Upstream PR to Virtuals** — submit `browser.ts` Windows fix to `github.com/Virtual-Protocol/acp-cli`.
+5. **Post-graduation:** wire DiscoveryCron, full DB hygiene service, render cache.
+6. **Monitor** — watch for edge cases from real buyers.
+
+## ACP CLI Setup Notes
+- **Repo:** `github.com/Virtual-Protocol/acp-cli` (NOT an npm package)
+- **Local path:** `C:\Users\kidco\dev\acp-cli-buyer`
+- **Invocation:** `npm run acp -- <args>` from `C:\Users\kidco\dev\acp-cli-buyer` (use for ALL commands)
+- `npx acp` is broken on this machine (Node 24 issue) — do NOT use npx
+- **Setup remaining (blocks video tests):** configure → agent create → add-signer → USDC fund
+- **Grey wallet (for browse):** `0xa9667116b4f4e9f1bae85f93a21b4b8ea45de98f`
 
 ## Test Pricing (pre-graduation — CHANGE FOR LAUNCH)
 | Offering | Test Price | Production Price |

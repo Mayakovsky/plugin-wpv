@@ -244,8 +244,9 @@ ACP_PRIVY_SIGNER_KEY=<from Virtuals Add Signer>
 - `BUILD DOCS and DATA/Grey_Kovsky_Execution_Eval34_Fixes.md` — Eval 34 fix plan (mutex, timeout, resolveTokenName)
 - `BUILD DOCS and DATA/Grey_Kovsky_Execution_Eval35_Fixes_v3.md` — Eval 35 fix plan v3 (9-fix infrastructure overhaul)
 - `BUILD DOCS and DATA/Grey_Graduation_Report.md` — Graduation report and post-launch context
+- `BUILD DOCS and DATA/Video_Graduation_Test_Report_2026-04-22.md` — Video graduation tests: 8/8 PASS + race condition fix detail
 - `README.md` — Setup and usage
 
 ---
 
-*Last updated: 2026-04-11 (ACP v2 SDK migration in progress. Graduated 24/24 eval 37 on v1. Now migrating to acp-node-v2 + PrivyAlchemyEvmProviderAdapter. Code complete + tested locally (45+310 tests). Grey STOPPED on VPS pending credential deployment. 310 tests / 24 files.)*
+*Last updated: 2026-04-22 (VIDEO GRADUATION 8/8 PASS on-chain. All 4 offerings × pos/neg verified end-to-end on Base. Race condition fix deployed in plugin-acp — waitForRequirement() 3-tier fallback in handleJobCreated and handleJobFunded. Grey stable across 9 on-chain jobs with no restart. Ready for Butler v2 re-graduation submission. 310 tests / 24 files.)*
