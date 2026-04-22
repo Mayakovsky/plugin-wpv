@@ -18,7 +18,7 @@ export class ScoreAggregator {
    */
   aggregate(claimScores: { category: ClaimCategory; score: number }[]): {
     confidenceScore: number;
-    focusAreaScores: Record<ClaimCategory, number>;
+    focusAreaScores: Record<ClaimCategory, number | null>;
     verdict: Verdict;
   } {
     // Insufficient data check
@@ -44,7 +44,7 @@ export class ScoreAggregator {
 
   private computeFocusAreaScores(
     claimScores: { category: ClaimCategory; score: number }[],
-  ): Record<ClaimCategory, number> {
+  ): Record<ClaimCategory, number | null> {
     const scores: Record<string, number[]> = {
       TOKENOMICS: [],
       PERFORMANCE: [],
@@ -58,12 +58,14 @@ export class ScoreAggregator {
       }
     }
 
+    // Return null for categories with zero claims (absent).
+    // Prevents misleading "0" scores on categories that were never assessed.
     return {
-      TOKENOMICS: this.avg(scores.TOKENOMICS),
-      PERFORMANCE: this.avg(scores.PERFORMANCE),
-      CONSENSUS: this.avg(scores.CONSENSUS),
-      SCIENTIFIC: this.avg(scores.SCIENTIFIC),
-    } as Record<ClaimCategory, number>;
+      TOKENOMICS: scores.TOKENOMICS.length > 0 ? this.avg(scores.TOKENOMICS) : null,
+      PERFORMANCE: scores.PERFORMANCE.length > 0 ? this.avg(scores.PERFORMANCE) : null,
+      CONSENSUS: scores.CONSENSUS.length > 0 ? this.avg(scores.CONSENSUS) : null,
+      SCIENTIFIC: scores.SCIENTIFIC.length > 0 ? this.avg(scores.SCIENTIFIC) : null,
+    } as Record<ClaimCategory, number | null>;
   }
 
   private computeConfidenceScore(
@@ -87,12 +89,13 @@ export class ScoreAggregator {
     return Math.round(nums.reduce((a, b) => a + b, 0) / nums.length);
   }
 
-  private emptyFocusScores(): Record<ClaimCategory, number> {
+  private emptyFocusScores(): Record<ClaimCategory, number | null> {
+    // All categories null when no claims were evaluated (INSUFFICIENT_DATA path).
     return {
-      TOKENOMICS: 0,
-      PERFORMANCE: 0,
-      CONSENSUS: 0,
-      SCIENTIFIC: 0,
-    } as Record<ClaimCategory, number>;
+      TOKENOMICS: null,
+      PERFORMANCE: null,
+      CONSENSUS: null,
+      SCIENTIFIC: null,
+    } as Record<ClaimCategory, number | null>;
   }
 }

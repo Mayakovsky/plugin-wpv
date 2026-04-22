@@ -14,15 +14,24 @@ import type {
   TokenomicsAuditReport,
   FullVerificationReport,
   DailyBriefingReport,
+  DiscoveryStatus,
+  DiscoveryAttempt,
 } from '../types';
+
+export interface DiscoveryProvenance {
+  discoveryStatus: DiscoveryStatus;
+  discoverySourceTier: number | null;
+  discoveryAttempts: DiscoveryAttempt[];
+}
 
 export class ReportGenerator {
   generateLegitimacyScan(
     verification: VerificationResult,
     analysis: StructuralAnalysis,
     wp: WhitepaperRecord,
+    provenance?: DiscoveryProvenance,
   ): LegitimacyScanReport {
-    return {
+    const base: LegitimacyScanReport = {
       projectName: wp.projectName,
       tokenAddress: wp.tokenAddress,
       structuralScore: verification.structuralScore,
@@ -34,6 +43,12 @@ export class ReportGenerator {
       micaSummary: analysis.mica?.micaSummary ?? '',
       generatedAt: new Date().toISOString(),
     };
+    if (provenance) {
+      base.discoveryStatus = provenance.discoveryStatus;
+      base.discoverySourceTier = provenance.discoverySourceTier;
+      base.discoveryAttempts = provenance.discoveryAttempts;
+    }
+    return base;
   }
 
   generateTokenomicsAudit(
@@ -73,7 +88,8 @@ export class ReportGenerator {
     // Transform focusAreaScores keys to lowercase for ACP deliverable compliance.
     // Internal ScoreAggregator uses ClaimCategory enum values (TOKENOMICS, PERFORMANCE, etc.)
     // but ACP schema requires camelCase/snake_case field names.
-    const lowercaseScores: Record<string, number> = {};
+    // Preserve null for absent categories (vs. 0 which misleadingly implies "scored but failed").
+    const lowercaseScores: Record<string, number | null> = {};
     for (const [key, value] of Object.entries(verification.focusAreaScores)) {
       lowercaseScores[key.toLowerCase()] = value;
     }

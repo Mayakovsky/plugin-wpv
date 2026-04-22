@@ -76,7 +76,7 @@ export const wpvVerifications = autognostic.table('wpv_verifications', {
   confidenceScore: real('confidence_score'),     // 1–100
   hypeTechRatio: real('hype_tech_ratio'),
   verdict: text('verdict'),                      // Verdict enum value
-  focusAreaScores: jsonb('focus_area_scores').$type<Record<string, number>>(),
+  focusAreaScores: jsonb('focus_area_scores').$type<Record<string, number | null>>(),
   totalClaims: integer('total_claims').notNull().default(0),
   verifiedClaims: integer('verified_claims').notNull().default(0),
   reportJson: jsonb('report_json').$type<Record<string, unknown>>(),

@@ -20,6 +20,8 @@ import { TieredDocumentDiscovery } from './discovery/TieredDocumentDiscovery';
 import { WebsiteScraper } from './discovery/WebsiteScraper';
 import { WebSearchFallback } from './discovery/WebSearchFallback';
 import { SyntheticWhitepaperComposer } from './discovery/SyntheticWhitepaperComposer';
+import { GitHubResolver } from './discovery/GitHubResolver';
+import { AggregatorResolver } from './discovery/AggregatorResolver';
 import type { DiscoveryCron } from './discovery/DiscoveryCron';
 import { JobRouter } from './acp/JobRouter';
 import { ResourceHandlers } from './acp/ResourceHandlers';
@@ -176,11 +178,29 @@ export class WpvService extends Service {
       const websiteScraper = new WebsiteScraper();
       const webSearch = new WebSearchFallback();
       const composer = new SyntheticWhitepaperComposer();
+
+      // Phase 3: Tier 3.5 (GitHub) and Tier 3.75 (CoinGecko/CMC) resolvers.
+      // Gracefully degrade when env vars are missing — Tier 3.5 runs
+      // unauthenticated at low rate-limit; Tier 3.75 skips CMC.
+      const githubToken = runtime.getSetting('GITHUB_TOKEN') ?? process.env.GITHUB_TOKEN;
+      const cmcApiKey = runtime.getSetting('CMC_API_KEY') ?? process.env.CMC_API_KEY;
+      if (!githubToken) {
+        logger.warn('WpvService: GITHUB_TOKEN not set — Tier 3 GitHub search will run unauthenticated (rate-limited)');
+      }
+      if (!cmcApiKey) {
+        logger.warn('WpvService: CMC_API_KEY not set — Tier 4 CMC lookup disabled (CoinGecko still active)');
+      }
+      const githubResolver = new GitHubResolver(fetchResolver);
+      const aggregatorResolver = new AggregatorResolver(fetchResolver);
+
       const tieredDiscovery = new TieredDocumentDiscovery({
         resolver: cryptoResolver,
         websiteScraper,
         webSearch,
         composer,
+        githubResolver,
+        aggregatorResolver,
+        env: { githubToken, cmcApiKey },
       });
 
       // Initialize L2+L3 pipeline (ClaimExtractor + ClaimEvaluator)
@@ -457,6 +477,280 @@ export class WpvService extends Service {
 
     // No real contract bytecode found on any chain → likely EOA or smart wallet
     return false;
+  }
+
+  /**
+   * NEW (Phase 1): Signal aggregator — OR-semantics input validation.
+   *
+   * Contract:
+   *  - Content violations (NSFW, injection, malicious keywords, address descriptors,
+   *    explicit contradictions) throw InputValidationError → pre-acceptance reject.
+   *  - Format/reachability issues (invalid token format, malformed URL, unreachable URL)
+   *    do NOT throw — the offending field is stripped and preservation of
+   *    `_originalTokenAddress` / `_originalDocumentUrl` allows downstream code to
+   *    reference the raw value if needed.
+   *  - Job is accepted if at least ONE valid signal remains (token, name, or url).
+   *  - Zero valid signals → throw InputValidationError (pre-acceptance reject).
+   *
+   * Reachability (HEAD checks) and on-chain contract checks are intentionally
+   * moved to the tiered resolver (Phase 3). The validator only checks syntax.
+   */
+  static async aggregateSignals(
+    offeringId: string,
+    requirement: Record<string, unknown>,
+    isPlainText?: boolean,
+  ): Promise<void> {
+    // Briefing has its own allow-list validator — delegate.
+    if (offeringId === 'daily_technical_briefing') {
+      await WpvService.validateTokenAddress(offeringId, requirement, isPlainText);
+      return;
+    }
+
+    // --- Content filters (throw on violation, same semantics as legacy) ---
+    WpvService.scanForViolations(requirement);
+
+    // Extract from unknown field names (e.g., "verification_request" blob)
+    if (!isPlainText) {
+      WpvService.extractFromUnknownFields(requirement);
+    }
+
+    // Plain-text: pull URL out of freeform text if present
+    if (isPlainText && !requirement.document_url) {
+      const allStrings = Object.values(requirement)
+        .filter((v): v is string => typeof v === 'string');
+      for (const text of allStrings) {
+        const urlMatch = text.match(/https?:\/\/[^\s"'<>]+/i);
+        if (urlMatch) {
+          const extractedUrl = urlMatch[0].replace(/[.,;:!?)]+$/, '');
+          if (/\.(pdf|html|htm|md|txt)(\?|$)/i.test(extractedUrl) ||
+              /\/(docs|whitepaper|paper|specification|technical)/i.test(extractedUrl) ||
+              /github\.com\/.+\/.+\//i.test(extractedUrl) ||
+              /gitbook/i.test(extractedUrl) ||
+              /arxiv\.org/i.test(extractedUrl)) {
+            requirement.document_url = extractedUrl;
+            break;
+          }
+        }
+      }
+    }
+
+    // GitHub blob → raw content URL
+    if (typeof requirement?.document_url === 'string') {
+      requirement.document_url = WpvService.normalizeGitHubUrl(requirement.document_url);
+    }
+
+    // Out-of-scope detection for plain-text full_technical_verification
+    if (offeringId === 'full_technical_verification' && isPlainText) {
+      const fullText = Object.values(requirement)
+        .filter((v): v is string => typeof v === 'string')
+        .join(' ')
+        .toLowerCase();
+
+      const OUT_OF_SCOPE_PATTERNS = [
+        /\b(?:current|live|real.?time|latest|today'?s?)\s+(?:market\s+)?(?:price|value|rate|cost)\b/,
+        /\b(?:buy|sell|trade|swap|exchange|convert)\s+(?:some|my|the)?\s*(?:tokens?|coins?|crypto)?\b/,
+        /\b(?:portfolio|wallet\s+balance|holdings|net\s+worth)\b/,
+        /\b(?:price\s+prediction|will\s+.*\s+go\s+up|moon|dump|pump)\b/,
+        /\b(?:should\s+i\s+(?:buy|sell|invest|hold))\b/,
+        /\b(?:trading\s+(?:signal|strategy|bot|advice))\b/,
+        /\b(?:airdrop|giveaway|free\s+(?:tokens?|coins?|crypto))\b/,
+        /\b(?:summarize|summary|tell\s+me|describe)\s+(?:the\s+)?(?:weather|news|politics|sports|movies?|music)\b/,
+      ];
+      const IN_SCOPE_PATTERNS = [
+        /\b(?:whitepaper|white\s*paper|technical\s*paper|litepaper)\b/,
+        /\b(?:verify|verif|analyz|analys|evaluat|audit|review|assess|examin)\b/,
+        /\b(?:claims?|tokenomics|consensus|security|architecture|protocol|mechanism)\b/,
+        /\b(?:mathematical|formal|proof|theorem|invariant)\b/,
+        /\b(?:smart\s*contract|decentraliz|oracle|liquidity|staking)\b/,
+        /\b(?:documentation|specification|RFC|technical)\b/,
+      ];
+      const isOutOfScope = OUT_OF_SCOPE_PATTERNS.some(p => p.test(fullText));
+      const isInScope = IN_SCOPE_PATTERNS.some(p => p.test(fullText));
+      if (isOutOfScope && !isInScope) {
+        const err = new Error('Requirement is outside scope — this service provides whitepaper technical verification and analysis, not market data, trading advice, or portfolio management');
+        err.name = 'InputValidationError';
+        throw err;
+      }
+    }
+
+    // project_name content filters (throw on violation)
+    const projectName = requirement?.project_name;
+    if (typeof projectName === 'string') {
+      // Bracket-tagged violations
+      if (/\[.*(?:nsfw|violation|banned|illegal|prohibited|explicit|adult|offensive).*\]/i.test(projectName)) {
+        const err = new Error('Request contains policy-violating content and cannot be processed');
+        err.name = 'InputValidationError';
+        throw err;
+      }
+      // NSFW in name
+      for (const pattern of NSFW_PATTERNS) {
+        if (pattern.test(projectName)) {
+          const err = new Error('Request contains policy-violating content and cannot be processed');
+          err.name = 'InputValidationError';
+          throw err;
+        }
+      }
+      // Malicious keywords in name
+      for (const keyword of MALICIOUS_PROJECT_NAME_KEYWORDS) {
+        if (projectName.toLowerCase().includes(keyword)) {
+          const err = new Error('Request contains policy-violating content and cannot be processed');
+          err.name = 'InputValidationError';
+          throw err;
+        }
+      }
+      // "Not a token", "personal wallet", etc. — explicit invalid-input markers
+      for (const pattern of INVALID_NAME_PATTERNS) {
+        if (projectName.toLowerCase().includes(pattern)) {
+          const err = new Error(`Rejected: project name '${projectName.slice(0, 50)}' indicates invalid input — '${pattern}'`);
+          err.name = 'InputValidationError';
+          throw err;
+        }
+      }
+      // Address-descriptor names ("Invalid Address", "Zero Contract", etc.)
+      const ADDRESS_DESCRIPTOR_PATTERN = /\b(empty|zero|null|dead|burn|void|invalid|broken)\s+(address|contract|token|wallet|link)\b/i;
+      if (ADDRESS_DESCRIPTOR_PATTERN.test(projectName)) {
+        const err = new Error(`Invalid: project name '${projectName.slice(0, 50)}' describes a field, not a project`);
+        err.name = 'InputValidationError';
+        throw err;
+      }
+    }
+
+    // Cross-field: contradictory protocol names in URL vs name — throw
+    if (typeof requirement?.project_name === 'string' && typeof requirement?.document_url === 'string') {
+      const projName = requirement.project_name.trim().toLowerCase();
+      const docUrl = requirement.document_url.trim().toLowerCase();
+      const urlProtocols = [
+        'uniswap', 'aave', 'compound', 'makerdao', 'curve', 'synthetix',
+        'sushiswap', 'balancer', 'yearn', 'chainlink', 'lido', 'solana',
+        'ethereum', 'bitcoin', 'cardano', 'polkadot', 'avalanche', 'polygon',
+        'arbitrum', 'optimism', 'celestia', 'cosmos', 'near', 'aptos', 'sui',
+        'aerodrome', 'jupiter', 'raydium', 'pancakeswap', 'stargate',
+        'layerzero', 'wormhole', 'filecoin', 'arweave', 'render',
+      ];
+      const urlMatchedProtocol = urlProtocols.find((p) => docUrl.includes(p));
+      if (urlMatchedProtocol && !projName.includes(urlMatchedProtocol) && !urlMatchedProtocol.includes(projName)) {
+        const err = new Error(`Contradictory inputs: document_url references '${urlMatchedProtocol}' but project_name is '${requirement.project_name}'. These appear to be different projects.`);
+        err.name = 'InputValidationError';
+        throw err;
+      }
+    }
+
+    // --- Signal collection (format-invalid → strip, no throw) ---
+    const signals: Array<'token' | 'name' | 'url'> = [];
+
+    // TOKEN signal
+    const tokenAddress = requirement?.token_address;
+    if (typeof tokenAddress === 'string' && tokenAddress.trim()) {
+      const trimmed = tokenAddress.trim();
+      let validToken = false;
+
+      if (isPlainText) {
+        // Plain-text-extracted addresses skip format validation (may be truncated)
+        validToken = true;
+      } else if (trimmed.startsWith('0x')) {
+        if (/^0x[0-9a-fA-F]{20,40}$/.test(trimmed)) {
+          const lower = trimmed.toLowerCase();
+          const isBurn =
+            /^0x(0{40}|dead(beef)?[0-9a-f]*(dead|beef)[0-9a-f]*|f{40})$/.test(lower) ||
+            /^0x(.)\1{39}$/.test(lower) ||
+            /^0x([0-9a-f]{2})\1{19}$/.test(lower);
+          validToken = !isBurn;
+        }
+      } else if (/^[13][a-km-zA-HJ-NP-Z1-9]{24,33}$/.test(trimmed) || /^bc1[a-zA-HJ-NP-Z0-9]{25,89}$/.test(trimmed)) {
+        // Bitcoin — explicit reject, Grey doesn't support BTC
+        const err = new Error(`Invalid token_address: Bitcoin address detected — not a supported chain. Supported chains: Base, Ethereum, Solana — '${trimmed.slice(0, 50)}'`);
+        err.name = 'InputValidationError';
+        throw err;
+      } else if (/^[a-zA-Z0-9]{26,50}$/.test(trimmed)) {
+        validToken = true;
+      }
+
+      if (validToken) {
+        signals.push('token');
+      } else {
+        // Invalid format — strip, preserve for logging
+        requirement._originalTokenAddress = requirement.token_address;
+        delete requirement.token_address;
+      }
+    }
+
+    // NAME signal — reaches here only after content filters passed
+    if (typeof requirement?.project_name === 'string' && requirement.project_name.trim()) {
+      const trimmed = requirement.project_name.trim();
+      const lower = trimmed.toLowerCase();
+      const NON_MEANINGFUL_NAMES = new Set([
+        'empty', 'unknown', 'none', 'test', 'n/a', 'null', 'undefined', '',
+        'placeholder', 'dummy', 'sample', 'example', 'fake', 'zero',
+        'test token', 'test project',
+      ]);
+      if (!NON_MEANINGFUL_NAMES.has(lower)) {
+        signals.push('name');
+      } else {
+        requirement._originalProjectName = requirement.project_name;
+        delete requirement.project_name;
+      }
+    }
+
+    // URL signal
+    if (typeof requirement?.document_url === 'string' && requirement.document_url.trim()) {
+      const trimmed = requirement.document_url.trim();
+      let validUrl = false;
+      if (/^https?:\/\/.+\..+/.test(trimmed)) {
+        try {
+          const urlObj = new URL(trimmed);
+          // Content filter: NSFW domain
+          WpvService.validateUrlDomain(trimmed);
+          // Search engines not valid sources
+          const SEARCH_ENGINE_PATTERNS = [
+            /^https?:\/\/(www\.)?google\.\w+\/(search|webhp)/i,
+            /^https?:\/\/(www\.)?bing\.com\/(search|results)/i,
+            /^https?:\/\/search\.yahoo\.com/i,
+            /^https?:\/\/(www\.)?duckduckgo\.com\/(\?q=|search)/i,
+            /^https?:\/\/(www\.)?baidu\.com\/(s|search)/i,
+            /^https?:\/\/(www\.)?yandex\.\w+\/(search|yandsearch)/i,
+          ];
+          const isSearchEngine = SEARCH_ENGINE_PATTERNS.some((p) => p.test(trimmed));
+          const isMedia = /\.(png|jpg|jpeg|gif|svg|ico|webp|bmp|mp4|mp3|avi|mov)(\?.*)?$/i.test(trimmed);
+          // Bare domain check — strip unless a known doc host
+          const isBareDomain = urlObj.pathname === '/' || urlObj.pathname === '';
+          const host = urlObj.hostname.toLowerCase();
+          const isDocSite = /\b(docs|whitepaper|technical|paper|wiki|gitbook)\b/.test(host);
+          if (!isSearchEngine && !isMedia && !(isBareDomain && !isDocSite)) {
+            validUrl = true;
+          }
+        } catch {
+          // Parse failed — not a valid URL
+        }
+      }
+      if (validUrl) {
+        signals.push('url');
+      } else {
+        requirement._originalDocumentUrl = requirement.document_url;
+        delete requirement.document_url;
+      }
+    }
+
+    // Cross-reference: non-EVM chain name paired with 0x EVM address → throw
+    if (typeof requirement?.project_name === 'string') {
+      const projLower = requirement.project_name.toLowerCase();
+      const NON_EVM_CHAINS = ['bitcoin', 'btc', 'cardano', 'ada', 'ripple', 'xrp', 'litecoin', 'ltc', 'monero', 'xmr', 'dogecoin', 'doge', 'toncoin', 'ton', 'tron', 'trx', 'stellar', 'xlm', 'hedera', 'hbar', 'algorand', 'algo', 'kaspa', 'kas'];
+      const tokenAddr = requirement?.token_address as string | undefined;
+      if (tokenAddr && tokenAddr.startsWith('0x') && NON_EVM_CHAINS.includes(projLower)) {
+        const err = new Error(`Contradictory inputs: project '${requirement.project_name}' is a non-EVM chain but token_address '${tokenAddr.slice(0, 20)}...' is an EVM address`);
+        err.name = 'InputValidationError';
+        throw err;
+      }
+    }
+
+    // --- Gate: zero signals = pre-acceptance reject ---
+    if (signals.length === 0) {
+      const err = new Error('Invalid requirement: no usable identifier — provide a valid token_address, project_name, or document_url');
+      err.name = 'InputValidationError';
+      throw err;
+    }
+
+    // Stamp signals on the requirement for downstream consumers
+    (requirement as Record<string, unknown>)._signals = signals;
   }
 
   private static async validateTokenAddress(offeringId: string, requirement: Record<string, unknown>, isPlainText?: boolean): Promise<void> {
@@ -921,27 +1215,27 @@ export class WpvService extends Service {
 
       for (const offering of offerings) {
         const offeringId = offering.id;
-        // Bug 3: Pre-accept input validator — runs before accept() in phase 0
+        // Phase 1: Signal aggregator validator (OR semantics, pre-accept only).
         const validator = async (input: { requirement: Record<string, unknown>; isPlainText?: boolean; rawContent?: string }) => {
           if (input.rawContent) {
             input.requirement._requirementText = input.rawContent;
           }
-          await WpvService.validateTokenAddress(offeringId, input.requirement, input.isPlainText);
+          await WpvService.aggregateSignals(offeringId, input.requirement, input.isPlainText);
         };
 
         const handler = async (input: { requirement: Record<string, unknown>; rawContent?: string }) => {
           if (!this.deps?.jobRouter) {
             return { error: 'wpv_not_ready', message: 'WPV JobRouter not initialized' };
           }
-
-          // Preserve raw requirement text before validation (scope check needs it)
           if (input.rawContent) {
             input.requirement._requirementText = input.rawContent;
           }
-
-          // Validate again in handler (defense in depth — also covers HTTP path)
-          await WpvService.validateTokenAddress(offeringId, input.requirement);
-
+          // Defense-in-depth: HTTP handler path has no pre-accept validator callback,
+          // so re-run the aggregator here. For socket-path jobs this is idempotent
+          // because the validator already stamped `_signals`.
+          if (!input.requirement._signals) {
+            await WpvService.aggregateSignals(offeringId, input.requirement);
+          }
           return this.deps.jobRouter.handleJob(offeringId, input.requirement);
         };
 

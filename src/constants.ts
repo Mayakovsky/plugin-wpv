@@ -281,6 +281,42 @@ export const LLM_PRICING = {
   outputPerToken: 15.0 / 1_000_000, // $15.00 / 1M output tokens
 } as const;
 
+// ── Tiered Resolver (Phase 3) ────────────────
+
+/** Feature flag: turn the new tiered resolver chain on/off without redeploying code. */
+export const USE_TIERED_RESOLVER =
+  (process.env.USE_TIERED_RESOLVER ?? 'true').toLowerCase() !== 'false';
+
+/** Threshold below which a tier's result is considered "thin" and the chain continues. */
+export const TIER_ROBUST_THRESHOLD = {
+  structuralScore: 2,
+  claimCount: 5,
+} as const;
+
+/** Per-tier timeout budgets (ms). Chain also honors the offering-level SLA deadline. */
+export const TIER_TIMEOUTS_MS = {
+  tier1: 10_000,   // explicit URL fetch
+  tier2: 60_000,   // primary-site discovery (Playwright can be slow)
+  tier3: 20_000,   // GitHub search + fetch
+  tier4: 15_000,   // CoinGecko / CMC API lookup
+} as const;
+
+/** Minimum remaining SLA budget before skipping further tiers. */
+export const TIER_MIN_SLA_REMAINING_MS = 60_000;
+
+/**
+ * Sanity check: when Tier 3 or 4 returns a document, confirm it actually
+ * references the requested project. First N characters are scanned for
+ * project name OR token address. Case-insensitive substring match.
+ */
+export const TIER_SANITY_CHECK_CHARS = 2000;
+
+/** CoinGecko free-tier API base */
+export const COINGECKO_API_BASE = 'https://api.coingecko.com/api/v3';
+
+/** CoinMarketCap Pro API base (free tier) */
+export const CMC_API_BASE = 'https://pro-api.coinmarketcap.com';
+
 // ── ACP ──────────────────────────────────────
 
 /** ACP environment variables */

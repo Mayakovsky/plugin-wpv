@@ -111,7 +111,7 @@ export interface VerificationResult {
   confidenceScore: number;        // 0–100
   hypeTechRatio: number;
   verdict: Verdict;
-  focusAreaScores: Record<ClaimCategory, number>;
+  focusAreaScores: Record<ClaimCategory, number | null>;  // null = no claims in that category
   totalClaims: number;
   verifiedClaims: number;
   llmTokensUsed: number;
@@ -204,6 +204,10 @@ export interface LegitimacyScanReport {
   micaCompliant: MicaComplianceStatus;
   micaSummary: string;
   generatedAt: string;            // ISO timestamp
+  // Phase 4: tiered-resolver provenance (optional on legacy callers)
+  discoveryStatus?: DiscoveryStatus;
+  discoverySourceTier?: number | null;
+  discoveryAttempts?: DiscoveryAttempt[];
 }
 
 export interface TokenomicsAuditReport extends LegitimacyScanReport {
@@ -215,9 +219,37 @@ export interface TokenomicsAuditReport extends LegitimacyScanReport {
 export interface FullVerificationReport extends TokenomicsAuditReport {
   confidenceScore: number;        // 0–100
   evaluations: ClaimEvaluation[];
-  focusAreaScores: Record<string, number>;  // lowercase keys: tokenomics, performance, consensus, scientific
+  focusAreaScores: Record<string, number | null>;  // lowercase keys; null = category absent
   llmTokensUsed: number;
   computeCostUsd: number;
+  // Tiered-resolver provenance (Phase 4). Always present on new deliverables.
+  discoveryStatus?: DiscoveryStatus;
+  discoverySourceTier?: number | null;
+  discoveryAttempts?: DiscoveryAttempt[];
+}
+
+/**
+ * Tier selection outcome, user-facing label in the deliverable.
+ * Maps to tiers 0-4, or "failed" when all tiers exhausted.
+ */
+export type DiscoveryStatus = 'cached' | 'provided' | 'primary' | 'community' | 'aggregator' | 'failed';
+
+/** Per-tier record for the `discoveryAttempts` array in deliverables */
+export interface DiscoveryAttempt {
+  tier: number;                   // 0..4
+  status: DiscoveryStatus | 'skipped' | 'error';
+  structuralScore?: number;
+  claimCount?: number;
+  note?: string;                  // short diagnostic ("unreachable", "thin", "success", etc.)
+}
+
+/**
+ * Validated signals extracted from a buyer request by the signal aggregator.
+ * Any non-zero count means the job is accepted; zero signals = pre-accept reject.
+ */
+export interface RequestSignal {
+  type: 'token' | 'name' | 'url';
+  value: string;
 }
 
 export interface DailyBriefingReport {

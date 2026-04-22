@@ -12,6 +12,8 @@ import type { CryptoContentResolver } from './CryptoContentResolver';
 import type { WebsiteScraper } from './WebsiteScraper';
 import type { WebSearchFallback } from './WebSearchFallback';
 import type { SyntheticWhitepaperComposer } from './SyntheticWhitepaperComposer';
+import type { GitHubResolver } from './GitHubResolver';
+import type { AggregatorResolver } from './AggregatorResolver';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger({ operation: 'TieredDocumentDiscovery' });
@@ -21,6 +23,20 @@ export interface TieredDocumentDiscoveryDeps {
   websiteScraper: WebsiteScraper;
   webSearch: WebSearchFallback;
   composer: SyntheticWhitepaperComposer;
+  /** Phase 3 additions — Tier 3.5 / 3.75 */
+  githubResolver?: GitHubResolver;
+  aggregatorResolver?: AggregatorResolver;
+  env?: { githubToken?: string; cmcApiKey?: string };
+}
+
+/** First-N-chars window used to verify a discovered document actually references the project */
+const SANITY_CHECK_CHARS = 2000;
+
+function verifyRelevance(text: string, projectName: string, tokenAddress?: string): boolean {
+  const hay = text.slice(0, SANITY_CHECK_CHARS).toLowerCase();
+  if (projectName && hay.includes(projectName.toLowerCase())) return true;
+  if (tokenAddress && hay.includes(tokenAddress.toLowerCase())) return true;
+  return false;
 }
 
 export class TieredDocumentDiscovery {
@@ -73,13 +89,76 @@ export class TieredDocumentDiscovery {
       }
     }
 
-    // ── Tier 3: Web search fallback ──
+    // ── Tier 3.5: GitHub whitepaper search (Phase 3) ──
+    // Runs BEFORE the old web-search tier so we try the richest sources first.
+    if (this.deps.githubResolver) {
+      try {
+        const gh = await this.deps.githubResolver.resolve({
+          projectName,
+          tokenAddress,
+          token: this.deps.env?.githubToken,
+        });
+        if (gh && gh.text.length > 100 && verifyRelevance(gh.text, projectName, tokenAddress)) {
+          log.info('Tier 3.5: Found via GitHub search', { projectName, repo: gh.repoFullName });
+          return {
+            resolved: {
+              text: gh.text,
+              pageCount: gh.pageCount,
+              isImageOnly: false,
+              isPasswordProtected: false,
+              source: 'direct',
+              originalUrl: gh.sourceUrl,
+              resolvedUrl: gh.sourceUrl,
+            },
+            documentUrl: gh.sourceUrl,
+            documentSource: 'pdf',
+            tier: 3,
+          };
+        }
+      } catch (err) {
+        log.debug('Tier 3.5: GitHub resolver threw', { error: (err as Error).message });
+      }
+    }
+
+    // ── Tier 3.75: Aggregator APIs (CoinGecko / CMC) ──
+    if (this.deps.aggregatorResolver) {
+      try {
+        const agg = await this.deps.aggregatorResolver.resolve({
+          projectName,
+          tokenAddress,
+          cmcApiKey: this.deps.env?.cmcApiKey,
+        });
+        if (agg && agg.text.length > 100 && verifyRelevance(agg.text, projectName, tokenAddress)) {
+          log.info('Tier 3.75: Found via aggregator', { projectName, aggregator: agg.aggregator });
+          return {
+            resolved: {
+              text: agg.text,
+              pageCount: agg.pageCount,
+              isImageOnly: false,
+              isPasswordProtected: false,
+              source: 'direct',
+              originalUrl: agg.sourceUrl,
+              resolvedUrl: agg.sourceUrl,
+            },
+            documentUrl: agg.sourceUrl,
+            documentSource: 'pdf',
+            tier: 3,
+          };
+        }
+      } catch (err) {
+        log.debug('Tier 3.75: Aggregator resolver threw', { error: (err as Error).message });
+      }
+    }
+
+    // ── Tier 3 (legacy fallback): Web search with known-URL map ──
+    // Kept as a last-resort before synthetic composition — the known-URL map
+    // sometimes points to sparse pages, so we prefer GitHub + aggregators above.
     try {
       const searchUrl = await this.deps.webSearch.searchWhitepaper(projectName);
       if (searchUrl) {
         const resolved = await this.deps.resolver.resolveWhitepaper(searchUrl);
         if (resolved.text.length > 100 && !resolved.isImageOnly && !resolved.isPasswordProtected) {
-          log.info('Tier 3: Found via web search', { projectName, url: searchUrl });
+          log.info('Tier 3 (web search fallback): Found via known-URL map', { projectName, url: searchUrl });
           return { resolved, documentUrl: searchUrl, documentSource: 'pdf', tier: 3 };
         }
       }

@@ -16,8 +16,11 @@ import type { ReportGenerator } from '../verification/ReportGenerator';
 import { CostTracker } from '../verification/CostTracker';
 import type { CryptoContentResolver } from '../discovery/CryptoContentResolver';
 import type { TieredDocumentDiscovery } from '../discovery/TieredDocumentDiscovery';
+import type { GitHubResolver } from '../discovery/GitHubResolver';
+import type { AggregatorResolver } from '../discovery/AggregatorResolver';
 import { Verdict, ClaimCategory } from '../types';
-import type { ProjectMetadata } from '../types';
+import type { ProjectMetadata, DiscoveryAttempt, DiscoveryStatus } from '../types';
+import { TIER_ROBUST_THRESHOLD, USE_TIERED_RESOLVER } from '../constants';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger({ operation: 'JobRouter' });
@@ -116,6 +119,9 @@ export interface JobRouterDeps {
   pricingConfig: { inputPerToken: number; outputPerToken: number };
   cryptoResolver: CryptoContentResolver;
   tieredDiscovery: TieredDocumentDiscovery | null;
+  githubResolver?: GitHubResolver;      // Phase 3 Tier 3
+  aggregatorResolver?: AggregatorResolver; // Phase 3 Tier 4
+  env?: { githubToken?: string; cmcApiKey?: string };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   anthropicClient?: any;
 }
@@ -183,6 +189,7 @@ export class JobRouter {
           this.verificationRowToResult(verification),
           analysis,
           wp as never,
+          { discoveryStatus: 'cached', discoverySourceTier: 0, discoveryAttempts: [{ tier: 0, status: 'cached', structuralScore: verification.structuralScore ?? 0, claimCount: verification.totalClaims ?? 0 }] },
         );
         const requestedAddress = (input._originalTokenAddress ?? input.token_address) as string | undefined;
         if (requestedAddress) {
@@ -273,9 +280,14 @@ export class JobRouter {
             }
           }
 
-          const verdict = structuralScore >= 3 ? Verdict.PASS
-            : structuralScore >= 2 ? Verdict.CONDITIONAL
-            : Verdict.FAIL;
+          // When content is genuinely thin after exhausting discovery tiers,
+          // INSUFFICIENT_DATA honestly represents "couldn't find enough to score"
+          // rather than FAIL which implies a judgment the project is bad.
+          const isThin = structuralScore < TIER_ROBUST_THRESHOLD.structuralScore;
+          const verdict: Verdict = isThin
+            ? ('INSUFFICIENT_DATA' as Verdict)
+            : structuralScore >= 3 ? Verdict.PASS
+            : Verdict.CONDITIONAL;
 
           if (!newWpId.startsWith('tmp-')) {
             await this.deps.verificationsRepo.deleteByWhitepaperId(newWpId);
@@ -295,10 +307,17 @@ export class JobRouter {
             });
           }
 
+          // Map internal TieredDocumentDiscovery tier → discoveryStatus
+          const discoveryStatus: DiscoveryStatus =
+            discovered.tier === 3 ? 'community' :
+            discovered.tier === 4 ? 'failed' :
+            'primary';
+
           const report = this.deps.reportGenerator.generateLegitimacyScan(
-            { structuralScore, confidenceScore: 0, hypeTechRatio, verdict, focusAreaScores: { [ClaimCategory.TOKENOMICS]: 0, [ClaimCategory.PERFORMANCE]: 0, [ClaimCategory.CONSENSUS]: 0, [ClaimCategory.SCIENTIFIC]: 0 }, totalClaims: 0, verifiedClaims: 0, llmTokensUsed: 0, computeCostUsd: 0 },
+            { structuralScore, confidenceScore: 0, hypeTechRatio, verdict, focusAreaScores: { [ClaimCategory.TOKENOMICS]: null, [ClaimCategory.PERFORMANCE]: null, [ClaimCategory.CONSENSUS]: null, [ClaimCategory.SCIENTIFIC]: null }, totalClaims: 0, verifiedClaims: 0, llmTokensUsed: 0, computeCostUsd: 0 },
             analysis,
             { id: newWpId, projectName, effectiveTokenAddress } as never,
+            { discoveryStatus, discoverySourceTier: discovered.tier, discoveryAttempts: [{ tier: discovered.tier, status: discoveryStatus, structuralScore, claimCount: 0 }] },
           );
           if (originalTokenAddress) report.tokenAddress = originalTokenAddress;
           log.info('Live L1 scan completed', { projectName, structuralScore, verdict });
