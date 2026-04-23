@@ -164,13 +164,24 @@ export class JobRouter {
       this.deps.pricingConfig.outputPerToken,
     );
 
+    // Fix 4 (2026-04-23): apply version-mismatch verdict downgrade at the dispatch
+    // boundary so it covers every return path within each handler (cached, live,
+    // discovery-only, enriched). Legitimacy scan doesn't typically carry version
+    // intent but the helper no-ops gracefully when no version in request.
+    const requestedProjectName = input.project_name as string | undefined;
     switch (offeringId) {
-      case 'project_legitimacy_scan':
-        return this.handleLegitimacyScan(input, costTracker);
-      case 'verify_project_whitepaper':
-        return this.handleVerifyWhitepaper(input, costTracker);
-      case 'full_technical_verification':
-        return this.handleFullVerification(input, costTracker);
+      case 'project_legitimacy_scan': {
+        const result = await this.handleLegitimacyScan(input, costTracker);
+        return this.maybeDowngradeForVersionMismatch(result as Record<string, unknown>, requestedProjectName);
+      }
+      case 'verify_project_whitepaper': {
+        const result = await this.handleVerifyWhitepaper(input, costTracker);
+        return this.maybeDowngradeForVersionMismatch(result as Record<string, unknown>, requestedProjectName);
+      }
+      case 'full_technical_verification': {
+        const result = await this.handleFullVerification(input, costTracker);
+        return this.maybeDowngradeForVersionMismatch(result as Record<string, unknown>, requestedProjectName);
+      }
       case 'daily_technical_briefing':
         return this.handleDailyBriefing(input);
       default:
@@ -578,13 +589,45 @@ export class JobRouter {
 
     try {
       return await this.withTimeout(async (signal) => {
-        let { resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = await this.runL1L2(documentUrl, projectName, requestedTokenAddress, requirementText, costTracker, signal);
+        // Fix 3 (2026-04-23): handler-level fetch-failure fallback. If the provided
+        // document_url fails to fetch (HTTP 4xx/5xx, network error), record the
+        // attempt and fall through to tieredDiscovery rather than bubbling the
+        // exception to the post-acceptance envelope (eval Job 1249).
+        // Also populates `discoveryAttempts` in the deliverable so the evaluator
+        // can see the agent tried.
+        const discoveryAttempts: DiscoveryAttempt[] = [];
+        let runResult: Awaited<ReturnType<typeof this.runL1L2>> | null = null;
+        let selectedTier: number = 1;
+        let selectedStatus: DiscoveryStatus = 'provided';
 
-        // If provided document_url yielded 0 claims (e.g. JavaScript SPA, empty page),
-        // try discovery as fallback before giving up
-        if (claims.length === 0 && this.deps.tieredDiscovery) {
+        // Phase 1: attempt provided document_url
+        try {
+          runResult = await this.runL1L2(documentUrl, projectName, requestedTokenAddress, requirementText, costTracker, signal);
+          discoveryAttempts.push({
+            tier: 1,
+            status: 'provided',
+            structuralScore: runResult.structuralScore,
+            claimCount: runResult.claims.length,
+          });
+        } catch (err) {
+          if ((err as Error).message === 'Pipeline timeout') throw err;
+          const errMsg = (err as Error).message;
+          log.warn('document_url fetch failed — attempting discovery fallback', {
+            projectName, documentUrl: documentUrl.slice(0, 80), error: errMsg,
+          });
+          discoveryAttempts.push({
+            tier: 1, status: 'error', note: errMsg.slice(0, 100),
+          });
+        }
+
+        // Phase 2: fall through to discovery if Tier 1 failed OR returned 0 claims
+        const needsDiscovery = !runResult || runResult.claims.length === 0;
+        if (needsDiscovery && this.deps.tieredDiscovery) {
           try {
-            log.info('document_url yielded 0 claims — trying discovery fallback', { projectName, documentUrl: documentUrl.slice(0, 80) });
+            log.info('trying discovery fallback', {
+              projectName,
+              reason: !runResult ? 'tier-1 fetch failed' : 'tier-1 yielded 0 claims',
+            });
             const metadata: ProjectMetadata = {
               agentName: projectName,
               entityId: null,
@@ -594,17 +637,51 @@ export class JobRouter {
               graduationStatus: null,
             };
             const discovered = await this.deps.tieredDiscovery.discover(metadata, requestedTokenAddress ?? '');
-            if (discovered && discovered.documentUrl !== documentUrl) {
+            if (discovered && (!runResult || discovered.documentUrl !== documentUrl)) {
               const fallback = await this.runL1L2(discovered.documentUrl, projectName, requestedTokenAddress, requirementText, costTracker, signal);
-              if (fallback.claims.length > 0) {
-                log.info('Discovery fallback succeeded', { projectName, discoveredUrl: discovered.documentUrl.slice(0, 80), claims: fallback.claims.length });
-                ({ resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = fallback);
+              const discoveredStatus: DiscoveryStatus =
+                discovered.tier === 3 ? 'community' :
+                discovered.tier === 4 ? 'aggregator' :
+                'primary';
+              discoveryAttempts.push({
+                tier: discovered.tier,
+                status: discoveredStatus,
+                structuralScore: fallback.structuralScore,
+                claimCount: fallback.claims.length,
+              });
+              // Accept fallback if Tier 1 failed OR fallback has more claims
+              if (!runResult || fallback.claims.length > 0) {
+                log.info('Discovery fallback succeeded', {
+                  projectName,
+                  discoveredUrl: discovered.documentUrl.slice(0, 80),
+                  claims: fallback.claims.length,
+                  tier: discovered.tier,
+                });
+                runResult = fallback;
+                selectedTier = discovered.tier;
+                selectedStatus = discoveredStatus;
               }
+            } else if (!discovered) {
+              discoveryAttempts.push({ tier: 4, status: 'failed', note: 'all discovery tiers exhausted' });
             }
           } catch (err) {
             log.warn('Discovery fallback failed', { projectName, error: (err as Error).message });
+            discoveryAttempts.push({ tier: 4, status: 'error', note: (err as Error).message.slice(0, 100) });
           }
         }
+
+        // If both Tier 1 and discovery failed entirely, return INSUFFICIENT_DATA
+        // with populated discoveryAttempts so the evaluator can see the agent tried.
+        if (!runResult) {
+          log.warn('Tier 1 + discovery both failed — returning INSUFFICIENT_DATA', {
+            projectName, attempts: discoveryAttempts.length,
+          });
+          const insuffResult = this.insufficientData(input, discoveryAttempts);
+          if (originalTokenAddress) insuffResult.tokenAddress = originalTokenAddress;
+          return insuffResult;
+        }
+
+        const { resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = runResult;
 
         // L3: Claim evaluation (timed)
         costTracker.startStage('l3');
@@ -677,6 +754,11 @@ export class JobRouter {
         if (originalTokenAddress) {
           report.tokenAddress = originalTokenAddress;
         }
+
+        // Fix 3: attach tier provenance to the successful deliverable
+        report.discoveryStatus = selectedStatus;
+        report.discoverySourceTier = selectedTier;
+        report.discoveryAttempts = discoveryAttempts;
 
         return report;
       });
@@ -954,13 +1036,42 @@ export class JobRouter {
     // Run full pipeline with timeout
     try {
       return await this.withTimeout(async (signal) => {
-        // Run L1+L2
-        let { resolved, analysis, structuralScore, hypeTechRatio, claims, wp: newWp } = await this.runL1L2(documentUrl, projectName, reqAddr, requirementText, costTracker, signal);
+        // Fix 3 (2026-04-23): handler-level fetch-failure fallback. Same pattern
+        // as handleVerifyWhitepaper. If provided document_url throws (404, etc.),
+        // fall through to tieredDiscovery and record attempts for the deliverable.
+        const discoveryAttempts: DiscoveryAttempt[] = [];
+        let runResult: Awaited<ReturnType<typeof this.runL1L2>> | null = null;
+        let selectedTier: number = 1;
+        let selectedStatus: DiscoveryStatus = 'provided';
 
-        // If provided document_url yielded 0 claims (e.g. landing page, SPA), try discovery fallback
-        if (claims.length === 0 && this.deps.tieredDiscovery) {
+        // Phase 1: attempt provided document_url
+        try {
+          runResult = await this.runL1L2(documentUrl, projectName, reqAddr, requirementText, costTracker, signal);
+          discoveryAttempts.push({
+            tier: 1,
+            status: 'provided',
+            structuralScore: runResult.structuralScore,
+            claimCount: runResult.claims.length,
+          });
+        } catch (err) {
+          if ((err as Error).message === 'Pipeline timeout') throw err;
+          const errMsg = (err as Error).message;
+          log.warn('full_tech document_url fetch failed — attempting discovery fallback', {
+            projectName, documentUrl: documentUrl.slice(0, 80), error: errMsg,
+          });
+          discoveryAttempts.push({
+            tier: 1, status: 'error', note: errMsg.slice(0, 100),
+          });
+        }
+
+        // Phase 2: discovery fallback if Tier 1 failed OR yielded 0 claims
+        const needsDiscovery = !runResult || runResult.claims.length === 0;
+        if (needsDiscovery && this.deps.tieredDiscovery) {
           try {
-            log.info('full_tech document_url yielded 0 claims — trying discovery fallback', { projectName, documentUrl: documentUrl.slice(0, 80) });
+            log.info('full_tech trying discovery fallback', {
+              projectName,
+              reason: !runResult ? 'tier-1 fetch failed' : 'tier-1 yielded 0 claims',
+            });
             const metadata: ProjectMetadata = {
               agentName: projectName,
               entityId: null,
@@ -970,17 +1081,49 @@ export class JobRouter {
               graduationStatus: null,
             };
             const discovered = await this.deps.tieredDiscovery.discover(metadata, reqAddr ?? '');
-            if (discovered && discovered.documentUrl !== documentUrl) {
+            if (discovered && (!runResult || discovered.documentUrl !== documentUrl)) {
               const fallback = await this.runL1L2(discovered.documentUrl, projectName, reqAddr, requirementText, costTracker, signal);
-              if (fallback.claims.length > 0) {
-                log.info('Discovery fallback succeeded for full_tech', { projectName, discoveredUrl: discovered.documentUrl.slice(0, 80), claims: fallback.claims.length });
-                ({ resolved, analysis, structuralScore, hypeTechRatio, claims, wp: newWp } = fallback);
+              const discoveredStatus: DiscoveryStatus =
+                discovered.tier === 3 ? 'community' :
+                discovered.tier === 4 ? 'aggregator' :
+                'primary';
+              discoveryAttempts.push({
+                tier: discovered.tier,
+                status: discoveredStatus,
+                structuralScore: fallback.structuralScore,
+                claimCount: fallback.claims.length,
+              });
+              if (!runResult || fallback.claims.length > 0) {
+                log.info('Discovery fallback succeeded for full_tech', {
+                  projectName,
+                  discoveredUrl: discovered.documentUrl.slice(0, 80),
+                  claims: fallback.claims.length,
+                  tier: discovered.tier,
+                });
+                runResult = fallback;
+                selectedTier = discovered.tier;
+                selectedStatus = discoveredStatus;
               }
+            } else if (!discovered) {
+              discoveryAttempts.push({ tier: 4, status: 'failed', note: 'all discovery tiers exhausted' });
             }
           } catch (err) {
             log.warn('Discovery fallback failed for full_tech', { projectName, error: (err as Error).message });
+            discoveryAttempts.push({ tier: 4, status: 'error', note: (err as Error).message.slice(0, 100) });
           }
         }
+
+        // Both Tier 1 and discovery failed — return INSUFFICIENT_DATA with attempts
+        if (!runResult) {
+          log.warn('full_tech Tier 1 + discovery both failed — returning INSUFFICIENT_DATA', {
+            projectName, attempts: discoveryAttempts.length,
+          });
+          const insuffResult = this.insufficientData(input, discoveryAttempts);
+          if (originalAddr) insuffResult.tokenAddress = originalAddr;
+          return insuffResult;
+        }
+
+        const { resolved, analysis, structuralScore, hypeTechRatio, claims, wp: newWp } = runResult;
 
         // L3: Full claim evaluation
         const { evaluations, scores } = await this.deps.claimEvaluator.evaluateAll(claims, resolved.text, { requirementText, costTracker });
@@ -1038,6 +1181,12 @@ export class JobRouter {
         }
 
         if (originalAddr) fullReport.tokenAddress = originalAddr;
+
+        // Fix 3: attach tier provenance to the successful deliverable
+        fullReport.discoveryStatus = selectedStatus;
+        fullReport.discoverySourceTier = selectedTier;
+        fullReport.discoveryAttempts = discoveryAttempts;
+
         return fullReport;
       });
     } catch (err) {
@@ -1246,11 +1395,15 @@ export class JobRouter {
     const projectName = input.project_name as string | undefined;
     const tokenAddress = (input._originalTokenAddress ?? input.token_address) as string | undefined;
 
-    const allCandidates: Array<{ id: string }> = [];
+    // Fix 2 (2026-04-23): name-path preference. Name lookup (exact + version-strip
+    // fallback) runs first. If it yields any usable candidate, return it and skip
+    // address-path. Address-path only consulted when name-path returns nothing.
+    // See findBestWhitepaper for the same rationale.
+    const nameResults: Array<{ id: string }> = [];
 
     if (projectName) {
       const results = await this.deps.whitepaperRepo.findByProjectName(projectName);
-      allCandidates.push(...results);
+      nameResults.push(...results);
 
       if (results.length === 0) {
         const stripped = stripVersionSuffix(projectName);
@@ -1265,7 +1418,7 @@ export class JobRouter {
               return wpName.includes(requestedVersion) || wpUrl.includes(requestedVersion);
             });
             if (versionMatched.length > 0) {
-              allCandidates.push(...versionMatched);
+              nameResults.push(...versionMatched);
               log.info('findWhitepaper: version-strip fallback (version-filtered)', {
                 original: projectName, stripped, requestedVersion,
                 total: strippedResults.length, matched: versionMatched.length,
@@ -1276,42 +1429,71 @@ export class JobRouter {
               });
             }
           } else if (strippedResults.length > 0) {
-            allCandidates.push(...strippedResults);
+            nameResults.push(...strippedResults);
             log.info('findWhitepaper: version-strip fallback matched', { original: projectName, stripped, matches: strippedResults.length });
           }
         }
       }
     }
-    if (tokenAddress && allCandidates.length === 0) {
-      const results = await this.deps.whitepaperRepo.findByTokenAddress(tokenAddress);
-      allCandidates.push(...results);
-    }
 
-    // Filter: skip 0-claim entries (cached failures)
-    for (const wp of allCandidates) {
+    // Phase 1: name-path — return first usable (claims > 0) match
+    for (const wp of nameResults) {
       const claims = await this.deps.claimsRepo.findByWhitepaperId(wp.id);
-      if (claims.length > 0) return wp;
+      if (claims.length > 0) {
+        log.info('findWhitepaper: name-path match', { projectName, wpId: wp.id });
+        return wp;
+      }
     }
 
-    if (allCandidates.length > 0) {
-      log.info('findWhitepaper: all candidates have 0 claims — treating as cache miss', {
-        projectName, tokenAddress: tokenAddress?.slice(0, 10), candidates: allCandidates.length,
+    // Phase 2: address-path only if name-path yielded nothing usable
+    if (tokenAddress) {
+      const addrResults = await this.deps.whitepaperRepo.findByTokenAddress(tokenAddress);
+      for (const wp of addrResults) {
+        // Skip if already considered via name-path (0-claim row)
+        if (nameResults.some((r) => r.id === wp.id)) continue;
+        const claims = await this.deps.claimsRepo.findByWhitepaperId(wp.id);
+        if (claims.length > 0) {
+          log.info('findWhitepaper: address-path match (no name-path hit)', {
+            projectName, tokenAddress: tokenAddress.slice(0, 10), wpId: wp.id,
+          });
+          return wp;
+        }
+      }
+      if (addrResults.length > 0 && nameResults.length > 0) {
+        log.info('findWhitepaper: all candidates have 0 claims — treating as cache miss', {
+          projectName, tokenAddress: tokenAddress.slice(0, 10),
+          candidates: nameResults.length + addrResults.length,
+        });
+      }
+    } else if (nameResults.length > 0) {
+      log.info('findWhitepaper: all name candidates have 0 claims — treating as cache miss', {
+        projectName, candidates: nameResults.length,
       });
     }
+
     return null;
   }
 
   /**
-   * Find the BEST whitepaper for a token — returns the entry with the most claims.
+   * Find the BEST whitepaper for a token.
+   *
+   * Fix 2 (2026-04-23): name-path preference. If name lookup (exact + version-aware
+   * strip fallback) yields any usable (claims > 0) candidate, return the best
+   * name-path match immediately. Only consult `findByTokenAddress` when name
+   * lookup returns nothing usable. Previously both paths merged and sorted by
+   * claim count, which allowed a richer unrelated-version address hit to beat
+   * a correct name hit (eval Job 1243: V3 request returned V2 cached row).
+   *
    * Skips 0-claim entries entirely — a cached failure is not a cached result.
-   * Returns null if all candidates have 0 claims, so handlers fall through to discovery.
+   * Returns null if all candidates have 0 claims, so handlers fall through to
+   * discovery.
    */
   private async findBestWhitepaper(input: Record<string, unknown>) {
     const projectName = input.project_name as string | undefined;
     const tokenAddress = (input._originalTokenAddress ?? input.token_address) as string | undefined;
 
-    // Collect ALL candidate entries from both name and address lookups
-    const candidates: Array<{ wp: Record<string, unknown>; claimCount: number }> = [];
+    // ── Phase 1: name-path lookup (exact + version-aware strip fallback) ──
+    const nameCandidates: Array<{ wp: Record<string, unknown>; claimCount: number }> = [];
 
     if (projectName) {
       let byName = await this.deps.whitepaperRepo.findByProjectName(projectName);
@@ -1350,50 +1532,73 @@ export class JobRouter {
 
       for (const wp of byName) {
         const claims = await this.deps.claimsRepo.findByWhitepaperId(wp.id);
-        candidates.push({ wp: wp as Record<string, unknown>, claimCount: claims.length });
+        nameCandidates.push({ wp: wp as Record<string, unknown>, claimCount: claims.length });
       }
     }
+
+    // Name-path wins if it has any usable candidate — return best of name-path
+    const usableByName = nameCandidates.filter((c) => c.claimCount > 0);
+    if (usableByName.length > 0) {
+      usableByName.sort((a, b) => b.claimCount - a.claimCount);
+      log.info('findBestWhitepaper: name-path match (preferred over address-path)', {
+        projectName,
+        best: (usableByName[0].wp as { projectName: string }).projectName,
+        bestClaims: usableByName[0].claimCount,
+      });
+      return usableByName[0].wp;
+    }
+
+    // ── Phase 2: address-path only if name-path yielded nothing usable ──
+    const addrCandidates: Array<{ wp: Record<string, unknown>; claimCount: number }> = [];
 
     if (tokenAddress) {
       const byAddr = await this.deps.whitepaperRepo.findByTokenAddress(tokenAddress);
       for (const wp of byAddr) {
-        // Avoid duplicates from the name lookup
-        if (candidates.some((c) => (c.wp as { id: string }).id === wp.id)) continue;
+        // Avoid rows already considered via name-path
+        if (nameCandidates.some((c) => (c.wp as { id: string }).id === wp.id)) continue;
         const claims = await this.deps.claimsRepo.findByWhitepaperId(wp.id);
-        candidates.push({ wp: wp as Record<string, unknown>, claimCount: claims.length });
+        addrCandidates.push({ wp: wp as Record<string, unknown>, claimCount: claims.length });
       }
     }
 
-    if (candidates.length === 0) return null;
-
-    // Filter out 0-claim entries — cached failures, not cached results
-    const usable = candidates.filter((c) => c.claimCount > 0);
-    if (usable.length === 0) {
-      log.info('findBestWhitepaper: all candidates have 0 claims — treating as cache miss', {
-        projectName, tokenAddress: tokenAddress?.slice(0, 10), candidates: candidates.length,
-      });
+    const usableByAddr = addrCandidates.filter((c) => c.claimCount > 0);
+    if (usableByAddr.length === 0) {
+      const totalCandidates = nameCandidates.length + addrCandidates.length;
+      if (totalCandidates > 0) {
+        log.info('findBestWhitepaper: all candidates have 0 claims — treating as cache miss', {
+          projectName, tokenAddress: tokenAddress?.slice(0, 10), candidates: totalCandidates,
+        });
+      }
       return null;
     }
 
-    // Sort by claimCount descending — prefer entries with the most claims
-    usable.sort((a, b) => b.claimCount - a.claimCount);
+    usableByAddr.sort((a, b) => b.claimCount - a.claimCount);
 
-    log.info('findBestWhitepaper candidates', {
-      total: candidates.length,
-      usable: usable.length,
-      best: (usable[0].wp as { projectName: string }).projectName,
-      bestClaims: usable[0].claimCount,
+    log.info('findBestWhitepaper: address-path match (no name-path hit)', {
+      projectName,
+      tokenAddress: tokenAddress?.slice(0, 10),
+      best: (usableByAddr[0].wp as { projectName: string }).projectName,
+      bestClaims: usableByAddr[0].claimCount,
     });
 
-    return usable[0].wp;
+    return usableByAddr[0].wp;
   }
 
   /**
    * Return a flat response with all expected fields zeroed/empty.
    * Virtuals evaluators check that the response matches the offering's deliverable schema.
    * A bare `{ error: "not_in_database" }` gets flagged as "unrelated to the requested audit."
+   *
+   * Fix 3 (2026-04-23): accepts optional discoveryAttempts array. When a handler
+   * has attempted Tier 1 (provided URL) and/or subsequent tiers before giving up,
+   * the attempts are surfaced in the deliverable so the evaluator can see the
+   * agent tried to recover. Previously `discoveryAttempts: []` triggered eval
+   * Job 1249 rejection ("the agent should also be robust enough to search").
    */
-  private insufficientData(input?: Record<string, unknown>) {
+  private insufficientData(
+    input?: Record<string, unknown>,
+    discoveryAttempts?: DiscoveryAttempt[],
+  ) {
     return {
       projectName: (input?.project_name as string) ?? 'Unknown',
       tokenAddress: (input?.token_address as string) ?? null,
@@ -1413,6 +1618,9 @@ export class JobRouter {
       focusAreaScores: {},
       llmTokensUsed: 0,
       computeCostUsd: 0,
+      discoveryStatus: 'failed' as DiscoveryStatus,
+      discoverySourceTier: null,
+      discoveryAttempts: discoveryAttempts ?? [],
     };
   }
 
@@ -1440,6 +1648,55 @@ export class JobRouter {
       computeCostUsd: 0,
     };
     return base;
+  }
+
+  /**
+   * Fix 4 (2026-04-23): verdict downgrade on version mismatch.
+   *
+   * When the buyer's request specified a version (e.g., "Uniswap V3") and the
+   * delivered report's projectName doesn't carry that version token, downgrade
+   * verdict to INSUFFICIENT_DATA rather than silently serving different-version
+   * content. Safety net for Fix 2 edge cases (e.g., live discovery returns a
+   * V2 GitHub PDF for a V3 request). See eval Job 1243.
+   *
+   * Mutates and returns the report. No-op when no version in request, or when
+   * versions align.
+   */
+  private maybeDowngradeForVersionMismatch<T extends Record<string, unknown>>(
+    report: T,
+    requestedProjectName: string | undefined,
+  ): T {
+    if (!requestedProjectName) return report;
+    // Only applies to report-shaped objects — skip error envelopes and other non-report returns.
+    if (typeof report.projectName !== 'string' || typeof report.verdict !== 'string') return report;
+
+    const versionMatch = requestedProjectName.match(/\b(v\d+)\b/i);
+    if (!versionMatch) return report;
+
+    const requestedVersion = versionMatch[1].toLowerCase();
+    const deliveredName = report.projectName.toLowerCase();
+    const deliveredSummary = typeof report.logicSummary === 'string' ? report.logicSummary : '';
+
+    // If the delivered projectName contains the requested version, versions align — no-op.
+    if (deliveredName.includes(requestedVersion)) return report;
+
+    // Also skip if verdict is already INSUFFICIENT_DATA — nothing to downgrade.
+    if (report.verdict === 'INSUFFICIENT_DATA') return report;
+
+    // Version mismatch. Downgrade verdict and replace logicSummary with explanation.
+    log.warn('Version mismatch detected — downgrading verdict to INSUFFICIENT_DATA', {
+      requested: requestedProjectName,
+      delivered: report.projectName,
+      requestedVersion,
+    });
+    (report as Record<string, unknown>).verdict = 'INSUFFICIENT_DATA';
+    const note = `Version mismatch: buyer requested '${requestedProjectName}' but only '${report.projectName}' was found. ` +
+                 `The ${requestedVersion.toUpperCase()} documentation could not be located — returning INSUFFICIENT_DATA rather than serve different-version content.`;
+    // Preserve existing logicSummary as a suffix for debuggability if present
+    (report as Record<string, unknown>).logicSummary = deliveredSummary
+      ? `${note}\n\n---\nOriginal analysis (different version) below:\n${deliveredSummary}`
+      : note;
+    return report;
   }
 
   private verificationRowToResult(v: Record<string, unknown>) {
