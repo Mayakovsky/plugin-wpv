@@ -268,7 +268,8 @@ describe('ScoreAggregator', () => {
     const result = aggregator.aggregate(scores);
     expect(result.focusAreaScores.TOKENOMICS).toBe(70); // avg(80,60)
     expect(result.focusAreaScores.PERFORMANCE).toBe(50);
-    expect(result.focusAreaScores.CONSENSUS).toBe(0); // no claims
+    expect(result.focusAreaScores.CONSENSUS).toBe(null); // no claims — null (not 0) per Phase 4 schema change
+    expect(result.focusAreaScores.SCIENTIFIC).toBe(null); // no claims
   });
 
   it('empty claims → INSUFFICIENT_DATA', () => {

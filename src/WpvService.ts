@@ -639,22 +639,37 @@ export class WpvService extends Service {
     const signals: Array<'token' | 'name' | 'url'> = [];
 
     // TOKEN signal
+    // Fix 1 (2026-04-23): EVM address must be exactly 40 hex chars (20-byte standard).
+    // Malformed addresses throw InputValidationError pre-acceptance rather than
+    // silent-strip — previously a typo address was stripped, the name signal
+    // accepted the job, and cached data was served with the typo address stamped
+    // on the report (eval Job 1246). See Eval_Zoom_Out_Fix_Plan_2026-04-23.md.
     const tokenAddress = requirement?.token_address;
     if (typeof tokenAddress === 'string' && tokenAddress.trim()) {
       const trimmed = tokenAddress.trim();
       let validToken = false;
 
       if (isPlainText) {
-        // Plain-text-extracted addresses skip format validation (may be truncated)
+        // Plain-text-extracted addresses skip format validation (may be truncated
+        // or abbreviated in freeform requirement text)
         validToken = true;
       } else if (trimmed.startsWith('0x')) {
-        if (/^0x[0-9a-fA-F]{20,40}$/.test(trimmed)) {
+        if (/^0x[0-9a-fA-F]{40}$/.test(trimmed)) {
           const lower = trimmed.toLowerCase();
           const isBurn =
             /^0x(0{40}|dead(beef)?[0-9a-f]*(dead|beef)[0-9a-f]*|f{40})$/.test(lower) ||
             /^0x(.)\1{39}$/.test(lower) ||
             /^0x([0-9a-f]{2})\1{19}$/.test(lower);
           validToken = !isBurn;
+          if (isBurn) {
+            const err = new Error(`Invalid token_address: burn/null address rejected — '${trimmed.slice(0, 50)}'`);
+            err.name = 'InputValidationError';
+            throw err;
+          }
+        } else {
+          const err = new Error(`Invalid token_address: expected 0x-prefixed 40-hex-character address (20-byte EVM format), got '${trimmed.slice(0, 50)}'`);
+          err.name = 'InputValidationError';
+          throw err;
         }
       } else if (/^[13][a-km-zA-HJ-NP-Z1-9]{24,33}$/.test(trimmed) || /^bc1[a-zA-HJ-NP-Z0-9]{25,89}$/.test(trimmed)) {
         // Bitcoin — explicit reject, Grey doesn't support BTC
@@ -662,15 +677,17 @@ export class WpvService extends Service {
         err.name = 'InputValidationError';
         throw err;
       } else if (/^[a-zA-Z0-9]{26,50}$/.test(trimmed)) {
+        // Solana / base58 (26-50 chars)
         validToken = true;
+      } else {
+        // Not 0x, not Bitcoin, not base58 — malformed
+        const err = new Error(`Invalid token_address: expected valid crypto address (EVM hex or base58), got '${trimmed.slice(0, 50)}'`);
+        err.name = 'InputValidationError';
+        throw err;
       }
 
       if (validToken) {
         signals.push('token');
-      } else {
-        // Invalid format — strip, preserve for logging
-        requirement._originalTokenAddress = requirement.token_address;
-        delete requirement.token_address;
       }
     }
 
@@ -1074,10 +1091,11 @@ export class WpvService extends Service {
 
       const trimmed = tokenAddress.trim();
 
-      // EVM: must be 0x + 20-40 hex chars (some chains use shorter addresses)
+      // EVM: exactly 20 bytes = 40 hex chars after 0x (Solidity / ERC-20 standard).
+      // Fix 1 (2026-04-23): tightened from {20,40} range to exact {40}.
       if (trimmed.startsWith('0x')) {
-        if (!/^0x[0-9a-fA-F]{20,40}$/.test(trimmed)) {
-          const err = new Error(`Invalid token_address: expected 0x-prefixed hex address (22-42 chars), got '${trimmed.slice(0, 50)}'`);
+        if (!/^0x[0-9a-fA-F]{40}$/.test(trimmed)) {
+          const err = new Error(`Invalid token_address: expected 0x-prefixed 40-hex-character address (20-byte EVM format), got '${trimmed.slice(0, 50)}'`);
           err.name = 'InputValidationError';
           throw err;
         }
