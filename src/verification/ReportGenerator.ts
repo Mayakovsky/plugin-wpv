@@ -16,12 +16,47 @@ import type {
   DailyBriefingReport,
   DiscoveryStatus,
   DiscoveryAttempt,
+  Verdict,
+  MicaClaimStatus,
+  MicaComplianceStatus,
 } from '../types';
 
 export interface DiscoveryProvenance {
   discoveryStatus: DiscoveryStatus;
   discoverySourceTier: number | null;
   discoveryAttempts: DiscoveryAttempt[];
+}
+
+/**
+ * A paper that CLAIMS MiCA compliance but FAILS the structural check
+ * (2/7 sections etc.) is more suspicious than one that makes no claim at all.
+ * The top-line verdict should reflect that discrepancy rather than show PASS
+ * off the back of structural formatting alone.
+ *
+ * Rules (strictly downgrading — never upgrades):
+ *   - claimsMica=YES + micaCompliant=NO:
+ *       PASS → FAIL when structuralScore ≤ 3, else PASS → CONDITIONAL
+ *   - claimsMica=YES + micaCompliant=PARTIAL:
+ *       PASS → CONDITIONAL (soft downgrade)
+ *   - otherwise unchanged
+ */
+function adjustVerdictForMicaDiscrepancy(
+  verdict: Verdict,
+  claimsMica: MicaClaimStatus,
+  micaCompliant: MicaComplianceStatus,
+  structuralScore: number,
+): Verdict {
+  if (claimsMica !== 'YES') return verdict;
+  if (micaCompliant === 'YES') return verdict;
+  if (verdict !== ('PASS' as Verdict)) return verdict;  // only ever downgrade PASS
+
+  if (micaCompliant === 'NO') {
+    return structuralScore <= 3 ? ('FAIL' as Verdict) : ('CONDITIONAL' as Verdict);
+  }
+  if (micaCompliant === 'PARTIAL') {
+    return 'CONDITIONAL' as Verdict;
+  }
+  return verdict;
 }
 
 export class ReportGenerator {
@@ -31,15 +66,24 @@ export class ReportGenerator {
     wp: WhitepaperRecord,
     provenance?: DiscoveryProvenance,
   ): LegitimacyScanReport {
+    const claimsMica = analysis.mica?.claimsMicaCompliance ?? 'NOT_MENTIONED';
+    const micaCompliant = analysis.mica?.micaCompliant ?? 'NO';
+    const adjustedVerdict = adjustVerdictForMicaDiscrepancy(
+      verification.verdict,
+      claimsMica,
+      micaCompliant,
+      verification.structuralScore,
+    );
+
     const base: LegitimacyScanReport = {
       projectName: wp.projectName,
       tokenAddress: wp.tokenAddress,
       structuralScore: verification.structuralScore,
-      verdict: verification.verdict,
+      verdict: adjustedVerdict,
       hypeTechRatio: verification.hypeTechRatio,
       claimCount: verification.totalClaims,
-      claimsMicaCompliance: analysis.mica?.claimsMicaCompliance ?? 'NOT_MENTIONED',
-      micaCompliant: analysis.mica?.micaCompliant ?? 'NO',
+      claimsMicaCompliance: claimsMica,
+      micaCompliant: micaCompliant,
       micaSummary: analysis.mica?.micaSummary ?? '',
       generatedAt: new Date().toISOString(),
     };
