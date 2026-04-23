@@ -1,8 +1,8 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-04-22 (VIDEO GRADUATION 8/8 PASS — race condition fixed, all offerings end-to-end on-chain)
+> Last updated: 2026-04-23 (Eval cycle in progress. 25/28 → 14/15 → 12/15. Zoom-out plan pending Forces approval.)
 > Updated by: Claude Opus 4.7 — Kovsky session
-> Session label: Video graduation tests complete. 8/8 PASS on the 4 offerings × (positive + negative). Pre-video, uncovered a race condition in plugin-acp v2 socket-path: buyer's SDK posts the `requirement` message via REST (`transport.postMessage`), not the socket, so `agent.on('entry')` never fires for it. Both `handleJobCreated` and `handleJobFunded` were reading requirement from empty `session.entries` → immediate reject / error-deliverable fallback. Fix: `waitForRequirement()` helper with 3-tier fallback (fast-path → poll → `transport.getHistory()` REST pull). Dual-trigger dispatch on `job.created` OR `requirement.message` entries. `__decided` sentinel prevents double-accept. Applied to both phase handlers. Deployed to VPS, SDK reconnected, 4 handlers re-registered, Grey ran 9 jobs without crash or restart. Video run: jobs #1049–#1055 + #1180 (Test 8 re-record). Total 0.13 USDC spent. Report: `BUILD DOCS and DATA/Video_Graduation_Test_Report_2026-04-22.md`.
-> Staleness gate: 2026-04-22 — if today is >3 days past this,
+> Session label: DevRel eval re-runs after 28/28 plan implementation. Two prior eval failures (Aerodrome #1207, Uniswap broken-URL #1213) both fixed — signal aggregator + Tier 3.5 GitHub + Phase 2 never-reject-post-acceptance held as designed. But each iterative fix surfaced a new semantic issue the evaluator catches: (1) version-stripping cache match delivers Uniswap V2 when V3 requested; (2) removed eth_getCode lets typo'd addresses serve cached data; (3) URL fetch failure throws unhandled instead of falling back to token/name discovery. Pattern Forces correctly named: my signal aggregator moved validation from strict→permissive but didn't complete the other half (resolver gaining strict enforcement + fallback). Coordinated A+B+C fix plan in `BUILD DOCS and DATA/Eval_Zoom_Out_Fix_Plan_2026-04-23.md` — awaiting Forces approval before implementation. Do NOT ship another single-fix iteration. MiCA verdict downgrade, never-reject-post-acceptance, tier chain, signal aggregator OR semantics — all working, leave alone.
+> Staleness gate: 2026-04-23 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
 ## Focus (1-3 goals, testable)
@@ -46,7 +46,10 @@
 - [x] **SELF-HIRE probe** — contract reverts at simulation (buyer==provider rejected). Script: /opt/grey/plugin-acp/self-hire-test.js. Kept as diagnostic reference.
 - [x] **Video graduation tests** — 8/8 PASS on-chain, jobs #1049–#1055 + #1180. See `BUILD DOCS and DATA/Video_Graduation_Test_Report_2026-04-22.md`.
 - [x] **Race condition fix** — `waitForRequirement()` 3-tier fallback, dual-trigger dispatch, `__decided` sentinel. `plugin-acp/src/AcpService.ts`.
-- [ ] **Re-graduation** — submit to Butler for v2 evaluator re-run.
+- [x] **Phase 1-4 28/28 plan** — signal aggregator, never-reject-post-acceptance, Tier 3.5/3.75, schema expansion. Deployed across commits `a70267c`, `0e0f4c6`.
+- [x] **MiCA discrepancy verdict downgrade** — commit `528729f`.
+- [ ] **DevRel eval cycles** — 25/28 → 14/15 → 12/15. Three outstanding failures #1243/1246/1249. Zoom-out plan pending Forces approval.
+- [ ] **Re-graduation** — submit to Butler after hitting 15/15.
 - [ ] **LAUNCH** — set production prices, close ports, fire outreach, monitor
 
 ## What Works (verified)
@@ -69,6 +72,21 @@
 - ⚠️ **Ports 3000 + 3001 open** in Lightsail firewall — close for production.
 - ⚠️ Test prices still active ($0.01-$0.04) — switch to production prices for launch
 - ⚠️ **Grey stats "not yet tracked"** on Virtuals UI — new wallet has zero ACP transactions; will populate after first successful video test job.
+
+## What's Fixed (2026-04-23 cycle)
+- 🟢 **Phase 1 — Signal aggregator (OR semantics)** — `WpvService.aggregateSignals` replaces field-AND validator. Valid token OR name OR url → accept.
+- 🟢 **Phase 2 — Never-reject-post-acceptance** — `AcpService.handleJobFunded` catch path delivers INSUFFICIENT_DATA envelope.
+- 🟢 **Phase 3 — Tier 3.5 GitHub + Tier 3.75 CoinGecko/CMC** — inserted ahead of legacy WebSearchFallback.
+- 🟢 **Phase 4 — Deliverable schema** — `discoveryStatus`/`discoverySourceTier`/`discoveryAttempts` fields (optional, strictly additive).
+- 🟢 **focusAreaScores null** — absent categories return null instead of 0.
+- 🟢 **Verdict-thin-result mapping** — `structuralScore < 2` → INSUFFICIENT_DATA (not FAIL).
+- 🟢 **MiCA discrepancy verdict downgrade** — `claimsMica=YES` + `micaCompliant≠YES` downgrades PASS.
+
+## What's broken as of 2026-04-23 eval (12/15)
+- 🔴 **Version-stripping cache match** (Job 1243) — plain-text `"Uniswap V3"` request served V2 content because `stripVersionSuffix()` fuzzy-matches to "Uniswap" row.
+- 🔴 **No contract-existence check** (Job 1246) — typo'd 40-char token address passes signal aggregator, serves cached Aerodrome Finance content.
+- 🔴 **URL fetch failure doesn't fall back** (Job 1249) — `cryptoResolver.resolveWhitepaper(url)` throws on 404, exception bubbles to Phase 2 fallback envelope instead of trying token/name discovery.
+- See `BUILD DOCS and DATA/Eval_Zoom_Out_Fix_Plan_2026-04-23.md` for coordinated A+B+C fix plan.
 
 ## What's Fixed (2026-04-22)
 - 🟢 **plugin-acp race condition (requirement message delivery)** — v2 buyer SDK posts requirement via REST, not socket, so Grey's `agent.on('entry')` never fires for it. Both `handleJobCreated` and `handleJobFunded` were reading empty `session.entries`. Fix: `waitForRequirement()` 3-tier fallback (fast-path → poll → `transport.getHistory()`), dual-trigger dispatch, `__decided` sentinel. `plugin-acp/src/AcpService.ts`. Deployed, verified across 9 live jobs.

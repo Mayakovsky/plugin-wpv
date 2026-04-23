@@ -245,8 +245,9 @@ ACP_PRIVY_SIGNER_KEY=<from Virtuals Add Signer>
 - `BUILD DOCS and DATA/Grey_Kovsky_Execution_Eval35_Fixes_v3.md` — Eval 35 fix plan v3 (9-fix infrastructure overhaul)
 - `BUILD DOCS and DATA/Grey_Graduation_Report.md` — Graduation report and post-launch context
 - `BUILD DOCS and DATA/Video_Graduation_Test_Report_2026-04-22.md` — Video graduation tests: 8/8 PASS + race condition fix detail
+- `BUILD DOCS and DATA/Eval_Zoom_Out_Fix_Plan_2026-04-23.md` — A+B+C zoom-out plan for eval cycle 3 regressions (pending Forces approval)
 - `README.md` — Setup and usage
 
 ---
 
-*Last updated: 2026-04-22 (VIDEO GRADUATION 8/8 PASS on-chain. All 4 offerings × pos/neg verified end-to-end on Base. Race condition fix deployed in plugin-acp — waitForRequirement() 3-tier fallback in handleJobCreated and handleJobFunded. Grey stable across 9 on-chain jobs with no restart. Ready for Butler v2 re-graduation submission. 310 tests / 24 files.)*
+*Last updated: 2026-04-23 (DevRel v2 eval cycle in progress. 25/28 → 14/15 → 12/15. Signal aggregator, Tier 3.5/3.75 resolvers, Phase 2 never-reject-post-acceptance, MiCA verdict downgrade all deployed and holding. Three regressions at eval 3 traced to over-permissive validator post-Phase-1: A) eth_getCode removed → typo addresses pass, B) URL fetch throws without fallback, C) `stripVersionSuffix` cache match loses version intent. Coordinated A+B+C zoom-out fix plan in `BUILD DOCS and DATA/Eval_Zoom_Out_Fix_Plan_2026-04-23.md` — awaiting Forces approval. 310 tests / 24 files. Grey ONLINE on VPS.)*
