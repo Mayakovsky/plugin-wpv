@@ -111,8 +111,14 @@ export class ReportGenerator {
       }
     }
 
+    // Fix 6 (2026-04-24): derive claimCount from the actual claims array, not
+    // the cached verification.totalClaims. The L2 enrichment path can produce
+    // a claims array longer than the stored totalClaims (seeded row had 11,
+    // enrichment discovered 15) — the delivered report must reflect what the
+    // claims[] actually contains (eval Job 1304 evaluator feedback).
     return {
       ...scan,
+      claimCount: claims.length,
       claims,
       claimScores: scores,
       logicSummary: this.generateLogicSummary(claims, verification),
@@ -160,10 +166,17 @@ export class ReportGenerator {
     const categories = new Set(claims.map((c) => c.category));
     const parts: string[] = [];
 
-    parts.push(`${verification.totalClaims} claims extracted across ${categories.size} categories.`);
+    // Fix 6 (2026-04-24): use claims.length (the actual array size) for the
+    // extracted-count text rather than verification.totalClaims (the cached
+    // scalar). Eval Job 1304 flagged the mismatch when the claims array post-
+    // enrichment was larger than the seeded totalClaims value.
+    const extracted = claims.length;
+    const verified = Math.min(verification.verifiedClaims, extracted);
 
-    if (verification.verifiedClaims > 0) {
-      parts.push(`${verification.verifiedClaims}/${verification.totalClaims} claims verified.`);
+    parts.push(`${extracted} claims extracted across ${categories.size} categories.`);
+
+    if (verified > 0) {
+      parts.push(`${verified}/${extracted} claims verified.`);
     }
 
     if (verification.hypeTechRatio > 3.0) {
