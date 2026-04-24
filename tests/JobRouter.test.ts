@@ -102,6 +102,10 @@ describe('JobRouter', () => {
   });
 
   it('verify_project_whitepaper creates DB record', async () => {
+    // Ensure "creates new record" path is exercised: no existing row for this project.
+    // (The default shared mock returns a stub row regardless of input; override here.)
+    (deps.whitepaperRepo.findByProjectName as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (deps.whitepaperRepo.findByTokenAddress as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     await router.handleJob('verify_project_whitepaper', {
       document_url: 'https://example.com/wp.pdf',
       project_name: 'NewProject',

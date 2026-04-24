@@ -21,6 +21,7 @@ import type { AggregatorResolver } from '../discovery/AggregatorResolver';
 import { Verdict, ClaimCategory } from '../types';
 import type { ProjectMetadata, DiscoveryAttempt, DiscoveryStatus } from '../types';
 import { TIER_ROBUST_THRESHOLD, USE_TIERED_RESOLVER } from '../constants';
+import { KNOWN_PROTOCOL_NAMES } from '../constants/protocols';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger({ operation: 'JobRouter' });
@@ -29,6 +30,55 @@ const log = createLogger({ operation: 'JobRouter' });
 function normalizeGitHubUrl(url: string): string {
   const m = url.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/(.+)$/);
   return m ? `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}` : url;
+}
+
+/**
+ * Option B Fix C (2026-04-24): name canonicalization.
+ *
+ * When `resolveTokenName` falls back to on-chain ERC-20 `name()` for tokens
+ * without project_name in the request, the returned string is the literal
+ * contract label — e.g., AAVE returns `"Aave Token"`, LINK returns
+ * `"ChainLink Token"`, VIRTUAL returns `"Virtual Protocol"`. These verbose
+ * forms create parallel DB rows alongside canonical short names.
+ *
+ * Canonicalization collapses these variants by:
+ *   1. Stripping trailing ` Token`/` Protocol`/` Coin`/` Stablecoin`/` Chain`/` Network`.
+ *   2. Looking the stripped base up (case-insensitive) against KNOWN_PROTOCOL_NAMES.
+ *   3. If found, returning the KNOWN canonical form (preserving its casing).
+ *   4. Checking a small synonym map for plural/singular pairs that don't
+ *      collapse via suffix stripping (e.g., `Virtual` → `Virtuals Protocol`).
+ *   5. If nothing matches, returning the input (trimmed) unchanged — never
+ *      over-merge unknown names.
+ *
+ * Returns the canonical name or the input trimmed.
+ */
+const NAME_SUFFIX_PATTERN = /\s+(token|protocol|coin|stablecoin|chain|network)s?$/i;
+
+/** Explicit synonyms for plural/singular forms that suffix-stripping doesn't catch. */
+const NAME_SYNONYMS = new Map<string, string>([
+  // Virtuals: on-chain name is "Virtual Protocol" but canonical is "Virtuals Protocol"
+  ['virtual', 'Virtuals Protocol'],
+]);
+
+function canonicalizeProjectName(raw: string | null | undefined): string | null | undefined {
+  if (raw == null) return raw;
+  const trimmed = raw.trim();
+  if (!trimmed) return trimmed;
+
+  const lower = trimmed.toLowerCase();
+  const base = lower.replace(NAME_SUFFIX_PATTERN, '').trim();
+
+  // Synonym map check
+  const syn = NAME_SYNONYMS.get(base);
+  if (syn) return syn;
+
+  // KNOWN_PROTOCOL_NAMES check — compare base forms on both sides
+  for (const known of KNOWN_PROTOCOL_NAMES) {
+    const knownBase = known.toLowerCase().replace(NAME_SUFFIX_PATTERN, '').trim();
+    if (knownBase === base) return known;
+  }
+
+  return trimmed;
 }
 
 /**
@@ -50,8 +100,16 @@ async function resolveTokenName(tokenAddress: string): Promise<string | null> {
         (p) => p.baseToken?.address?.toLowerCase() === tokenAddress.toLowerCase(),
       );
       if (match?.baseToken?.name) {
-        log.info('DexScreener resolved token name', { tokenAddress: tokenAddress.slice(0, 10), name: match.baseToken.name });
-        return match.baseToken.name;
+        const raw = match.baseToken.name;
+        const canonical = canonicalizeProjectName(raw) ?? raw;
+        if (canonical !== raw) {
+          log.info('DexScreener resolved token name (canonicalized)', {
+            tokenAddress: tokenAddress.slice(0, 10), raw, canonical,
+          });
+        } else {
+          log.info('DexScreener resolved token name', { tokenAddress: tokenAddress.slice(0, 10), name: raw });
+        }
+        return canonical;
       }
     }
   } catch { /* DexScreener unavailable — try fallback */ }
@@ -84,8 +142,16 @@ async function resolveTokenName(tokenAddress: string): Promise<string | null> {
               const strHex = hex.slice(128, 128 + strLen * 2);
               const name = Buffer.from(strHex, 'hex').toString('utf8').trim();
               if (name.length > 0 && /^[\x20-\x7E]+$/.test(name)) {
-                log.info('ERC-20 name() resolved', { tokenAddress: tokenAddress.slice(0, 10), name, rpcUrl: rpcUrl.slice(0, 30) });
-                return name;
+                const canonical = canonicalizeProjectName(name) ?? name;
+                if (canonical !== name) {
+                  log.info('ERC-20 name() resolved (canonicalized)', {
+                    tokenAddress: tokenAddress.slice(0, 10), raw: name, canonical,
+                    rpcUrl: rpcUrl.slice(0, 30),
+                  });
+                } else {
+                  log.info('ERC-20 name() resolved', { tokenAddress: tokenAddress.slice(0, 10), name, rpcUrl: rpcUrl.slice(0, 30) });
+                }
+                return canonical;
               }
             }
           }
@@ -105,6 +171,17 @@ async function resolveTokenName(tokenAddress: string): Promise<string | null> {
 function stripVersionSuffix(name: string): string | null {
   const stripped = name.replace(/\s+[vV]\d+(\.\d+)*\s*$/, '').trim();
   return stripped !== name.trim() ? stripped : null;
+}
+
+/**
+ * Extract the version token from a project name. "Aave V3" → "v3", "Uniswap" → null.
+ * Used by dedupe-on-address logic to keep v1 and v3 rows distinct even when
+ * they share a token contract.
+ */
+function extractVersion(name: string | null | undefined): string | null {
+  if (!name) return null;
+  const m = name.match(/\b(v\d+)\b/i);
+  return m ? m[1].toLowerCase() : null;
 }
 
 export interface JobRouterDeps {
@@ -416,8 +493,43 @@ export class JobRouter {
       wp = { id: `tmp-${Date.now()}`, projectName, tokenAddress: tokenAddress ?? null };
       log.warn('Skipping cache write — project name contains violation keywords', { projectName });
     } else {
-      // Upsert: check for existing whitepaper by project name
-      const existing = await this.deps.whitepaperRepo.findByProjectName(projectName);
+      // Option B Fix B (2026-04-24): dedupe upsert by token_address with version
+      // awareness. Before, this method upserted by project_name only — which
+      // created parallel rows for the same on-chain contract when the name
+      // varied ("Aave Token" vs "Aave", "Virtual Protocol" vs "Virtuals
+      // Protocol"). Now we also consider rows matching the same tokenAddress
+      // in the same version-family as candidate records, and we preserve the
+      // existing row's name when replacing so the canonical first-seen name
+      // wins over verbose on-chain labels.
+      const requestedVersion = extractVersion(projectName);
+
+      // Name-path candidates (existing behavior)
+      const byName = await this.deps.whitepaperRepo.findByProjectName(projectName);
+      // Address-path candidates, filtered to same version-family
+      let byAddrCompatible: typeof byName = [];
+      if (tokenAddress) {
+        const byAddr = await this.deps.whitepaperRepo.findByTokenAddress(tokenAddress);
+        byAddrCompatible = byAddr.filter((row) => {
+          const rowVersion = extractVersion((row as Record<string, unknown>).projectName as string | null);
+          return (rowVersion ?? '') === (requestedVersion ?? '');
+        });
+      }
+
+      // Merge candidates, dedupe by id, preserve name-path priority (for logging clarity)
+      const existing: typeof byName = [...byName];
+      const seenIds = new Set(existing.map((e) => e.id));
+      for (const wpRow of byAddrCompatible) {
+        if (!seenIds.has(wpRow.id)) {
+          existing.push(wpRow);
+          seenIds.add(wpRow.id);
+          log.info('Upsert: dedupe-on-address candidate', {
+            requestedName: projectName, requestedVersion: requestedVersion ?? 'none',
+            existingName: (wpRow as Record<string, unknown>).projectName,
+            tokenAddress: tokenAddress?.slice(0, 10),
+          });
+        }
+      }
+
       const existingWithClaims = existing.length > 0
         ? await (async () => {
             for (const e of existing) {
@@ -433,12 +545,20 @@ export class JobRouter {
         wp = existingWithClaims.wp;
         log.info('Upsert: reusing existing record', {
           projectName, existingClaims: existingWithClaims.claimCount, newClaims: claims.length,
+          existingName: existingWithClaims.wp.projectName,
         });
       } else {
-        // New result is better, or no existing record — create new
+        // New result is better, or no existing record — create new.
+        // Preserve the existing canonical name when replacing, so on-chain
+        // verbose labels ("Aave Token") don't overwrite canonical forms ("Aave").
+        const canonicalName = existingWithClaims
+          ? (existingWithClaims.wp as Record<string, unknown>).projectName as string
+          : projectName;
+
         if (existingWithClaims) {
           log.info('Upsert: replacing — new result has more claims', {
-            projectName, existingClaims: existingWithClaims.claimCount, newClaims: claims.length,
+            requestedName: projectName, preservedName: canonicalName,
+            existingClaims: existingWithClaims.claimCount, newClaims: claims.length,
           });
           await this.deps.claimsRepo.deleteByWhitepaperId(existingWithClaims.wp.id);
           await this.deps.verificationsRepo.deleteByWhitepaperId(existingWithClaims.wp.id);
@@ -452,7 +572,7 @@ export class JobRouter {
         }
 
         wp = await this.deps.whitepaperRepo.create({
-          projectName,
+          projectName: canonicalName,
           tokenAddress: tokenAddress ?? undefined,
           documentUrl,
           chain: tokenAddress?.startsWith('0x') ? 'base' : 'unknown',
