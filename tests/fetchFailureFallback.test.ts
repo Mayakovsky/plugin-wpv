@@ -106,7 +106,7 @@ describe('handleVerifyWhitepaper — Fix 3: fetch-failure fallback', () => {
       tier: 3,
     });
 
-    const result = await router.handleJob('verify_project_whitepaper', {
+    const result = await router.handleJob('verify_whitepaper', {
       token_address: '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9',
       document_url: 'https://aave.com/whitepaper.pdf',
       project_name: 'Aave',
@@ -126,7 +126,7 @@ describe('handleVerifyWhitepaper — Fix 3: fetch-failure fallback', () => {
       .mockRejectedValueOnce(new Error('HTTP 404 fetching https://aave.com/whitepaper.pdf'));
     (deps.tieredDiscovery!.discover as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
-    const result = await router.handleJob('verify_project_whitepaper', {
+    const result = await router.handleJob('verify_whitepaper', {
       token_address: '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9',
       document_url: 'https://aave.com/whitepaper.pdf',
       project_name: 'Aave',
@@ -151,7 +151,7 @@ describe('handleVerifyWhitepaper — Fix 3: fetch-failure fallback', () => {
       source: 'direct', originalUrl: 'aave', resolvedUrl: 'aave',
     });
 
-    const result = await router.handleJob('verify_project_whitepaper', {
+    const result = await router.handleJob('verify_whitepaper', {
       token_address: '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9',
       document_url: 'https://aave.com/whitepaper-v1.pdf',
       project_name: 'Aave',
@@ -170,7 +170,7 @@ describe('handleVerifyWhitepaper — Fix 3: fetch-failure fallback', () => {
     (deps.cryptoResolver.resolveWhitepaper as ReturnType<typeof vi.fn>)
       .mockRejectedValueOnce(new Error('Pipeline timeout'));
 
-    const result = await router.handleJob('verify_project_whitepaper', {
+    const result = await router.handleJob('verify_whitepaper', {
       token_address: '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9',
       document_url: 'https://aave.com/whitepaper.pdf',
       project_name: 'Aave',
@@ -207,7 +207,7 @@ describe('handleFullVerification — Fix 3: fetch-failure fallback', () => {
       tier: 3,
     });
 
-    const result = await router.handleJob('full_technical_verification', {
+    const result = await router.handleJob('verify_full_tech', {
       token_address: '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9',
       document_url: 'https://aave.com/whitepaper.pdf',
       project_name: 'Aave',
@@ -225,7 +225,7 @@ describe('handleFullVerification — Fix 3: fetch-failure fallback', () => {
       .mockRejectedValueOnce(new Error('HTTP 404'));
     (deps.tieredDiscovery!.discover as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
-    const result = await router.handleJob('full_technical_verification', {
+    const result = await router.handleJob('verify_full_tech', {
       token_address: '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9',
       document_url: 'https://aave.com/whitepaper.pdf',
       project_name: 'Aave',

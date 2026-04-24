@@ -501,7 +501,7 @@ export class WpvService extends Service {
     isPlainText?: boolean,
   ): Promise<void> {
     // Briefing has its own allow-list validator — delegate.
-    if (offeringId === 'daily_technical_briefing') {
+    if (offeringId === 'daily_tech_brief') {
       await WpvService.validateTokenAddress(offeringId, requirement, isPlainText);
       return;
     }
@@ -539,8 +539,8 @@ export class WpvService extends Service {
       requirement.document_url = WpvService.normalizeGitHubUrl(requirement.document_url);
     }
 
-    // Out-of-scope detection for plain-text full_technical_verification
-    if (offeringId === 'full_technical_verification' && isPlainText) {
+    // Out-of-scope detection for plain-text verify_full_tech
+    if (offeringId === 'verify_full_tech' && isPlainText) {
       const fullText = Object.values(requirement)
         .filter((v): v is string => typeof v === 'string')
         .join(' ')
@@ -771,8 +771,8 @@ export class WpvService extends Service {
   }
 
   private static async validateTokenAddress(offeringId: string, requirement: Record<string, unknown>, isPlainText?: boolean): Promise<void> {
-    // WS4A: Date validation for daily_technical_briefing
-    if (offeringId === 'daily_technical_briefing') {
+    // WS4A: Date validation for daily_tech_brief
+    if (offeringId === 'daily_tech_brief') {
       // Normalize keys to lowercase (Option B — lenient): "Date", "DATE" → "date"
       for (const key of Object.keys(requirement)) {
         const lower = key.toLowerCase();
@@ -788,7 +788,7 @@ export class WpvService extends Service {
         const BRIEFING_ALLOWED_KEYS = new Set(['date']);
         const unknownKeys = Object.keys(requirement).filter((k) => !BRIEFING_ALLOWED_KEYS.has(k));
         if (unknownKeys.length > 0) {
-          const err = new Error(`Unknown field(s): ${unknownKeys.map((k) => `'${k}'`).join(', ')} — daily_technical_briefing accepts only 'date' (YYYY-MM-DD format)`);
+          const err = new Error(`Unknown field(s): ${unknownKeys.map((k) => `'${k}'`).join(', ')} — daily_tech_brief accepts only 'date' (YYYY-MM-DD format)`);
           err.name = 'InputValidationError';
           throw err;
         }
@@ -874,8 +874,8 @@ export class WpvService extends Service {
 
     // Fix 5: Reject JSON requirements missing all identifying fields
     // Both {} and {"garbage": "..."} are rejected — no standard fields to work with.
-    // daily_technical_briefing excluded — handles empty input gracefully (returns today's briefing).
-    if (!isPlainText && offeringId !== 'daily_technical_briefing') {
+    // daily_tech_brief excluded — handles empty input gracefully (returns today's briefing).
+    if (!isPlainText && offeringId !== 'daily_tech_brief') {
       const hasTokenAddress = requirement?.token_address !== undefined && requirement?.token_address !== null;
       const hasProjectName = requirement?.project_name !== undefined && requirement?.project_name !== null;
       const hasDocumentUrl = requirement?.document_url !== undefined && requirement?.document_url !== null;
@@ -886,9 +886,9 @@ export class WpvService extends Service {
       }
     }
 
-    // Out-of-scope detection for plain text full_technical_verification requests
+    // Out-of-scope detection for plain text verify_full_tech requests
     // Reject questions that are clearly not about whitepaper/technical verification
-    if (offeringId === 'full_technical_verification' && isPlainText) {
+    if (offeringId === 'verify_full_tech' && isPlainText) {
       const fullText = Object.values(requirement)
         .filter((v): v is string => typeof v === 'string')
         .join(' ')
@@ -930,8 +930,8 @@ export class WpvService extends Service {
       requirement.document_url = WpvService.normalizeGitHubUrl(requirement.document_url as string);
     }
 
-    // WS3: document_url validation for verify_project_whitepaper
-    if (offeringId === 'verify_project_whitepaper') {
+    // WS3: document_url validation for verify_whitepaper
+    if (offeringId === 'verify_whitepaper') {
       const docUrl = requirement?.document_url;
       if (docUrl !== undefined && docUrl !== null && typeof docUrl === 'string') {
         const trimmedUrl = docUrl.trim();
@@ -1224,11 +1224,14 @@ export class WpvService extends Service {
         return;
       }
 
+      // Production prices (2026-04-24). Must match the Virtuals platform
+      // registered prices — Grey proposes these as budget via session.setBudget(),
+      // and the auto-fund rejects out-of-bounds amounts.
       const offerings: { id: OfferingId; price: number }[] = [
-        { id: 'project_legitimacy_scan', price: 0.01 },
-        { id: 'verify_project_whitepaper', price: 0.02 },
-        { id: 'full_technical_verification', price: 0.03 },
-        { id: 'daily_technical_briefing', price: 0.04 },
+        { id: 'legitimacy_scan', price: 0.25 },
+        { id: 'verify_whitepaper', price: 1.50 },
+        { id: 'verify_full_tech', price: 3.00 },
+        { id: 'daily_tech_brief', price: 8.00 },
       ];
 
       for (const offering of offerings) {

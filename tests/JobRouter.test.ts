@@ -76,23 +76,23 @@ describe('JobRouter', () => {
     router = new JobRouter(deps);
   });
 
-  it('routes project_legitimacy_scan correctly', async () => {
-    const result = await router.handleJob('project_legitimacy_scan', { project_name: 'Test' });
+  it('routes legitimacy_scan correctly', async () => {
+    const result = await router.handleJob('legitimacy_scan', { project_name: 'Test' });
     expect(deps.reportGenerator.generateLegitimacyScan).toHaveBeenCalled();
   });
 
-  it('routes daily_technical_briefing correctly', async () => {
-    const result = await router.handleJob('daily_technical_briefing', {});
+  it('routes daily_tech_brief correctly', async () => {
+    const result = await router.handleJob('daily_tech_brief', {});
     expect(deps.reportGenerator.generateDailyBriefing).toHaveBeenCalled();
   });
 
   it('cached lookup returns report (mock DB)', async () => {
-    const result = await router.handleJob('project_legitimacy_scan', { project_name: 'Test' }) as Record<string, unknown>;
+    const result = await router.handleJob('legitimacy_scan', { project_name: 'Test' }) as Record<string, unknown>;
     expect(result.projectName).toBe('Test');
   });
 
   it('live verification runs pipeline (mock LLM)', async () => {
-    const result = await router.handleJob('verify_project_whitepaper', {
+    const result = await router.handleJob('verify_whitepaper', {
       document_url: 'https://example.com/wp.pdf',
       project_name: 'NewProject',
     });
@@ -101,12 +101,12 @@ describe('JobRouter', () => {
     expect(deps.claimExtractor.extractClaims).toHaveBeenCalled();
   });
 
-  it('verify_project_whitepaper creates DB record', async () => {
+  it('verify_whitepaper creates DB record', async () => {
     // Ensure "creates new record" path is exercised: no existing row for this project.
     // (The default shared mock returns a stub row regardless of input; override here.)
     (deps.whitepaperRepo.findByProjectName as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (deps.whitepaperRepo.findByTokenAddress as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    await router.handleJob('verify_project_whitepaper', {
+    await router.handleJob('verify_whitepaper', {
       document_url: 'https://example.com/wp.pdf',
       project_name: 'NewProject',
     });
@@ -119,7 +119,7 @@ describe('JobRouter', () => {
     (deps.whitepaperRepo.findByProjectName as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (deps.verificationsRepo.findByWhitepaperId as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
-    const result = await router.handleJob('project_legitimacy_scan', { project_name: 'Unknown' }) as Record<string, unknown>;
+    const result = await router.handleJob('legitimacy_scan', { project_name: 'Unknown' }) as Record<string, unknown>;
     expect(result.verdict).toBe('INSUFFICIENT_DATA');
     expect(result.projectName).toBe('Unknown');
     expect(result.structuralScore).toBe(0);
@@ -132,20 +132,20 @@ describe('JobRouter', () => {
   });
 
   it('missing required input fields returns INSUFFICIENT_DATA', async () => {
-    const result = await router.handleJob('verify_project_whitepaper', {}) as Record<string, unknown>;
+    const result = await router.handleJob('verify_whitepaper', {}) as Record<string, unknown>;
     expect(result.verdict).toBe('INSUFFICIENT_DATA');
   });
 
-  it('full_technical_verification uses cached result when available', async () => {
-    await router.handleJob('full_technical_verification', { project_name: 'Test' });
+  it('verify_full_tech uses cached result when available', async () => {
+    await router.handleJob('verify_full_tech', { project_name: 'Test' });
     expect(deps.reportGenerator.generateFullVerification).toHaveBeenCalled();
     // Should NOT call resolver (cached)
     expect(deps.cryptoResolver.resolveWhitepaper).not.toHaveBeenCalled();
   });
 
-  it('full_technical_verification falls back to live when no cache', async () => {
+  it('verify_full_tech falls back to live when no cache', async () => {
     (deps.whitepaperRepo.findByProjectName as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    await router.handleJob('full_technical_verification', {
+    await router.handleJob('verify_full_tech', {
       document_url: 'https://example.com/wp.pdf',
       project_name: 'NewProject',
     });
@@ -156,7 +156,7 @@ describe('JobRouter', () => {
     (deps.whitepaperRepo.findByProjectName as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (deps.whitepaperRepo.findByTokenAddress as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 'wp-1', projectName: 'Token', tokenAddress: '0xabc' }]);
 
-    await router.handleJob('project_legitimacy_scan', { token_address: '0xabc' });
+    await router.handleJob('legitimacy_scan', { token_address: '0xabc' });
     expect(deps.whitepaperRepo.findByTokenAddress).toHaveBeenCalledWith('0xabc');
   });
 });

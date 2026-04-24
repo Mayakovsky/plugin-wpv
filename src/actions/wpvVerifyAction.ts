@@ -60,7 +60,7 @@ export const WpvVerifyAction: Action = {
       return { success: false, text, data: safeSerialize({ error: "missing_url" }) };
     }
 
-    const result = await wpv.jobRouter.handleJob('full_technical_verification', {
+    const result = await wpv.jobRouter.handleJob('verify_full_tech', {
       document_url: url,
       project_name: projectName,
     });

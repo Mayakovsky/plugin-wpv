@@ -69,7 +69,7 @@ async function main() {
 
   // 42-char typo (Aerodrome eval Job 1246)
   try {
-    await aggregateSignals('project_legitimacy_scan', {
+    await aggregateSignals('legitimacy_scan', {
       token_address: '0x940181a9ad482c1a306652651d769a677b8fd98631',
       project_name: 'Aerodrome Finance',
     });
@@ -89,7 +89,7 @@ async function main() {
       token_address: '0x940181a94A35A4569E4529A3CDfB74e38FD98631', // real AERO EIP-55
       project_name: 'Aerodrome Finance',
     };
-    await aggregateSignals('project_legitimacy_scan', req);
+    await aggregateSignals('legitimacy_scan', req);
     const signals = (req as { _signals?: string[] })._signals;
     if (signals?.includes('token') && signals?.includes('name')) {
       pass('40-char EIP-55 address accepted', `signals=[${signals.join(',')}]`);
@@ -102,7 +102,7 @@ async function main() {
 
   // 20-char truncated (should reject)
   try {
-    await aggregateSignals('project_legitimacy_scan', {
+    await aggregateSignals('legitimacy_scan', {
       token_address: '0x1234567890abcdef1234',
       project_name: 'Aave',
     });

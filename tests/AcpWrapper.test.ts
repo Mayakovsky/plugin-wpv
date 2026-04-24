@@ -60,7 +60,7 @@ describe('AcpWrapper', () => {
 
     const job: AcpJob = {
       jobId: 'job-1',
-      offeringId: 'project_legitimacy_scan',
+      offeringId: 'legitimacy_scan',
       buyerEntityId: 'buyer-1',
       input: { projectName: 'Test' },
       createdAt: Date.now(),

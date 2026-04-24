@@ -74,7 +74,7 @@ const LEGITIMACY_SCAN_FIELDS: FieldSpec[] = [
 ];
 
 const LEGITIMACY_SCAN_SPEC: DeliverableSpec = {
-  offering_id: 'project_legitimacy_scan',
+  offering_id: 'legitimacy_scan',
   // SLA: 5 minutes (matches Virtuals UI setting)
   max_response_time_ms: 300000,
   required_fields: LEGITIMACY_SCAN_FIELDS,
@@ -88,18 +88,18 @@ const VERIFY_WHITEPAPER_FIELDS: FieldSpec[] = [
 ];
 
 const VERIFY_WHITEPAPER_SPEC: DeliverableSpec = {
-  offering_id: 'verify_project_whitepaper',
+  offering_id: 'verify_whitepaper',
   // SLA: 10 minutes (matches Virtuals UI setting)
   max_response_time_ms: 600000,
-  inherits_from: 'project_legitimacy_scan',
+  inherits_from: 'legitimacy_scan',
   required_fields: VERIFY_WHITEPAPER_FIELDS,
 };
 
 const FULL_VERIFICATION_SPEC: DeliverableSpec = {
-  offering_id: 'full_technical_verification',
+  offering_id: 'verify_full_tech',
   // SLA: 15 minutes (matches Virtuals UI setting)
   max_response_time_ms: 900000,
-  inherits_from: 'verify_project_whitepaper',
+  inherits_from: 'verify_whitepaper',
   required_fields: [
     ...VERIFY_WHITEPAPER_FIELDS,
     { path: 'confidenceScore', type: 'number', min: 0, max: 100, required: true },
@@ -111,7 +111,7 @@ const FULL_VERIFICATION_SPEC: DeliverableSpec = {
 };
 
 const DAILY_BRIEFING_SPEC: DeliverableSpec = {
-  offering_id: 'daily_technical_briefing',
+  offering_id: 'daily_tech_brief',
   // SLA: 5 minutes (matches Virtuals UI setting)
   max_response_time_ms: 300000,
   required_fields: [
@@ -142,10 +142,10 @@ const SCAM_ALERT_SPEC: DeliverableSpec = {
 
 // Export specs for Test Evaluator
 export const DELIVERABLE_SPECS: Record<string, DeliverableSpec> = {
-  project_legitimacy_scan: LEGITIMACY_SCAN_SPEC,
-  verify_project_whitepaper: VERIFY_WHITEPAPER_SPEC,
-  full_technical_verification: FULL_VERIFICATION_SPEC,
-  daily_technical_briefing: DAILY_BRIEFING_SPEC,
+  legitimacy_scan: LEGITIMACY_SCAN_SPEC,
+  verify_whitepaper: VERIFY_WHITEPAPER_SPEC,
+  verify_full_tech: FULL_VERIFICATION_SPEC,
+  daily_tech_brief: DAILY_BRIEFING_SPEC,
   daily_greenlight_list: GREENLIGHT_SPEC,
   scam_alert_feed: SCAM_ALERT_SPEC,
 };
@@ -163,7 +163,7 @@ export interface OfferingConfig {
 
 export const OFFERINGS: OfferingConfig[] = [
   {
-    id: 'project_legitimacy_scan',
+    id: 'legitimacy_scan',
     displayName: 'Project Legitimacy Scan',
     price: 0.25,
     description: 'Quick structural scan. Returns cached results instantly or runs live L1 analysis for uncached tokens. Structured JSON with verdict (PASS/CONDITIONAL/FAIL/INSUFFICIENT_DATA), structural_score (0-5), hype_tech_ratio, mica_compliance, claim_count.',
@@ -178,7 +178,7 @@ export const OFFERINGS: OfferingConfig[] = [
     deliverableSchema: LEGITIMACY_SCAN_SPEC,
   },
   {
-    id: 'verify_project_whitepaper',
+    id: 'verify_whitepaper',
     displayName: 'Verify Project Whitepaper',
     price: 1.50,
     description: 'On-demand verification. Returns cached results instantly if project is in database. If not, runs live L1+L2 verification pipeline. Returns structured JSON with verdict, structural analysis, claims, MiCA compliance, token address. Returns verdict=INSUFFICIENT_DATA if no whitepaper or document source can be found. Verified projects are cached permanently for future lookups.',
@@ -194,7 +194,7 @@ export const OFFERINGS: OfferingConfig[] = [
     deliverableSchema: VERIFY_WHITEPAPER_SPEC,
   },
   {
-    id: 'full_technical_verification',
+    id: 'verify_full_tech',
     displayName: 'Full Technical Verification',
     price: 3.00,
     description: 'Deepest analysis. Runs full L1+L2+L3 pipeline including claim-by-claim evaluation against mathematical validity, benchmark plausibility, citation verification, originality, and internal consistency. Returns structured JSON with verdict, confidence_score (0-100), focus_area_scores, per-claim evaluations, MiCA compliance, compute cost. Runs live pipeline if not cached.',
@@ -210,7 +210,7 @@ export const OFFERINGS: OfferingConfig[] = [
     deliverableSchema: FULL_VERIFICATION_SPEC,
   },
   {
-    id: 'daily_technical_briefing',
+    id: 'daily_tech_brief',
     displayName: 'Daily Technical Briefing',
     price: 8.00,
     description: 'Returns today\'s verification batch summary. Includes: projects_verified_count, greenlight entries (PASS verdicts), alert entries (FAIL verdicts), and per-project verification summaries. If no verifications ran today, returns empty batch with timestamp.',

@@ -214,7 +214,7 @@ export class JobRouter {
   async handleJob(offeringId: OfferingId, input: Record<string, unknown>): Promise<unknown> {
     // Briefings are read-only (no DB writes, no Playwright, no Sonnet).
     // Exempt from mutex to prevent SLA violations when slow pipeline jobs block the queue.
-    if (offeringId === 'daily_technical_briefing') {
+    if (offeringId === 'daily_tech_brief') {
       return this._handleJobImpl(offeringId, input);
     }
 
@@ -225,7 +225,7 @@ export class JobRouter {
     // expired this way: deliverable generated correctly at 01:32:58 but on-chain
     // submit landed past deadline after waiting behind Jobs 1304+1305 full_tech.
     // If cache miss, we fall through to the mutex path for live L1.
-    if (offeringId === 'project_legitimacy_scan') {
+    if (offeringId === 'legitimacy_scan') {
       const cached = await this._tryLegitimacyScanFromCache(input);
       if (cached) {
         const requestedProjectName = input.project_name as string | undefined;
@@ -286,19 +286,19 @@ export class JobRouter {
     // intent but the helper no-ops gracefully when no version in request.
     const requestedProjectName = input.project_name as string | undefined;
     switch (offeringId) {
-      case 'project_legitimacy_scan': {
+      case 'legitimacy_scan': {
         const result = await this.handleLegitimacyScan(input, costTracker);
         return this.maybeDowngradeForVersionMismatch(result as Record<string, unknown>, requestedProjectName);
       }
-      case 'verify_project_whitepaper': {
+      case 'verify_whitepaper': {
         const result = await this.handleVerifyWhitepaper(input, costTracker);
         return this.maybeDowngradeForVersionMismatch(result as Record<string, unknown>, requestedProjectName);
       }
-      case 'full_technical_verification': {
+      case 'verify_full_tech': {
         const result = await this.handleFullVerification(input, costTracker);
         return this.maybeDowngradeForVersionMismatch(result as Record<string, unknown>, requestedProjectName);
       }
-      case 'daily_technical_briefing':
+      case 'daily_tech_brief':
         return this.handleDailyBriefing(input);
       default:
         return { error: 'unknown_offering', message: `Unknown offering: ${offeringId}` };
@@ -665,7 +665,7 @@ export class JobRouter {
               }
             }
 
-            log.info('verify_project_whitepaper: returning cached result', { projectName, claims: cachedClaims.length });
+            log.info('verify_whitepaper: returning cached result', { projectName, claims: cachedClaims.length });
             return report;
           }
         }
@@ -723,7 +723,7 @@ export class JobRouter {
           if ((err as Error).message === 'Pipeline timeout') {
             log.warn('Pipeline timeout in verify discovery — returning INSUFFICIENT_DATA', { projectName });
           } else {
-            log.warn('Discovery failed for verify_project_whitepaper (no document_url)', { projectName, error: (err as Error).message });
+            log.warn('Discovery failed for verify_whitepaper (no document_url)', { projectName, error: (err as Error).message });
           }
         }
       }
@@ -1172,7 +1172,7 @@ export class JobRouter {
         if ((err as Error).message === 'Pipeline timeout') {
           log.warn('Pipeline timeout in full_tech discovery — returning INSUFFICIENT_DATA', { projectName });
         } else {
-          log.warn('Discovery failed for full_technical_verification', { error: (err as Error).message });
+          log.warn('Discovery failed for verify_full_tech', { error: (err as Error).message });
         }
       }
       return this.insufficientData(input);

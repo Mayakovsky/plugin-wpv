@@ -106,7 +106,7 @@ describe('findBestWhitepaper — Fix 2: name-path preference', () => {
         return [];
       });
 
-    const result = await router.handleJob('full_technical_verification', {
+    const result = await router.handleJob('verify_full_tech', {
       project_name: 'Uniswap V3',
       token_address: '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984',
     }) as { projectName: string };
@@ -126,7 +126,7 @@ describe('findBestWhitepaper — Fix 2: name-path preference', () => {
     (deps.claimsRepo.findByWhitepaperId as ReturnType<typeof vi.fn>)
       .mockResolvedValue(Array(15).fill({ claimText: 'c' }));
 
-    const result = await router.handleJob('full_technical_verification', {
+    const result = await router.handleJob('verify_full_tech', {
       project_name: 'UnknownProject',
       token_address: '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984',
     }) as { projectName: string };
@@ -148,7 +148,7 @@ describe('findBestWhitepaper — Fix 2: name-path preference', () => {
         return [];
       });
 
-    const result = await router.handleJob('full_technical_verification', {
+    const result = await router.handleJob('verify_full_tech', {
       project_name: 'Uniswap v3',
       token_address: '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984',
     }) as { projectName: string };
@@ -175,7 +175,7 @@ describe('findBestWhitepaper — Fix 2: name-path preference', () => {
     (deps.claimsRepo.findByWhitepaperId as ReturnType<typeof vi.fn>)
       .mockResolvedValue(Array(10).fill({ claimText: 'c' }));
 
-    const result = await router.handleJob('full_technical_verification', {
+    const result = await router.handleJob('verify_full_tech', {
       project_name: 'Uniswap V3',
     }) as { projectName: string };
 
@@ -196,7 +196,7 @@ describe('findBestWhitepaper — Fix 2: name-path preference', () => {
     (deps.claimsRepo.findByWhitepaperId as ReturnType<typeof vi.fn>)
       .mockResolvedValue(Array(15).fill({ claimText: 'c' }));
 
-    const result = await router.handleJob('full_technical_verification', {
+    const result = await router.handleJob('verify_full_tech', {
       project_name: 'Uniswap V3',
     }) as { verdict: string };
 

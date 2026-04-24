@@ -93,7 +93,7 @@ describe('WpvVerifyAction', () => {
     const msg = makeMessage('verify', { document_url: 'https://example.com/wp.pdf', project_name: 'Test' });
     const result = await WpvVerifyAction.handler(runtime, msg, undefined, undefined, cb);
     expect(result.success).toBe(true);
-    expect(mockRouter.handleJob).toHaveBeenCalledWith('full_technical_verification', expect.objectContaining({ document_url: 'https://example.com/wp.pdf' }));
+    expect(mockRouter.handleJob).toHaveBeenCalledWith('verify_full_tech', expect.objectContaining({ document_url: 'https://example.com/wp.pdf' }));
   });
 });
 

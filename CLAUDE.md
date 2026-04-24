@@ -127,12 +127,16 @@ enum Verdict {
 
 **Role:** Provider
 
-| offering_id | Test Price | Production Price | Pipeline | SLA |
-|-------------|-----------|-----------------|----------|-----|
-| project_legitimacy_scan | $0.01 | $0.25 | Cache or live L1 | 5min |
-| verify_project_whitepaper | $0.02 | $1.50 | Cache or live L1+L2 | 10min |
-| full_technical_verification | $0.03 | $3.00 | Cache or live L1+L2+L3 | 15min |
-| daily_technical_briefing | $0.04 | $8.00 | Cron summary | 5min |
+| offering_id | Price | Pipeline | SLA |
+|-------------|-------|----------|-----|
+| legitimacy_scan | $0.25 | Cache or live L1 | 5min |
+| verify_whitepaper | $1.50 | Cache or live L1+L2 | 10min |
+| verify_full_tech | $3.00 | Cache or live L1+L2+L3 | 15min |
+| daily_tech_brief | $8.00 | Cron summary | 5min |
+
+> Renamed 2026-04-24 for platform character limit. Old names
+> (`project_legitimacy_scan` etc.) removed from code + tests.
+> Test-price regime (0.01–0.04) replaced by production prices at the same time.
 
 **2 Free Resources:** Daily Greenlight List, Scam Alert Feed
 

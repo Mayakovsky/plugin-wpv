@@ -15,7 +15,7 @@ describe('aggregateSignals — Fix 1: strict EVM format rejection', () => {
         token_address: '0x940181a9ad482c1a306652651d769a677b8fd98631', // 42 hex chars
         project_name: 'Aerodrome Finance',
       };
-      await expect(aggregateSignals('project_legitimacy_scan', requirement))
+      await expect(aggregateSignals('legitimacy_scan', requirement))
         .rejects.toThrow(/expected 0x-prefixed 40-hex-character address/);
     });
 
@@ -24,7 +24,7 @@ describe('aggregateSignals — Fix 1: strict EVM format rejection', () => {
         token_address: '0x1234567890abcdef1234', // 20 hex chars
         project_name: 'Aave',
       };
-      await expect(aggregateSignals('project_legitimacy_scan', requirement))
+      await expect(aggregateSignals('legitimacy_scan', requirement))
         .rejects.toThrow(/expected 0x-prefixed 40-hex-character address/);
     });
 
@@ -33,7 +33,7 @@ describe('aggregateSignals — Fix 1: strict EVM format rejection', () => {
         token_address: '0x1234567890abcdef1234567890abcdef1234567', // 39 hex chars
         project_name: 'Aave',
       };
-      await expect(aggregateSignals('project_legitimacy_scan', requirement))
+      await expect(aggregateSignals('legitimacy_scan', requirement))
         .rejects.toThrow(/expected 0x-prefixed 40-hex-character address/);
     });
 
@@ -42,7 +42,7 @@ describe('aggregateSignals — Fix 1: strict EVM format rejection', () => {
         token_address: '0x1234567890abcdef1234567890abcdef123456789', // 41 hex chars
         project_name: 'Aave',
       };
-      await expect(aggregateSignals('project_legitimacy_scan', requirement))
+      await expect(aggregateSignals('legitimacy_scan', requirement))
         .rejects.toThrow(/expected 0x-prefixed 40-hex-character address/);
     });
 
@@ -51,7 +51,7 @@ describe('aggregateSignals — Fix 1: strict EVM format rejection', () => {
         token_address: '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9', // Aave, 40 hex lowercase
         project_name: 'Aave',
       };
-      await expect(aggregateSignals('project_legitimacy_scan', requirement))
+      await expect(aggregateSignals('legitimacy_scan', requirement))
         .resolves.toBeUndefined();
       // Token signal should have been recorded
       expect((requirement as { _signals?: string[] })._signals).toContain('token');
@@ -62,7 +62,7 @@ describe('aggregateSignals — Fix 1: strict EVM format rejection', () => {
         token_address: '0x940181a94A35A4569E4529A3CDfB74e38FD98631', // real AERO, EIP-55
         project_name: 'Aerodrome Finance',
       };
-      await expect(aggregateSignals('project_legitimacy_scan', requirement))
+      await expect(aggregateSignals('legitimacy_scan', requirement))
         .resolves.toBeUndefined();
       expect((requirement as { _signals?: string[] })._signals).toContain('token');
     });
@@ -72,7 +72,7 @@ describe('aggregateSignals — Fix 1: strict EVM format rejection', () => {
         token_address: '0xZZZZ567890abcdef1234567890abcdef12345678', // non-hex Z
         project_name: 'Aave',
       };
-      await expect(aggregateSignals('project_legitimacy_scan', requirement))
+      await expect(aggregateSignals('legitimacy_scan', requirement))
         .rejects.toThrow(/expected 0x-prefixed 40-hex-character address/);
     });
 
@@ -81,7 +81,7 @@ describe('aggregateSignals — Fix 1: strict EVM format rejection', () => {
         token_address: '0x0000000000000000000000000000000000000000',
         project_name: 'Test',
       };
-      await expect(aggregateSignals('project_legitimacy_scan', requirement))
+      await expect(aggregateSignals('legitimacy_scan', requirement))
         .rejects.toThrow(/burn\/null address rejected/);
     });
 
@@ -90,7 +90,7 @@ describe('aggregateSignals — Fix 1: strict EVM format rejection', () => {
         token_address: '0xffffffffffffffffffffffffffffffffffffffff',
         project_name: 'Test',
       };
-      await expect(aggregateSignals('project_legitimacy_scan', requirement))
+      await expect(aggregateSignals('legitimacy_scan', requirement))
         .rejects.toThrow(/burn\/null address rejected/);
     });
   });
@@ -101,7 +101,7 @@ describe('aggregateSignals — Fix 1: strict EVM format rejection', () => {
         token_address: '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa', // Genesis block address
         project_name: 'Bitcoin',
       };
-      await expect(aggregateSignals('project_legitimacy_scan', requirement))
+      await expect(aggregateSignals('legitimacy_scan', requirement))
         .rejects.toThrow(/Bitcoin address detected/);
     });
 
@@ -110,7 +110,7 @@ describe('aggregateSignals — Fix 1: strict EVM format rejection', () => {
         token_address: 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
         project_name: 'Bitcoin',
       };
-      await expect(aggregateSignals('project_legitimacy_scan', requirement))
+      await expect(aggregateSignals('legitimacy_scan', requirement))
         .rejects.toThrow(/Bitcoin address detected/);
     });
 
@@ -119,7 +119,7 @@ describe('aggregateSignals — Fix 1: strict EVM format rejection', () => {
         token_address: 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN', // Jupiter
         project_name: 'Jupiter',
       };
-      await expect(aggregateSignals('project_legitimacy_scan', requirement))
+      await expect(aggregateSignals('legitimacy_scan', requirement))
         .resolves.toBeUndefined();
       expect((requirement as { _signals?: string[] })._signals).toContain('token');
     });
@@ -129,7 +129,7 @@ describe('aggregateSignals — Fix 1: strict EVM format rejection', () => {
         token_address: 'invalid_addr_with_underscores', // underscores fail base58
         project_name: 'Test',
       };
-      await expect(aggregateSignals('project_legitimacy_scan', requirement))
+      await expect(aggregateSignals('legitimacy_scan', requirement))
         .rejects.toThrow(/expected valid crypto address/);
     });
   });
@@ -139,7 +139,7 @@ describe('aggregateSignals — Fix 1: strict EVM format rejection', () => {
       const requirement: Record<string, unknown> = {
         project_name: 'Aave',
       };
-      await expect(aggregateSignals('project_legitimacy_scan', requirement))
+      await expect(aggregateSignals('legitimacy_scan', requirement))
         .resolves.toBeUndefined();
       expect((requirement as { _signals?: string[] })._signals).toContain('name');
     });
@@ -148,7 +148,7 @@ describe('aggregateSignals — Fix 1: strict EVM format rejection', () => {
       const requirement: Record<string, unknown> = {
         document_url: 'https://uniswap.org/whitepaper-v3.pdf',
       };
-      await expect(aggregateSignals('verify_project_whitepaper', requirement))
+      await expect(aggregateSignals('verify_whitepaper', requirement))
         .resolves.toBeUndefined();
       expect((requirement as { _signals?: string[] })._signals).toContain('url');
     });
@@ -162,7 +162,7 @@ describe('aggregateSignals — Fix 1: strict EVM format rejection', () => {
         raw_instruction: 'Verify Aave (0x7fc66500...)',
       };
       // Plain-text extraction may produce truncated addresses — skip format check
-      await expect(aggregateSignals('verify_project_whitepaper', requirement, true))
+      await expect(aggregateSignals('verify_whitepaper', requirement, true))
         .resolves.toBeUndefined();
       expect((requirement as { _signals?: string[] })._signals).toContain('token');
     });

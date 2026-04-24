@@ -87,7 +87,7 @@ describe('Fix 4: verdict downgrade on version mismatch', () => {
       llmTokensUsed: 1000, computeCostUsd: 0.1, focusAreaScores: {},
     });
 
-    const result = await router.handleJob('full_technical_verification', {
+    const result = await router.handleJob('verify_full_tech', {
       project_name: 'Uniswap V3',
       token_address: '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984',
     }) as { verdict: string; projectName: string; logicSummary: string };
@@ -115,7 +115,7 @@ describe('Fix 4: verdict downgrade on version mismatch', () => {
       llmTokensUsed: 1000, computeCostUsd: 0.1, focusAreaScores: {},
     });
 
-    const result = await router.handleJob('full_technical_verification', {
+    const result = await router.handleJob('verify_full_tech', {
       project_name: 'Uniswap V3',
     }) as { verdict: string; projectName: string };
 
@@ -141,7 +141,7 @@ describe('Fix 4: verdict downgrade on version mismatch', () => {
       llmTokensUsed: 1000, computeCostUsd: 0.1, focusAreaScores: {},
     });
 
-    const result = await router.handleJob('full_technical_verification', {
+    const result = await router.handleJob('verify_full_tech', {
       project_name: 'Uniswap', // no version
     }) as { verdict: string };
 
@@ -150,7 +150,7 @@ describe('Fix 4: verdict downgrade on version mismatch', () => {
 
   it('error envelope is not touched by the downgrade helper', async () => {
     // Force an invalid URL path that returns an error envelope (not a report)
-    const result = await router.handleJob('verify_project_whitepaper', {
+    const result = await router.handleJob('verify_whitepaper', {
       project_name: 'Uniswap V3',
       document_url: 'file:///etc/passwd',
     }) as { error?: string; verdict?: string };
@@ -165,7 +165,7 @@ describe('Fix 4: verdict downgrade on version mismatch', () => {
     (deps.whitepaperRepo.findByProjectName as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (deps.whitepaperRepo.findByTokenAddress as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
-    const result = await router.handleJob('full_technical_verification', {
+    const result = await router.handleJob('verify_full_tech', {
       project_name: 'Uniswap V3',
     }) as { verdict: string; logicSummary: string };
 

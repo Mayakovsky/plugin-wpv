@@ -1,8 +1,8 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-04-23 (Eval cycle in progress. 25/28 → 14/15 → 12/15. Zoom-out plan pending Forces approval.)
+> Last updated: 2026-04-24 (🎯 15/15 eval PASS + Option B address-dedupe hardening shipped. No more evals — moving to application + production.)
 > Updated by: Claude Opus 4.7 — Kovsky session
-> Session label: DevRel eval re-runs after 28/28 plan implementation. Two prior eval failures (Aerodrome #1207, Uniswap broken-URL #1213) both fixed — signal aggregator + Tier 3.5 GitHub + Phase 2 never-reject-post-acceptance held as designed. But each iterative fix surfaced a new semantic issue the evaluator catches: (1) version-stripping cache match delivers Uniswap V2 when V3 requested; (2) removed eth_getCode lets typo'd addresses serve cached data; (3) URL fetch failure throws unhandled instead of falling back to token/name discovery. Pattern Forces correctly named: my signal aggregator moved validation from strict→permissive but didn't complete the other half (resolver gaining strict enforcement + fallback). Coordinated A+B+C fix plan in `BUILD DOCS and DATA/Eval_Zoom_Out_Fix_Plan_2026-04-23.md` — awaiting Forces approval before implementation. Do NOT ship another single-fix iteration. MiCA verdict downgrade, never-reject-post-acceptance, tier chain, signal aggregator OR semantics — all working, leave alone.
-> Staleness gate: 2026-04-23 — if today is >3 days past this,
+> Session label: Eval graduation complete. Post-graduation hardening (Option B, commits 5681451/3cdda21/d58a30c) eliminates the same-address duplicate-row class of bug uncovered by the Aave/Aave Token finding. (A) wpvWhitepapersRepo normalizes 0x addresses to lowercase on read + write; base58 Solana addresses untouched. (B) runL1L2 dedupe-on-address with version awareness — Aave + Aave V3 stay distinct despite shared contract; "Aave Token" + "Aave" merge. Canonical first-seen name preserved on replace. (C) resolveTokenName canonicalizes via KNOWN_PROTOCOL_NAMES + synonym map ("Aave Token" → "Aave", "Virtual Protocol" → "Virtuals Protocol", "ChainLink Token" → "Chainlink"). One-time migration (scripts/migrateAddressNormalization.ts) dry-run default + --apply mode, transaction-wrapped, idempotent. Applied to Supabase: 3 rows lowercased (Virtuals/Virtual Protocol, Aerodrome Finance); 2 duplicate groups collapsed (Virtual Protocol→Virtuals Protocol, Aerodrome→Aerodrome Finance). Final state: 10 whitepapers, 10 verifications, 132 claims, 0 mixed-case 0x, 0 residual dupes. 388/388 unit tests (310 baseline + 56 zoom-out fixes + 22 Option B). Grey PM2 #9, SDK connected, 4 handlers registered.
+> Staleness gate: 2026-04-24 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
 ## Focus (1-3 goals, testable)
@@ -68,7 +68,7 @@
 
 ## What's Broken
 - ⚠️ **Self-hire blocked at contract level** (not a blocker for graduation, kept as note): ACP contract on Base (`0x238E541B…32E0`) reverts at simulation when `buyer==provider`. Verified via `/opt/grey/plugin-acp/self-hire-test.js`. Must use an external buyer (which we now have — Grey Test Buyer).
-- ⚠️ **full_technical_verification offering schema** — requirements field is a string (description text), not JSON schema. AJV client-side validation skipped. Registration bug on Virtuals side.
+- ⚠️ **verify_full_tech offering schema** — requirements field is a string (description text), not JSON schema. AJV client-side validation skipped. Registration bug on Virtuals side.
 - ⚠️ **Ports 3000 + 3001 open** in Lightsail firewall — close for production.
 - ⚠️ Test prices still active ($0.01-$0.04) — switch to production prices for launch
 - ⚠️ **Grey stats "not yet tracked"** on Virtuals UI — new wallet has zero ACP transactions; will populate after first successful video test job.
@@ -119,7 +119,7 @@
 
 ## Next Actions (ordered)
 1. **Re-graduation via Butler** — submit on video + on-chain evidence. 8/8 PASS ready for evaluator review.
-2. **Fix full_technical_verification schema** — re-register with JSON schema instead of string.
+2. **Fix verify_full_tech schema** — re-register with JSON schema instead of string.
 3. **LAUNCH** — set production prices, close ports 3000+3001, fire outreach.
 4. **Upstream PR to Virtuals** — submit `browser.ts` Windows fix to `github.com/Virtual-Protocol/acp-cli`.
 5. **Post-graduation:** wire DiscoveryCron, full DB hygiene service, render cache.
@@ -136,7 +136,7 @@
 ## Test Pricing (pre-graduation — CHANGE FOR LAUNCH)
 | Offering | Test Price | Production Price |
 |----------|-----------|-----------------|
-| project_legitimacy_scan | $0.01 | $0.25 |
-| verify_project_whitepaper | $0.02 | $1.50 |
-| full_technical_verification | $0.03 | $3.00 |
-| daily_technical_briefing | $0.04 | $8.00 |
+| legitimacy_scan | $0.01 | $0.25 |
+| verify_whitepaper | $0.02 | $1.50 |
+| verify_full_tech | $0.03 | $3.00 |
+| daily_tech_brief | $0.04 | $8.00 |

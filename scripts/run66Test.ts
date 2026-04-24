@@ -297,10 +297,10 @@ async function testLegitimacyScan(
   );
   const elapsed = Date.now() - start;
 
-  const failures = validateResponse(result, 'project_legitimacy_scan', elapsed);
+  const failures = validateResponse(result, 'legitimacy_scan', elapsed);
   return {
     testId: `T1:${token.projectName}`,
-    offering: 'project_legitimacy_scan',
+    offering: 'legitimacy_scan',
     tokenProject: token.projectName,
     tokenAddress: token.tokenAddress ?? undefined,
     pass: failures.length === 0,
@@ -351,14 +351,14 @@ async function testVerifyWhitepaper(
     undefined,
     analysis as never,
   );
-  // verify_project_whitepaper adds tokenAddress — add it manually since we're going through ReportGenerator
+  // verify_whitepaper adds tokenAddress — add it manually since we're going through ReportGenerator
   const enriched = { ...result, tokenAddress: token.tokenAddress };
   const elapsed = Date.now() - start;
 
-  const failures = validateResponse(enriched, 'verify_project_whitepaper', elapsed);
+  const failures = validateResponse(enriched, 'verify_whitepaper', elapsed);
   return {
     testId: `T3:${token.projectName}`,
-    offering: 'verify_project_whitepaper',
+    offering: 'verify_whitepaper',
     tokenProject: token.projectName,
     tokenAddress: token.tokenAddress ?? undefined,
     pass: failures.length === 0,
@@ -384,10 +384,10 @@ async function testFullVerification(
   );
   const elapsed = Date.now() - start;
 
-  const failures = validateResponse(result, 'full_technical_verification', elapsed);
+  const failures = validateResponse(result, 'verify_full_tech', elapsed);
   return {
     testId: `T4:${token.projectName}`,
-    offering: 'full_technical_verification',
+    offering: 'verify_full_tech',
     tokenProject: token.projectName,
     tokenAddress: token.tokenAddress ?? undefined,
     pass: failures.length === 0,
@@ -561,12 +561,12 @@ function generateReport(results: TestResult[], tokens: Array<{ projectName: stri
 
   // Verdict distribution from T4 results
   const verdictDist: Record<string, number> = {};
-  const t4Results = results.filter((r) => r.offering === 'full_technical_verification');
+  const t4Results = results.filter((r) => r.offering === 'verify_full_tech');
   // We'll count from DB data, not from test results
   // (test results only have pass/fail of the test, not the verdict value)
 
   // Field coverage from T1 results
-  const t1Results = results.filter((r) => r.offering === 'project_legitimacy_scan');
+  const t1Results = results.filter((r) => r.offering === 'legitimacy_scan');
 
   console.log('');
   console.log('═══════════════════════════════════════');
@@ -661,10 +661,10 @@ async function main() {
       for (const tid of ['T1', 'T2', 'T3', 'T4']) {
         results.push({
           testId: `${tid}:${token.projectName}`,
-          offering: tid === 'T1' ? 'project_legitimacy_scan'
+          offering: tid === 'T1' ? 'legitimacy_scan'
             : tid === 'T2' ? 'tokenomics_sustainability_audit'
-            : tid === 'T3' ? 'verify_project_whitepaper'
-            : 'full_technical_verification',
+            : tid === 'T3' ? 'verify_whitepaper'
+            : 'verify_full_tech',
           tokenProject: token.projectName,
           tokenAddress: token.tokenAddress ?? undefined,
           pass: false,

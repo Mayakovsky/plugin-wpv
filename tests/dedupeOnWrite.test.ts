@@ -107,7 +107,7 @@ describe('Option B Fix B — dedupe-on-address upsert in runL1L2', () => {
     (deps.claimsRepo.findByWhitepaperId as ReturnType<typeof vi.fn>)
       .mockResolvedValue(Array.from({ length: 22 }, (_, i) => ({ id: `c-a-${i}`, category: 'TOKENOMICS' })));
 
-    await router.handleJob('verify_project_whitepaper', {
+    await router.handleJob('verify_whitepaper', {
       project_name: 'Aave Token',
       token_address: aaveAddr,
       document_url: 'https://aave.com/whitepaper-v1.pdf',
@@ -134,7 +134,7 @@ describe('Option B Fix B — dedupe-on-address upsert in runL1L2', () => {
       { claimId: 'c-5', category: 'TOKENOMICS', claimText: 'new5', statedEvidence: '', mathematicalProofPresent: false, sourceSection: '' },
     ]);
 
-    await router.handleJob('verify_project_whitepaper', {
+    await router.handleJob('verify_whitepaper', {
       project_name: 'Aave Token',
       token_address: aaveAddr,
       document_url: 'https://aave.com/whitepaper-v1.pdf',
@@ -164,7 +164,7 @@ describe('Option B Fix B — dedupe-on-address upsert in runL1L2', () => {
       return [];
     });
 
-    await router.handleJob('verify_project_whitepaper', {
+    await router.handleJob('verify_whitepaper', {
       project_name: 'Aave V3',
       token_address: aaveAddr,
       document_url: 'https://github.com/aave/aave-v3-core/whitepaper.pdf',
@@ -179,7 +179,7 @@ describe('Option B Fix B — dedupe-on-address upsert in runL1L2', () => {
     (deps.whitepaperRepo.findByProjectName as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (deps.whitepaperRepo.findByTokenAddress as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
-    await router.handleJob('verify_project_whitepaper', {
+    await router.handleJob('verify_whitepaper', {
       project_name: 'BrandNew',
       token_address: '0x1234567890abcdef1234567890abcdef12345678',
       document_url: 'https://brandnew.io/wp.pdf',

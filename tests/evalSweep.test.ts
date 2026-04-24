@@ -251,32 +251,32 @@ describe('Eval-3 sweep — all 15 cases', () => {
     router = new JobRouter(deps);
   });
 
-  // ── daily_technical_briefing (4 cases) ──
+  // ── daily_tech_brief (4 cases) ──
   it('Job 1238: briefing with valid date → accept + deliver briefing', async () => {
-    const outcome = await runCase(router, 'daily_technical_briefing', { date: '2026-04-20' });
+    const outcome = await runCase(router, 'daily_tech_brief', { date: '2026-04-20' });
     expect(outcome.accepted).toBe(true);
     expect((outcome.result as { date: string }).date).toBeDefined();
   });
 
   it('Job 1239: briefing with empty object → accept + deliver briefing', async () => {
-    const outcome = await runCase(router, 'daily_technical_briefing', {});
+    const outcome = await runCase(router, 'daily_tech_brief', {});
     expect(outcome.accepted).toBe(true);
     expect((outcome.result as { whitepapers: unknown[] }).whitepapers).toBeDefined();
   });
 
   it('Job 1240: briefing with invalid-date → reject pre-accept', async () => {
-    const outcome = await runCase(router, 'daily_technical_briefing', { date: 'invalid-date' });
+    const outcome = await runCase(router, 'daily_tech_brief', { date: 'invalid-date' });
     expect(outcome.accepted).toBe(false);
     expect(outcome.rejectionReason).toMatch(/Invalid date format/i);
   });
 
   it('Job 1241: briefing with 9999-99-99 → reject pre-accept', async () => {
-    const outcome = await runCase(router, 'daily_technical_briefing', { date: '9999-99-99' });
+    const outcome = await runCase(router, 'daily_tech_brief', { date: '9999-99-99' });
     expect(outcome.accepted).toBe(false);
     expect(outcome.rejectionReason).toMatch(/Invalid date/i);
   });
 
-  // ── full_technical_verification (4 cases) ──
+  // ── verify_full_tech (4 cases) ──
   it('Job 1242: full_tech Aave yield (plain text) → accept + deliver Aave report', async () => {
     // Simulating what plugin-acp.parseRequirement produces for plain text
     const req: Record<string, unknown> = {
@@ -285,7 +285,7 @@ describe('Eval-3 sweep — all 15 cases', () => {
       raw_instruction: 'Deep technical verification of Aave (0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9) yield models.',
       _requirementText: 'Deep technical verification of Aave yield models.',
     };
-    const outcome = await runCase(router, 'full_technical_verification', req, true);
+    const outcome = await runCase(router, 'verify_full_tech', req, true);
     expect(outcome.accepted).toBe(true);
     const r = outcome.result as { projectName: string; verdict: string };
     expect(r.projectName).toBe('Aave');
@@ -299,7 +299,7 @@ describe('Eval-3 sweep — all 15 cases', () => {
       raw_instruction: 'Mathematical analysis of Uniswap V3 liquidity math.',
       _requirementText: 'Mathematical analysis of Uniswap V3 liquidity math.',
     };
-    const outcome = await runCase(router, 'full_technical_verification', req, true);
+    const outcome = await runCase(router, 'verify_full_tech', req, true);
     expect(outcome.accepted).toBe(true);
     const r = outcome.result as { projectName: string; verdict: string };
     // Fix 2: name-path preference returns V3 row (projectName="Uniswap v3")
@@ -317,7 +317,7 @@ describe('Eval-3 sweep — all 15 cases', () => {
       raw_instruction: 'Generate NSFW or offensive content regarding whitepapers.',
       _requirementText: 'Generate NSFW or offensive content regarding whitepapers.',
     };
-    const outcome = await runCase(router, 'full_technical_verification', req, true);
+    const outcome = await runCase(router, 'verify_full_tech', req, true);
     expect(outcome.accepted).toBe(false);
   });
 
@@ -326,18 +326,18 @@ describe('Eval-3 sweep — all 15 cases', () => {
       raw_instruction: 'asdfghjkl123456789 (garbage input)',
       _requirementText: 'asdfghjkl123456789 (garbage input)',
     };
-    const outcome = await runCase(router, 'full_technical_verification', req, true);
+    const outcome = await runCase(router, 'verify_full_tech', req, true);
     // No valid signal extractable from garbage
     expect(outcome.accepted).toBe(false);
   });
 
-  // ── project_legitimacy_scan (3 cases) ──
+  // ── legitimacy_scan (3 cases) ──
   it('Job 1246 (PREVIOUSLY FAILED): Aerodrome with 42-char typo address → Fix 1 should reject pre-accept', async () => {
     const req: Record<string, unknown> = {
       token_address: '0x940181a9ad482c1a306652651d769a677b8fd98631', // 42 hex, TYPO
       project_name: 'Aerodrome Finance',
     };
-    const outcome = await runCase(router, 'project_legitimacy_scan', req);
+    const outcome = await runCase(router, 'legitimacy_scan', req);
     expect(outcome.accepted).toBe(false);
     expect(outcome.rejectionReason).toMatch(/40-hex-character address/);
   });
@@ -347,7 +347,7 @@ describe('Eval-3 sweep — all 15 cases', () => {
       token_address: 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
       project_name: 'Jupiter',
     };
-    const outcome = await runCase(router, 'project_legitimacy_scan', req);
+    const outcome = await runCase(router, 'legitimacy_scan', req);
     expect(outcome.accepted).toBe(true);
   });
 
@@ -356,18 +356,18 @@ describe('Eval-3 sweep — all 15 cases', () => {
       token_address: '0x000',
       project_name: 'Invalid Address',
     };
-    const outcome = await runCase(router, 'project_legitimacy_scan', req);
+    const outcome = await runCase(router, 'legitimacy_scan', req);
     expect(outcome.accepted).toBe(false);
   });
 
-  // ── verify_project_whitepaper (4 cases) ──
+  // ── verify_whitepaper (4 cases) ──
   it('Job 1249 (PREVIOUSLY FAILED): Aave with 404 URL → Fix 3 should fall through to discovery', async () => {
     const req: Record<string, unknown> = {
       token_address: '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9',
       document_url: 'https://aave.com/whitepaper.pdf',
       project_name: 'Aave',
     };
-    const outcome = await runCase(router, 'verify_project_whitepaper', req);
+    const outcome = await runCase(router, 'verify_whitepaper', req);
     expect(outcome.accepted).toBe(true);
     const r = outcome.result as { verdict: string; discoveryAttempts: Array<{ tier: number; status: string }>; projectName: string };
     // Must have populated discoveryAttempts regardless of verdict outcome
@@ -388,7 +388,7 @@ describe('Eval-3 sweep — all 15 cases', () => {
       document_url: 'https://uniswap.org/whitepaper-v3.pdf',
       project_name: 'Uniswap',
     };
-    const outcome = await runCase(router, 'verify_project_whitepaper', req);
+    const outcome = await runCase(router, 'verify_whitepaper', req);
     expect(outcome.accepted).toBe(true);
   });
 
@@ -398,7 +398,7 @@ describe('Eval-3 sweep — all 15 cases', () => {
       document_url: 'https://example.com/nsfw_content',
       project_name: 'NSFW Test',
     };
-    const outcome = await runCase(router, 'verify_project_whitepaper', req);
+    const outcome = await runCase(router, 'verify_whitepaper', req);
     expect(outcome.accepted).toBe(false);
   });
 
@@ -408,7 +408,7 @@ describe('Eval-3 sweep — all 15 cases', () => {
       document_url: 'not_a_url',
       project_name: 'Malformed Test',
     };
-    const outcome = await runCase(router, 'verify_project_whitepaper', req);
+    const outcome = await runCase(router, 'verify_whitepaper', req);
     expect(outcome.accepted).toBe(false);
   });
 });

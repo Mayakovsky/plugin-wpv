@@ -109,11 +109,11 @@ describe('WPV Integration — end-to-end pipeline', () => {
   // Note: handleVerifyWhitepaper returns TokenomicsAuditReport (not FullVerificationReport)
   // because the live pipeline does L1+L2 then aggregates, but does not run claimEvaluator.
 
-  it('verify_project_whitepaper produces valid TokenomicsAuditReport', async () => {
+  it('verify_whitepaper produces valid TokenomicsAuditReport', async () => {
     const deps = createIntegrationDeps();
     const router = new JobRouter(deps);
 
-    const result = await router.handleJob('verify_project_whitepaper', {
+    const result = await router.handleJob('verify_whitepaper', {
       document_url: 'https://example.com/wp.pdf',
       project_name: 'IntegrationTest',
     }) as TokenomicsAuditReport;
@@ -159,7 +159,7 @@ describe('WPV Integration — end-to-end pipeline', () => {
       return makeMockClaims();
     });
 
-    await router.handleJob('verify_project_whitepaper', {
+    await router.handleJob('verify_whitepaper', {
       document_url: 'https://example.com/wp.pdf',
       project_name: 'OrderTest',
     });
@@ -233,7 +233,7 @@ describe('WPV Integration — end-to-end pipeline', () => {
     const deps = createIntegrationDeps();
     const router = new JobRouter(deps);
 
-    const report = await router.handleJob('verify_project_whitepaper', {
+    const report = await router.handleJob('verify_whitepaper', {
       document_url: 'https://example.com/wp.pdf',
       project_name: 'SupersetTest',
     }) as TokenomicsAuditReport;
@@ -256,7 +256,7 @@ describe('WPV Integration — end-to-end pipeline', () => {
     const deps = createIntegrationDeps();
     const router = new JobRouter(deps);
 
-    await router.handleJob('verify_project_whitepaper', {
+    await router.handleJob('verify_whitepaper', {
       document_url: 'https://example.com/wp.pdf',
       project_name: 'DbTest',
     });

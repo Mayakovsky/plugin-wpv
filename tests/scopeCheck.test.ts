@@ -17,7 +17,7 @@ describe('Out-of-scope detector', () => {
       _requirementText: 'What is the current market price of Bitcoin on Binance?',
     };
 
-    await expect(validate('full_technical_verification', requirement, true))
+    await expect(validate('verify_full_tech', requirement, true))
       .rejects.toThrow('outside scope');
   });
 
@@ -28,7 +28,7 @@ describe('Out-of-scope detector', () => {
       _requirementText: 'Should I buy Chainlink tokens?',
     };
 
-    await expect(validate('full_technical_verification', requirement, true))
+    await expect(validate('verify_full_tech', requirement, true))
       .rejects.toThrow('outside scope');
   });
 
@@ -40,7 +40,7 @@ describe('Out-of-scope detector', () => {
     };
 
     // Should NOT throw — this is in-scope
-    await expect(validate('full_technical_verification', requirement, true))
+    await expect(validate('verify_full_tech', requirement, true))
       .resolves.toBeUndefined();
   });
 
@@ -51,7 +51,7 @@ describe('Out-of-scope detector', () => {
       _requirementText: 'Evaluate the mathematical validity of Uniswap v3 concentrated liquidity',
     };
 
-    await expect(validate('full_technical_verification', requirement, true))
+    await expect(validate('verify_full_tech', requirement, true))
       .resolves.toBeUndefined();
   });
 
@@ -62,18 +62,18 @@ describe('Out-of-scope detector', () => {
     };
 
     // Structured JSON with token_address — scope check only fires for isPlainText
-    await expect(validate('full_technical_verification', requirement, false))
+    await expect(validate('verify_full_tech', requirement, false))
       .resolves.toBeUndefined();
   });
 
-  it('does NOT fire on non-full_technical_verification offerings', async () => {
+  it('does NOT fire on non-verify_full_tech offerings', async () => {
     const requirement: Record<string, unknown> = {
       project_name: 'Bitcoin',
       raw_instruction: 'What is the current market price of Bitcoin?',
     };
 
-    // project_legitimacy_scan — scope check only fires for full_technical_verification
-    await expect(validate('project_legitimacy_scan', requirement, true))
+    // legitimacy_scan — scope check only fires for verify_full_tech
+    await expect(validate('legitimacy_scan', requirement, true))
       .resolves.toBeUndefined();
   });
 });

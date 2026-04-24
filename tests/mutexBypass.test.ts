@@ -92,7 +92,7 @@ describe('Fix 5A: mutex bypass for legit_scan cache-hit', () => {
     const stuckPromise = new Promise<void>(() => { /* never resolves */ });
     (router as never as { _jobLock: Promise<void> })._jobLock = stuckPromise;
 
-    const legitScan = router.handleJob('project_legitimacy_scan', {
+    const legitScan = router.handleJob('legitimacy_scan', {
       token_address: '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9',
       project_name: 'Aave',
     });
@@ -112,7 +112,7 @@ describe('Fix 5A: mutex bypass for legit_scan cache-hit', () => {
     (deps.whitepaperRepo.findByProjectName as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (deps.whitepaperRepo.findByTokenAddress as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     // No tieredDiscovery → falls through to insufficientData
-    const result = await router.handleJob('project_legitimacy_scan', {
+    const result = await router.handleJob('legitimacy_scan', {
       token_address: '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9',
       project_name: 'UnknownProject',
     }) as { verdict: string };
@@ -127,7 +127,7 @@ describe('Fix 5A: mutex bypass for legit_scan cache-hit', () => {
     (router as never as { _jobLock: Promise<void> })._jobLock = stuckPromise;
 
     // full_tech should hang behind the mutex
-    const fullTech = router.handleJob('full_technical_verification', {
+    const fullTech = router.handleJob('verify_full_tech', {
       project_name: 'Aave',
       token_address: '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9',
     });
@@ -148,7 +148,7 @@ describe('Fix 5A: mutex bypass for legit_scan cache-hit', () => {
       date: '2026-04-24', totalVerified: 0, whitepapers: [],
     });
 
-    const briefing = router.handleJob('daily_technical_briefing', {});
+    const briefing = router.handleJob('daily_tech_brief', {});
 
     const result = await Promise.race([
       briefing,

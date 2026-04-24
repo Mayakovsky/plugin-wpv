@@ -317,10 +317,10 @@ export interface AcpJob {
 }
 
 export type OfferingId =
-  | 'project_legitimacy_scan'
-  | 'verify_project_whitepaper'
-  | 'full_technical_verification'
-  | 'daily_technical_briefing';
+  | 'legitimacy_scan'
+  | 'verify_whitepaper'
+  | 'verify_full_tech'
+  | 'daily_tech_brief';
 
 export type ResourceId =
   | 'daily_greenlight_list'

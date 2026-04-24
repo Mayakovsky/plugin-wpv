@@ -11,7 +11,7 @@ const ENV_PATH = "/opt/grey/wpv-agent/.env";
 const GREY_WALLET = "0xa9667116b4f4e9f1bae85f93a21b4b8ea45de98f";
 const CHAIN_ID = 8453;
 const TOKEN_ADDRESS = "0x0b3e328455c4059EEb9e3f84b5543F74E24e7E1b";
-const OFFERING_NAME = "project_legitimacy_scan";
+const OFFERING_NAME = "legitimacy_scan";
 const TIMEOUT_MS = 3 * 60 * 1000;
 
 function loadEnv(path) {
