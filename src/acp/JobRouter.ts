@@ -141,8 +141,23 @@ export class JobRouter {
       return this._handleJobImpl(offeringId, input);
     }
 
-    // Serialize job processing — prevents CostTracker data corruption,
-    // Playwright race conditions, and DB upsert TOCTOU.
+    // Fix 5A (2026-04-24): legit_scan cache-hit bypass.
+    // Cache-hit reads touch none of the shared state the mutex protects
+    // (no Playwright, no DB upserts, no write-back). A cached legit_scan should
+    // never wait behind full_tech jobs invoking Sonnet synthesis. Job 1308
+    // expired this way: deliverable generated correctly at 01:32:58 but on-chain
+    // submit landed past deadline after waiting behind Jobs 1304+1305 full_tech.
+    // If cache miss, we fall through to the mutex path for live L1.
+    if (offeringId === 'project_legitimacy_scan') {
+      const cached = await this._tryLegitimacyScanFromCache(input);
+      if (cached) {
+        const requestedProjectName = input.project_name as string | undefined;
+        return this.maybeDowngradeForVersionMismatch(cached as Record<string, unknown>, requestedProjectName);
+      }
+    }
+
+    // Serialize job processing — prevents Playwright race conditions
+    // and DB upsert TOCTOU.
     let release: () => void;
     const acquired = new Promise<void>(r => { release = r; });
     const previous = this._jobLock;
@@ -153,6 +168,30 @@ export class JobRouter {
     } finally {
       release!();
     }
+  }
+
+  /**
+   * Fix 5A (2026-04-24): cache-only path for legit_scan. Returns a report when
+   * findWhitepaper + verificationsRepo both hit, null on any miss. Safe to run
+   * without holding _jobLock — reads only, no writes, no Playwright.
+   */
+  private async _tryLegitimacyScanFromCache(input: Record<string, unknown>): Promise<unknown | null> {
+    const wp = await this.findWhitepaper(input);
+    if (!wp) return null;
+    const verification = await this.deps.verificationsRepo.findByWhitepaperId(wp.id);
+    if (!verification) return null;
+    const analysis = this.extractStructuralAnalysis(verification);
+    const report = this.deps.reportGenerator.generateLegitimacyScan(
+      this.verificationRowToResult(verification),
+      analysis,
+      wp as never,
+      { discoveryStatus: 'cached', discoverySourceTier: 0, discoveryAttempts: [{ tier: 0, status: 'cached', structuralScore: verification.structuralScore ?? 0, claimCount: verification.totalClaims ?? 0 }] },
+    );
+    const requestedAddress = (input._originalTokenAddress ?? input.token_address) as string | undefined;
+    if (requestedAddress) {
+      report.tokenAddress = requestedAddress;
+    }
+    return report;
   }
 
   private async _handleJobImpl(offeringId: OfferingId, input: Record<string, unknown>): Promise<unknown> {
