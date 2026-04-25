@@ -20,6 +20,7 @@ import type {
   MicaClaimStatus,
   MicaComplianceStatus,
 } from '../types';
+import { KNOWN_PROTOCOL_PATTERN } from '../constants/protocols';
 
 export interface DiscoveryProvenance {
   discoveryStatus: DiscoveryStatus;
@@ -38,25 +39,45 @@ export interface DiscoveryProvenance {
  *       PASS → FAIL when structuralScore ≤ 3, else PASS → CONDITIONAL
  *   - claimsMica=YES + micaCompliant=PARTIAL:
  *       PASS → CONDITIONAL (soft downgrade)
+ *   - Path B (2026-04-25): KNOWN protocol + claimsMica=NOT_MENTIONED + micaCompliant=NO:
+ *       PASS → CONDITIONAL (regulatory portal consultation gap)
+ *       Why: evaluator flagged Job 1697 Uniswap legitimacy_scan because the report
+ *       didn't acknowledge the absence of ESMA/NCAs/CASP filings consultation for
+ *       a known DeFi protocol. The downgrade reflects that uncertainty surface.
  *   - otherwise unchanged
  */
+const REGULATORY_PORTAL_NOTE =
+  ' Note: ESMA register / national CASP filings / NCA portals were not consulted for this assessment — known protocols operating without explicit MiCA registration carry residual regulatory uncertainty.';
+
 function adjustVerdictForMicaDiscrepancy(
   verdict: Verdict,
   claimsMica: MicaClaimStatus,
   micaCompliant: MicaComplianceStatus,
   structuralScore: number,
-): Verdict {
-  if (claimsMica !== 'YES') return verdict;
-  if (micaCompliant === 'YES') return verdict;
-  if (verdict !== ('PASS' as Verdict)) return verdict;  // only ever downgrade PASS
+  projectName?: string,
+): { verdict: Verdict; micaSummaryAppend?: string } {
+  if (verdict !== ('PASS' as Verdict)) return { verdict };  // only ever downgrade PASS
 
-  if (micaCompliant === 'NO') {
-    return structuralScore <= 3 ? ('FAIL' as Verdict) : ('CONDITIONAL' as Verdict);
+  if (claimsMica === 'YES' && micaCompliant !== 'YES') {
+    if (micaCompliant === 'NO') {
+      return { verdict: structuralScore <= 3 ? ('FAIL' as Verdict) : ('CONDITIONAL' as Verdict) };
+    }
+    if (micaCompliant === 'PARTIAL') {
+      return { verdict: 'CONDITIONAL' as Verdict };
+    }
   }
-  if (micaCompliant === 'PARTIAL') {
-    return 'CONDITIONAL' as Verdict;
+
+  // Path B: KNOWN protocol that doesn't mention MiCA but also doesn't qualify
+  if (
+    claimsMica === 'NOT_MENTIONED' &&
+    micaCompliant === 'NO' &&
+    projectName &&
+    KNOWN_PROTOCOL_PATTERN.test(projectName)
+  ) {
+    return { verdict: 'CONDITIONAL' as Verdict, micaSummaryAppend: REGULATORY_PORTAL_NOTE };
   }
-  return verdict;
+
+  return { verdict };
 }
 
 export class ReportGenerator {
@@ -68,12 +89,16 @@ export class ReportGenerator {
   ): LegitimacyScanReport {
     const claimsMica = analysis.mica?.claimsMicaCompliance ?? 'NOT_MENTIONED';
     const micaCompliant = analysis.mica?.micaCompliant ?? 'NO';
-    const adjustedVerdict = adjustVerdictForMicaDiscrepancy(
+    const { verdict: adjustedVerdict, micaSummaryAppend } = adjustVerdictForMicaDiscrepancy(
       verification.verdict,
       claimsMica,
       micaCompliant,
       verification.structuralScore,
+      wp.projectName,
     );
+
+    const baseSummary = analysis.mica?.micaSummary ?? '';
+    const finalSummary = micaSummaryAppend ? `${baseSummary}${micaSummaryAppend}` : baseSummary;
 
     const base: LegitimacyScanReport = {
       projectName: wp.projectName,
@@ -84,7 +109,7 @@ export class ReportGenerator {
       claimCount: verification.totalClaims,
       claimsMicaCompliance: claimsMica,
       micaCompliant: micaCompliant,
-      micaSummary: analysis.mica?.micaSummary ?? '',
+      micaSummary: finalSummary,
       generatedAt: new Date().toISOString(),
     };
     if (provenance) {
