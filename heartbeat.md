@@ -1,8 +1,8 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-04-24 (🎯 15/15 eval PASS + Option B address-dedupe hardening shipped. No more evals — moving to application + production.)
+> Last updated: 2026-04-27 (🎓 ACP graduation requirements complete. Submitting application now.)
 > Updated by: Claude Opus 4.7 — Kovsky session
-> Session label: Eval graduation complete. Post-graduation hardening (Option B, commits 5681451/3cdda21/d58a30c) eliminates the same-address duplicate-row class of bug uncovered by the Aave/Aave Token finding. (A) wpvWhitepapersRepo normalizes 0x addresses to lowercase on read + write; base58 Solana addresses untouched. (B) runL1L2 dedupe-on-address with version awareness — Aave + Aave V3 stay distinct despite shared contract; "Aave Token" + "Aave" merge. Canonical first-seen name preserved on replace. (C) resolveTokenName canonicalizes via KNOWN_PROTOCOL_NAMES + synonym map ("Aave Token" → "Aave", "Virtual Protocol" → "Virtuals Protocol", "ChainLink Token" → "Chainlink"). One-time migration (scripts/migrateAddressNormalization.ts) dry-run default + --apply mode, transaction-wrapped, idempotent. Applied to Supabase: 3 rows lowercased (Virtuals/Virtual Protocol, Aerodrome Finance); 2 duplicate groups collapsed (Virtual Protocol→Virtuals Protocol, Aerodrome→Aerodrome Finance). Final state: 10 whitepapers, 10 verifications, 132 claims, 0 mixed-case 0x, 0 residual dupes. 388/388 unit tests (310 baseline + 56 zoom-out fixes + 22 Option B). Grey PM2 #9, SDK connected, 4 handlers registered.
-> Staleness gate: 2026-04-24 — if today is >3 days past this,
+> Session label: Final graduation push. Eval cycle 7 cleared **16/16** (2026-04-25) — Path B verdict-downgrade for KNOWN-protocol regulatory portal gap (commit `9c94a36`) addressed the lone Cycle 6 Uniswap legitimacy_scan rejection. Video battery rerun under new offering names — **8/8 PASS** (Jobs 2226-2235 on Base, 2026-04-27) — recording captures `legitimacy_scan` / `verify_whitepaper` / `verify_full_tech` / `daily_tech_brief` on the on-chain record matching the Graduation Report. All 4 acceptance lifecycles funded + delivered + completed cleanly; all 4 adversarial rejections caught at the validator boundary with no escrow exposure. 399/399 unit tests (388 baseline + 11 Path B). Grey PM2 online, SDK connected, 4 handlers registered. ACP application submitting.
+> Staleness gate: 2026-04-27 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
 ## Focus (1-3 goals, testable)
@@ -48,9 +48,13 @@
 - [x] **Race condition fix** — `waitForRequirement()` 3-tier fallback, dual-trigger dispatch, `__decided` sentinel. `plugin-acp/src/AcpService.ts`.
 - [x] **Phase 1-4 28/28 plan** — signal aggregator, never-reject-post-acceptance, Tier 3.5/3.75, schema expansion. Deployed across commits `a70267c`, `0e0f4c6`.
 - [x] **MiCA discrepancy verdict downgrade** — commit `528729f`.
-- [ ] **DevRel eval cycles** — 25/28 → 14/15 → 12/15. Three outstanding failures #1243/1246/1249. Zoom-out plan pending Forces approval.
-- [ ] **Re-graduation** — submit to Butler after hitting 15/15.
-- [ ] **LAUNCH** — set production prices, close ports, fire outreach, monitor
+- [x] **DevRel eval cycle 6** — 15/15 PASS (2026-04-24). Option B address-dedupe hardening shipped post-cycle.
+- [x] **DevRel eval cycle 7** — **16/16 PASS** (2026-04-25). Single Cycle-6 regression (Uniswap legit_scan, MiCA portal acknowledgement gap) cleared by Path B verdict downgrade.
+- [x] **Path B — KNOWN-protocol regulatory portal verdict downgrade** — commit `9c94a36`. KNOWN_PROTOCOL + claimsMica=NOT_MENTIONED + micaCompliant=NO + verdict=PASS → CONDITIONAL with ESMA/CASP/NCA acknowledgement note appended to micaSummary. 11 new tests, 399/399 total.
+- [x] **Video battery 2026-04-27** — **8/8 PASS** under new offering names. Jobs 2226-2235 on Base. See `BUILD DOCS and DATA/Video_Test_Run_2026-04-27.md`.
+- [x] **`Video_Test_Schema_v2.md`** — Forces' updated plan with my CLI syntax corrections (`client create-job`, `--offering-name`, `--requirements`, `--chain-id`, lifecycle handling rule).
+- [ ] **ACP application** — submitting now (2026-04-27).
+- [ ] **LAUNCH** — set production prices, close ports, fire outreach, monitor.
 
 ## What Works (verified)
 - ✅ Build (`bun run build`) — 0 errors — verified 2026-04-11
@@ -95,7 +99,7 @@
 - 🟢 **ACP CLI `openBrowser` URL truncation on Windows** — 1-line fix in `src/lib/browser.ts`: `cmd /c start` → `rundll32 url.dll,FileProtocolHandler`. Cmd.exe was truncating URLs at `&` (command separator), silently dropping `publicKey` from the add-signer approval URL. Applied locally, CLI runs via tsx so effective immediately. Report for upstream: `BUILD DOCS and DATA/ACP_CLI_Windows_URL_Truncation.md`.
 
 ## Test Count
-- **plugin-wpv: 310 tests / 24 files, 0 failures** (verified 2026-04-11)
+- **plugin-wpv: 399 tests / 35 files, 0 failures** (verified 2026-04-25 — 388 prior + 11 Path B)
 - **plugin-acp: 45 tests / 2 files, 0 failures** (verified 2026-04-11)
 
 ## DB State (post-graduation, 2026-04-09)
@@ -115,15 +119,21 @@
 | 34 | 11/15 | scan 5/5, briefing 0/2 | 4 | Job mutex EXPIRED briefings, Aerodrome SPA timeout, Aave V3 Unknown |
 | 35 | 15/18 | scan 5/5, briefing 4/4 | 3 | Plain-text parser (ve(3,3) capture, Uniswap v3 digits), Aerodrome SPA |
 | 36 | — (server conflict) | 11 delivered, 0 EXPIRED | eval terminated | All fixes working, evaluator cut session before scoring |
-| **37** | **24/24** | **ALL** | **NONE** | **GRADUATED** |
+| **37** | **24/24** | **ALL** | **NONE** | **GRADUATED** (2026-04-09) |
+| 38-42 | 25/28 → 14/15 → 12/15 | — | — | Aerodrome typo, Uniswap V3 stripping, Aave 404 fallback (zoom-out plan) |
+| 43 | 14/15 | — | 1 | Cache hit served stale claims for L2 enrichment path |
+| 44 | 15/15 | ALL | NONE | Mutex bypass + claim-count consistency fixed it |
+| 45 / **Cycle 6** | 15/16 | — | 1 | Uniswap legit_scan REJECTED — evaluator wanted MiCA portal acknowledgement |
+| **46 / Cycle 7** | **16/16** | **ALL** | **NONE** | Path B verdict downgrade addressed regulatory portal gap (2026-04-25) |
 
 ## Next Actions (ordered)
-1. **Re-graduation via Butler** — submit on video + on-chain evidence. 8/8 PASS ready for evaluator review.
-2. **Fix verify_full_tech schema** — re-register with JSON schema instead of string.
-3. **LAUNCH** — set production prices, close ports 3000+3001, fire outreach.
-4. **Upstream PR to Virtuals** — submit `browser.ts` Windows fix to `github.com/Virtual-Protocol/acp-cli`.
-5. **Post-graduation:** wire DiscoveryCron, full DB hygiene service, render cache.
-6. **Monitor** — watch for edge cases from real buyers.
+1. **ACP application submission** — in flight (2026-04-27). 16/16 eval + 8/8 video battery + Path B + Option B all on record.
+2. **Set production prices** — switch from test rates ($0.01-$0.04) to production ($0.25 / $1.50 / $3.00 / $8.00).
+3. **Close Lightsail ports 3000 + 3001** before public launch.
+4. **Fix verify_full_tech offering schema** — re-register with JSON schema instead of free-text string.
+5. **Upstream PR to Virtuals** — submit `browser.ts` Windows fix to `github.com/Virtual-Protocol/acp-cli`.
+6. **Post-launch:** wire DiscoveryCron, full DB hygiene service, render cache.
+7. **Monitor** — watch for edge cases from real buyers.
 
 ## ACP CLI Setup Notes
 - **Repo:** `github.com/Virtual-Protocol/acp-cli` (NOT an npm package)
