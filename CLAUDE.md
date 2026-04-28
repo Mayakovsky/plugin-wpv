@@ -254,4 +254,4 @@ ACP_PRIVY_SIGNER_KEY=<from Virtuals Add Signer>
 
 ---
 
-*Last updated: 2026-04-27 (🎓 ACP graduation requirements complete. Submitting application now. Eval cycles: 12/15 → 14/15 → 15/15 → 15/16 → **16/16** (cycle 7, 2026-04-25). Path B verdict downgrade (`9c94a36`) addresses the regulatory portal acknowledgement gap on KNOWN protocols. Video battery 8/8 PASS under new offering names (Jobs 2226-2235, 2026-04-27) — recording matches Graduation Report. 399 tests / 35 files. Grey ONLINE on VPS, 4 handlers registered. Next: ACP application submission, production prices, port closure, launch.)*
+*Last updated: 2026-04-28 (🎓 ACP application submitted (2026-04-27). 16/16 eval cycle 7 + 8/8 video battery on record. Daily Aggregation Cycle wiring plan drafted — `BUILD DOCS and DATA/Daily_Aggregation_Wiring_Plan.md`. 10-step activation sequence + 6 Forces decisions awaiting signoff before Step 1 (AcpService bridge). 399 tests / 35 files. Grey ONLINE on VPS, 4 handlers registered. Next: Forces decisions, then DiscoveryCron wiring, then production prices + launch.)*

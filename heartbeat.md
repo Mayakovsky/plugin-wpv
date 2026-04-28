@@ -1,8 +1,8 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-04-27 (🎓 ACP graduation requirements complete. Submitting application now.)
+> Last updated: 2026-04-28 (🎓 ACP application submitted. Daily Aggregation wiring plan drafted for Forces review.)
 > Updated by: Claude Opus 4.7 — Kovsky session
-> Session label: Final graduation push. Eval cycle 7 cleared **16/16** (2026-04-25) — Path B verdict-downgrade for KNOWN-protocol regulatory portal gap (commit `9c94a36`) addressed the lone Cycle 6 Uniswap legitimacy_scan rejection. Video battery rerun under new offering names — **8/8 PASS** (Jobs 2226-2235 on Base, 2026-04-27) — recording captures `legitimacy_scan` / `verify_whitepaper` / `verify_full_tech` / `daily_tech_brief` on the on-chain record matching the Graduation Report. All 4 acceptance lifecycles funded + delivered + completed cleanly; all 4 adversarial rejections caught at the validator boundary with no escrow exposure. 399/399 unit tests (388 baseline + 11 Path B). Grey PM2 online, SDK connected, 4 handlers registered. ACP application submitting.
-> Staleness gate: 2026-04-27 — if today is >3 days past this,
+> Session label: Post-graduation cycle. ACP graduation requirements remain complete (16/16 eval cycle 7 + 8/8 video battery 2026-04-27). Application is in flight. **Daily Aggregation Cycle wiring plan saved** to `BUILD DOCS and DATA/Daily_Aggregation_Wiring_Plan.md` — companion to the existing functionality+constraints report. 10-step activation sequence with concrete file paths, 3 hardening items (Option B dedupe parity, content filter at discovery boundary, `lastProcessedBlock` Supabase persistence), 6 Forces decision points (enrichment source, budget cap behavior, retention, violation-content stance, initial threshold, briefing source filter), risk surface + mitigations, one-flag rollback, 7 acceptance criteria. Grey PM2 online, 4 handlers registered. 399/399 tests. No code changes today — planning + heartbeats only. Restarting in next session.
+> Staleness gate: 2026-04-28 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
 ## Focus (1-3 goals, testable)
@@ -53,7 +53,9 @@
 - [x] **Path B — KNOWN-protocol regulatory portal verdict downgrade** — commit `9c94a36`. KNOWN_PROTOCOL + claimsMica=NOT_MENTIONED + micaCompliant=NO + verdict=PASS → CONDITIONAL with ESMA/CASP/NCA acknowledgement note appended to micaSummary. 11 new tests, 399/399 total.
 - [x] **Video battery 2026-04-27** — **8/8 PASS** under new offering names. Jobs 2226-2235 on Base. See `BUILD DOCS and DATA/Video_Test_Run_2026-04-27.md`.
 - [x] **`Video_Test_Schema_v2.md`** — Forces' updated plan with my CLI syntax corrections (`client create-job`, `--offering-name`, `--requirements`, `--chain-id`, lifecycle handling rule).
-- [ ] **ACP application** — submitting now (2026-04-27).
+- [x] **ACP application** — submitted 2026-04-27.
+- [x] **Daily Aggregation wiring plan** — drafted 2026-04-28, awaiting Forces decisions. See `BUILD DOCS and DATA/Daily_Aggregation_Wiring_Plan.md`.
+- [ ] **Daily Aggregation activation** — Steps 1-10 from the plan, gated on Forces signoff for the 6 decisions (enrichment source, budget cap, retention, violation-content stance, initial threshold, briefing filter).
 - [ ] **LAUNCH** — set production prices, close ports, fire outreach, monitor.
 
 ## What Works (verified)
@@ -127,13 +129,15 @@
 | **46 / Cycle 7** | **16/16** | **ALL** | **NONE** | Path B verdict downgrade addressed regulatory portal gap (2026-04-25) |
 
 ## Next Actions (ordered)
-1. **ACP application submission** — in flight (2026-04-27). 16/16 eval + 8/8 video battery + Path B + Option B all on record.
-2. **Set production prices** — switch from test rates ($0.01-$0.04) to production ($0.25 / $1.50 / $3.00 / $8.00).
-3. **Close Lightsail ports 3000 + 3001** before public launch.
-4. **Fix verify_full_tech offering schema** — re-register with JSON schema instead of free-text string.
-5. **Upstream PR to Virtuals** — submit `browser.ts` Windows fix to `github.com/Virtual-Protocol/acp-cli`.
-6. **Post-launch:** wire DiscoveryCron, full DB hygiene service, render cache.
-7. **Monitor** — watch for edge cases from real buyers.
+1. **Forces review of Daily Aggregation wiring plan** — 6 decisions to lock down before Step 1. See `BUILD DOCS and DATA/Daily_Aggregation_Wiring_Plan.md`.
+2. **Wire DiscoveryCron (Steps 1-7 of the plan)** — AcpService bridge, Option B dedupe parity in cron path, `lastProcessedBlock` persistence, instantiate cron in WpvService, scheduler in `start()`, tests, dry-run via `/wpvscan`.
+3. **Activate cron** — flip `DISCOVERY_ENABLED=true` on VPS, observe for 3 days, iterate thresholds.
+4. **Set production prices** — switch from test rates ($0.01-$0.04) to production ($0.25 / $1.50 / $3.00 / $8.00).
+5. **Close Lightsail ports 3000 + 3001** before public launch.
+6. **Fix verify_full_tech offering schema** — re-register with JSON schema instead of free-text string.
+7. **Upstream PR to Virtuals** — submit `browser.ts` Windows fix to `github.com/Virtual-Protocol/acp-cli`.
+8. **Post-launch:** full DB hygiene service, render cache.
+9. **Monitor** — watch for edge cases from real buyers.
 
 ## ACP CLI Setup Notes
 - **Repo:** `github.com/Virtual-Protocol/acp-cli` (NOT an npm package)
