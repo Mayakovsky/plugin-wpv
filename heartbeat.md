@@ -1,8 +1,19 @@
 # HEARTBEAT — plugin-wpv
-> Last updated: 2026-04-28 (🎓 ACP application submitted. Daily Aggregation wiring plan drafted for Forces review.)
+> Last updated: 2026-05-13 (🚨 Silent SocketTransport failure caught after ~16h. Heartbeat watchdog deployed.)
 > Updated by: Claude Opus 4.7 — Kovsky session
-> Session label: Post-graduation cycle. ACP graduation requirements remain complete (16/16 eval cycle 7 + 8/8 video battery 2026-04-27). Application is in flight. **Daily Aggregation Cycle wiring plan saved** to `BUILD DOCS and DATA/Daily_Aggregation_Wiring_Plan.md` — companion to the existing functionality+constraints report. 10-step activation sequence with concrete file paths, 3 hardening items (Option B dedupe parity, content filter at discovery boundary, `lastProcessedBlock` Supabase persistence), 6 Forces decision points (enrichment source, budget cap behavior, retention, violation-content stance, initial threshold, briefing source filter), risk surface + mitigations, one-flag rollback, 7 acceptance criteria. Grey PM2 online, 4 handlers registered. 399/399 tests. No code changes today — planning + heartbeats only. Restarting in next session.
-> Staleness gate: 2026-04-28 — if today is >3 days past this,
+> Session label: **ACP Status Check executed (`BUILD DOCS and DATA/Kov_Context_Recovery_ACP_Status_2026-04-28.md`).** Grey **IS** discoverable on ACP — `acp browse "whitepaper verification"` returns Grey first; `acp browse "whitepaper"` returns Grey first; `acp browse "crypto verification"` returns Grey 4th. All 4 offerings registered at **production prices** (legitimacy_scan $0.25, verify_whitepaper $1.50, verify_full_tech $3.00, daily_tech_brief $8.00) — production pricing is *already live*, the test-rate column in the table below is historical. `acp agent list` shows Grey alongside two buyer agents. No "graduation/activation" references anywhere in CLI/API output — the path the Virtuals docs described was deprecated and Grey is already on the marketplace via the standard ACP flow.
+>
+> **However:** end-to-end job dispatch was broken. Grey's PM2 process was `online` (15h uptime, 87.4MB RAM, 0% CPU) but `grey-out.log` mtime had been frozen at `2026-05-13 05:00 UTC` for ~16h. SocketTransport silently stopped delivering events; `isConnected()` still returned true. Two on-chain `JobCreated` events fired during this audit (Base #8190 + #8193) — paymaster-sponsored, confirmed on Basescan, never reached Grey's `handleEntry`. `pm2 restart grey` cleanly revived the socket.
+>
+> **Watchdog shipped this session (see `plugin-acp/heartbeat.md` for code-level detail):**
+> - `plugin-acp/src/AcpService.ts` — 5-min heartbeat log line, `lastEventAt` tracking, HTTP `/` returns `lastEventAgeSec`
+> - `plugin-acp/ops/grey-watchdog.sh` deployed to VPS at `/opt/grey/watchdog/grey-watchdog.sh`, cron every 2 min, restarts Grey when log mtime stale > 12 min
+> - 45/45 plugin-acp tests pass after rebasing two stale tests onto the Phase-2 "never-reject-post-acceptance" contract
+>
+> **Test-mode reality (Forces note):** Every "test" job on ACP is a real on-chain transaction with real USDC charged at production prices. The briefing's "send one test job" framing is loose — what we actually did was a production job dry-fire. Buyer wallet `0x22a3…56a6` paid 0 USDC for #8190/#8193 only because Grey never accepted (no budget set → no funding step → no charge). If Grey accepts → delivers → buyer completes, $0.25/$1.50/$3.00/$8.00 transfers per offering. The "test pricing" column in the table at the bottom of this heartbeat is the *historical* pre-graduation rate — production is what's live on Virtuals now.
+>
+> Grey is online again post-restart, watchdog armed. 399/399 plugin-wpv tests, 45/45 plugin-acp tests.
+> Staleness gate: 2026-05-13 — if today is >3 days past this,
 >   verify state before acting (see Section 3 of SeshMem schema).
 
 ## Focus (1-3 goals, testable)
@@ -56,7 +67,9 @@
 - [x] **ACP application** — submitted 2026-04-27.
 - [x] **Daily Aggregation wiring plan** — drafted 2026-04-28, awaiting Forces decisions. See `BUILD DOCS and DATA/Daily_Aggregation_Wiring_Plan.md`.
 - [ ] **Daily Aggregation activation** — Steps 1-10 from the plan, gated on Forces signoff for the 6 decisions (enrichment source, budget cap, retention, violation-content stance, initial threshold, briefing filter).
-- [ ] **LAUNCH** — set production prices, close ports, fire outreach, monitor.
+- [x] **Production prices live (2026-05-13)** — `WpvService.ts` registration now passes 0.25 / 1.50 / 3.00 / 8.00 to `registerOfferingHandler`. Deployed via SCP + rebuild + pm2 restart (restart #34). 399/399 tests pass.
+- [x] **End-to-end on-chain confirmation (2026-05-13)** — Job 8194 completed full lifecycle: create → setBudget → fund → handler → submit → complete. Aave verdict CONDITIONAL (Path B downgrade firing correctly). 94s wall-clock, $0.01 USDC transferred (last job before price bump). Logs: `plugin-acp/heartbeat.md`.
+- [ ] **LAUNCH remaining** — close Lightsail ports 3000 + 3001, fire outreach, monitor.
 
 ## What Works (verified)
 - ✅ Build (`bun run build`) — 0 errors — verified 2026-04-11
@@ -76,7 +89,7 @@
 - ⚠️ **Self-hire blocked at contract level** (not a blocker for graduation, kept as note): ACP contract on Base (`0x238E541B…32E0`) reverts at simulation when `buyer==provider`. Verified via `/opt/grey/plugin-acp/self-hire-test.js`. Must use an external buyer (which we now have — Grey Test Buyer).
 - ⚠️ **verify_full_tech offering schema** — requirements field is a string (description text), not JSON schema. AJV client-side validation skipped. Registration bug on Virtuals side.
 - ⚠️ **Ports 3000 + 3001 open** in Lightsail firewall — close for production.
-- ⚠️ Test prices still active ($0.01-$0.04) — switch to production prices for launch
+- ✅ ~~Test prices still active ($0.01-$0.04) — switch to production prices for launch~~ **DONE 2026-05-13** — production prices ($0.25/$1.50/$3.00/$8.00) now hardcoded in `WpvService.ts` and live in runtime via restart #34.
 - ⚠️ **Grey stats "not yet tracked"** on Virtuals UI — new wallet has zero ACP transactions; will populate after first successful video test job.
 
 ## What's Fixed (2026-04-23 cycle)
@@ -147,10 +160,12 @@
 - **Setup remaining (blocks video tests):** configure → agent create → add-signer → USDC fund
 - **Grey wallet (for browse):** `0xa9667116b4f4e9f1bae85f93a21b4b8ea45de98f`
 
-## Test Pricing (pre-graduation — CHANGE FOR LAUNCH)
-| Offering | Test Price | Production Price |
-|----------|-----------|-----------------|
-| legitimacy_scan | $0.01 | $0.25 |
-| verify_whitepaper | $0.02 | $1.50 |
-| verify_full_tech | $0.03 | $3.00 |
-| daily_tech_brief | $0.04 | $8.00 |
+## Pricing (LIVE — production rates as of 2026-05-13)
+| Offering | Price | Test rate (deprecated 2026-05-13) |
+|----------|-------|-----------------------------------|
+| legitimacy_scan | **$0.25** | ~~$0.01~~ |
+| verify_whitepaper | **$1.50** | ~~$0.02~~ |
+| verify_full_tech | **$3.00** | ~~$0.03~~ |
+| daily_tech_brief | **$8.00** | ~~$0.04~~ |
+
+Source of truth: `plugin-wpv/src/WpvService.ts` registration map. Grey proposes these via `session.setBudget()`. Must match Virtuals platform `acp offering list` output.

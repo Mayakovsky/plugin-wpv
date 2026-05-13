@@ -1224,16 +1224,14 @@ export class WpvService extends Service {
         return;
       }
 
-      // Test-rate prices (temporary, for internal video-test re-run after
-      // offering rename — 2026-04-24). Production prices are 0.25 / 1.50 /
-      // 3.00 / 8.00; restore those before application submission. These MUST
-      // match the Virtuals platform registered prices — Grey proposes them
-      // via session.setBudget() and auto-fund rejects out-of-bounds amounts.
+      // Production prices — must match the Virtuals platform registered prices
+      // (confirmed via `acp offering list` on 2026-05-13). Grey proposes these
+      // via session.setBudget(); the buyer's auto-fund rejects out-of-bounds amounts.
       const offerings: { id: OfferingId; price: number }[] = [
-        { id: 'legitimacy_scan', price: 0.01 },
-        { id: 'verify_whitepaper', price: 0.02 },
-        { id: 'verify_full_tech', price: 0.03 },
-        { id: 'daily_tech_brief', price: 0.04 },
+        { id: 'legitimacy_scan', price: 0.25 },
+        { id: 'verify_whitepaper', price: 1.50 },
+        { id: 'verify_full_tech', price: 3.00 },
+        { id: 'daily_tech_brief', price: 8.00 },
       ];
 
       for (const offering of offerings) {
