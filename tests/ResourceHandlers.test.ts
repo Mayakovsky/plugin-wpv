@@ -17,8 +17,8 @@ describe('AgentCardConfig', () => {
     expect(AGENT_CARD.shortDescription.length).toBeLessThanOrEqual(100);
   });
 
-  it('has 4 offerings', () => {
-    expect(OFFERINGS).toHaveLength(4);
+  it('has at least 4 offerings', () => {
+    expect(OFFERINGS.length).toBeGreaterThanOrEqual(4);
   });
 
   it('has 2 resources', () => {

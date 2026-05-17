@@ -212,9 +212,9 @@ export class JobRouter {
   constructor(private deps: JobRouterDeps) {}
 
   async handleJob(offeringId: OfferingId, input: Record<string, unknown>): Promise<unknown> {
-    // Briefings are read-only (no DB writes, no Playwright, no Sonnet).
+    // Briefings and claim history are read-only (no DB writes, no Playwright, no Sonnet).
     // Exempt from mutex to prevent SLA violations when slow pipeline jobs block the queue.
-    if (offeringId === 'daily_tech_brief') {
+    if (offeringId === 'daily_tech_brief' || offeringId === 'claim_history') {
       return this._handleJobImpl(offeringId, input);
     }
 
@@ -300,6 +300,8 @@ export class JobRouter {
       }
       case 'daily_tech_brief':
         return this.handleDailyBriefing(input);
+      case 'claim_history':
+        return this.handleClaimHistory(input);
       default:
         return { error: 'unknown_offering', message: `Unknown offering: ${offeringId}` };
     }
@@ -1467,6 +1469,145 @@ export class JobRouter {
     const briefing = this.deps.reportGenerator.generateDailyBriefing(briefingReports);
     briefing.date = targetDate;
     return briefing;
+  }
+
+  /**
+   * Movement 0 offering — `claim_history`.
+   * Pure DB read across the autognostic.wpv_* tables. No pipeline, no LLM, no
+   * discovery. Routed through the mutex-bypass branch in handleJob since this
+   * touches none of the shared state the mutex protects.
+   *
+   * Input: { projectIdentifier: string } — token address (0x... or Solana
+   * base58), exact or version-stripped project name, or whitepaper URL.
+   * URL lookup has no matching repo path so URLs fall through to the "no
+   * prior verifications" structured response rather than failing.
+   *
+   * Output: { project, verifications[], claims[] } on a match (where
+   * `project` is { name, tokenAddress, whitepaperUrl }), or
+   * { project: { query }, verifications: [], claims: [], note } on no match.
+   */
+  private async handleClaimHistory(input: Record<string, unknown>) {
+    const identifier = ((input.projectIdentifier as string | undefined) ?? '').trim();
+    if (!identifier) {
+      return {
+        project: { query: '' },
+        verifications: [],
+        claims: [],
+        note: 'projectIdentifier is required',
+      };
+    }
+
+    // Identifier-type detection
+    const isUrl = /^https?:\/\//i.test(identifier);
+    const isHexAddress = /^0x[a-fA-F0-9]+$/.test(identifier);
+    // Solana / base58 contract addresses: 32–44 base58 chars, no 0x prefix.
+    // Matches the same shape resolveTokenName uses for non-EVM chains.
+    const isBase58Address = !isHexAddress && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(identifier);
+    const isTokenAddress = isHexAddress || isBase58Address;
+
+    let whitepapers: Array<Record<string, unknown>> = [];
+    if (isUrl) {
+      // No repo path for document_url lookup; surface as a structured no-match.
+      log.info('claim_history: URL identifier — no matching path available', {
+        identifier: identifier.slice(0, 80),
+      });
+    } else if (isTokenAddress) {
+      whitepapers = (await this.deps.whitepaperRepo.findByTokenAddress(identifier)) as never;
+    } else {
+      // Treat as project name. Try exact match, then version-strip fallback
+      // ("Aave V3" → "Aave") so old-version cache entries surface for new-version queries.
+      let byName = (await this.deps.whitepaperRepo.findByProjectName(identifier)) as never as Array<Record<string, unknown>>;
+      if (byName.length === 0) {
+        const stripped = stripVersionSuffix(identifier);
+        if (stripped) {
+          const strippedResults = (await this.deps.whitepaperRepo.findByProjectName(stripped)) as never as Array<Record<string, unknown>>;
+          if (strippedResults.length > 0) {
+            byName = strippedResults;
+            log.info('claim_history: version-strip fallback matched', {
+              original: identifier, stripped, matches: byName.length,
+            });
+          }
+        }
+      }
+      whitepapers = byName;
+    }
+
+    if (whitepapers.length === 0) {
+      return {
+        project: { query: identifier },
+        verifications: [],
+        claims: [],
+        note: 'no prior verifications found',
+      };
+    }
+
+    // Collect verifications + claims across every matching whitepaper row.
+    // A single project may have multiple rows (e.g., Aave V1 + V3).
+    const verifications: Array<Record<string, unknown>> = [];
+    const claims: Array<Record<string, unknown>> = [];
+    let primaryWp: Record<string, unknown> | undefined;
+
+    for (const wp of whitepapers) {
+      const wpId = wp.id as string;
+      const v = await this.deps.verificationsRepo.findByWhitepaperId(wpId);
+      if (v) {
+        const verifiedAtIso = v.verifiedAt instanceof Date
+          ? v.verifiedAt.toISOString()
+          : (v.verifiedAt as string | null);
+        verifications.push({
+          whitepaperId: wpId,
+          verdict: v.verdict,
+          structuralScore: v.structuralScore,
+          confidenceScore: v.confidenceScore,
+          hypeTechRatio: v.hypeTechRatio,
+          totalClaims: v.totalClaims,
+          verifiedClaims: v.verifiedClaims,
+          llmTokensUsed: v.llmTokensUsed,
+          computeCostUsd: v.computeCostUsd,
+          verifiedAt: verifiedAtIso,
+        });
+      }
+      const wpClaims = await this.deps.claimsRepo.findByWhitepaperId(wpId);
+      for (const c of wpClaims) {
+        const evaluatedAtIso = c.evaluatedAt instanceof Date
+          ? c.evaluatedAt.toISOString()
+          : (c.evaluatedAt as string | null);
+        claims.push({
+          whitepaperId: wpId,
+          claimId: c.id,
+          category: c.category,
+          claimText: c.claimText,
+          statedEvidence: c.statedEvidence,
+          sourceSection: c.sourceSection,
+          mathProofPresent: c.mathProofPresent,
+          claimScore: c.claimScore,
+          evaluatedAt: evaluatedAtIso,
+        });
+      }
+      primaryWp ??= wp;
+    }
+
+    // Order desc by date. Null/undefined dates sort to the end.
+    const dateDesc = (a: unknown, b: unknown) => String(b ?? '').localeCompare(String(a ?? ''));
+    verifications.sort((a, b) => dateDesc(a.verifiedAt, b.verifiedAt));
+    claims.sort((a, b) => dateDesc(a.evaluatedAt, b.evaluatedAt));
+
+    // Round-trip original token address per the existing pattern, falling back
+    // to the whitepaper row's stored address if no original was stamped.
+    const originalTokenAddress = (input._originalTokenAddress as string | undefined) ?? undefined;
+    const tokenAddress = originalTokenAddress
+      ?? (primaryWp?.tokenAddress as string | null | undefined)
+      ?? null;
+
+    return {
+      project: {
+        name: (primaryWp?.projectName as string | undefined) ?? null,
+        tokenAddress,
+        whitepaperUrl: (primaryWp?.documentUrl as string | undefined) ?? null,
+      },
+      verifications,
+      claims,
+    };
   }
 
   /** Race a pipeline function against PIPELINE_TIMEOUT_MS. Clears the timer on both paths to prevent unhandled rejections. */

@@ -1227,11 +1227,17 @@ export class WpvService extends Service {
       // Production prices — must match the Virtuals platform registered prices
       // (confirmed via `acp offering list` on 2026-05-13). Grey proposes these
       // via session.setBudget(); the buyer's auto-fund rejects out-of-bounds amounts.
+      //
+      // The canonical offering catalog lives in AgentCardConfig.OFFERINGS. This
+      // array duplicates (id, price) for AcpService.registerOfferingHandler. Both
+      // must stay in sync — Movement 0 keeps the duplication intentional;
+      // a future cleanup will drive both from a single source.
       const offerings: { id: OfferingId; price: number }[] = [
         { id: 'legitimacy_scan', price: 0.25 },
         { id: 'verify_whitepaper', price: 1.50 },
         { id: 'verify_full_tech', price: 3.00 },
         { id: 'daily_tech_brief', price: 8.00 },
+        { id: 'claim_history', price: 0.10 },
       ];
 
       for (const offering of offerings) {

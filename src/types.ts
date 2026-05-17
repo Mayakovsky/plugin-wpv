@@ -320,7 +320,8 @@ export type OfferingId =
   | 'legitimacy_scan'
   | 'verify_whitepaper'
   | 'verify_full_tech'
-  | 'daily_tech_brief';
+  | 'daily_tech_brief'
+  | 'claim_history';
 
 export type ResourceId =
   | 'daily_greenlight_list'

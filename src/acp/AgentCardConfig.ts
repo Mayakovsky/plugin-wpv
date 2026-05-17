@@ -140,6 +140,20 @@ const SCAM_ALERT_SPEC: DeliverableSpec = {
   ],
 };
 
+const CLAIM_HISTORY_FIELDS: FieldSpec[] = [
+  { path: 'project', type: 'object', required: true },
+  { path: 'verifications', type: 'array', required: true },
+  { path: 'claims', type: 'array', required: true },
+  { path: 'note', type: 'string', required: false, nullable: true },
+];
+
+const CLAIM_HISTORY_SPEC: DeliverableSpec = {
+  offering_id: 'claim_history',
+  // SLA: 1 minute. Pure DB read, no pipeline. Generous bound for slow networks.
+  max_response_time_ms: 60000,
+  required_fields: CLAIM_HISTORY_FIELDS,
+};
+
 // Export specs for Test Evaluator
 export const DELIVERABLE_SPECS: Record<string, DeliverableSpec> = {
   legitimacy_scan: LEGITIMACY_SCAN_SPEC,
@@ -148,6 +162,7 @@ export const DELIVERABLE_SPECS: Record<string, DeliverableSpec> = {
   daily_tech_brief: DAILY_BRIEFING_SPEC,
   daily_greenlight_list: GREENLIGHT_SPEC,
   scam_alert_feed: SCAM_ALERT_SPEC,
+  claim_history: CLAIM_HISTORY_SPEC,
 };
 
 // ── Offerings ─────────────────────────────────────────────
@@ -221,6 +236,20 @@ export const OFFERINGS: OfferingConfig[] = [
       },
     },
     deliverableSchema: DAILY_BRIEFING_SPEC,
+  },
+  {
+    id: 'claim_history',
+    displayName: 'Claim History',
+    price: 0.10,
+    description: 'Returns Grey\'s accumulated knowledge on a project — every prior verification and every extracted claim, ordered by date descending. Read-only DB lookup, no live pipeline. Accepts a token address, project name, or whitepaper URL. Returns empty arrays with a note field if the project has no prior verifications.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectIdentifier: { type: 'string' },
+      },
+      required: ['projectIdentifier'],
+    },
+    deliverableSchema: CLAIM_HISTORY_SPEC,
   },
 ];
 
