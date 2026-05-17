@@ -4,5 +4,10 @@ dist/
 bun.lock
 .claude/
 
-# Historical docs — kept locally for reference, not mirrored to remote
-BUILD DOCS and DATA/build_archive/
+# Movement-cycle working area — captures, snapshots, smoke outputs, and any
+# other transient dev-cycle data live here locally. The authoritative docs
+# already tracked in this folder (orientation, deployment plan, work
+# breakdown, movement packets, etc.) stay tracked — gitignore only affects
+# untracked files, so existing committed docs continue to be diffable on the
+# remote. Anything new dropped into this folder is silently ignored.
+BUILD DOCS and DATA/
