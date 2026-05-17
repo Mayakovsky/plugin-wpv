@@ -3,3 +3,6 @@ dist/
 .env
 bun.lock
 .claude/
+
+# Historical docs — kept locally for reference, not mirrored to remote
+BUILD DOCS and DATA/build_archive/
