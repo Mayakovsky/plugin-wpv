@@ -1238,6 +1238,7 @@ export class WpvService extends Service {
         { id: 'verify_full_tech', price: 3.00 },
         { id: 'daily_tech_brief', price: 8.00 },
         { id: 'claim_history', price: 0.10 },
+        { id: 'quick_protocol_facts', price: 0.30 },
       ];
 
       for (const offering of offerings) {

@@ -212,9 +212,17 @@ export class JobRouter {
   constructor(private deps: JobRouterDeps) {}
 
   async handleJob(offeringId: OfferingId, input: Record<string, unknown>): Promise<unknown> {
-    // Briefings and claim history are read-only (no DB writes, no Playwright, no Sonnet).
-    // Exempt from mutex to prevent SLA violations when slow pipeline jobs block the queue.
-    if (offeringId === 'daily_tech_brief' || offeringId === 'claim_history') {
+    // Briefings, claim history, and quick protocol facts are read-only (no DB
+    // writes, no Playwright, no Sonnet). Exempt from mutex to prevent SLA
+    // violations when slow pipeline jobs block the queue. quick_protocol_facts
+    // is cache-only — on cache miss it returns a structured NOT_IN_DATABASE
+    // response rather than running the live pipeline, so its $0.30 price is
+    // never charged against a full pipeline run.
+    if (
+      offeringId === 'daily_tech_brief' ||
+      offeringId === 'claim_history' ||
+      offeringId === 'quick_protocol_facts'
+    ) {
       return this._handleJobImpl(offeringId, input);
     }
 
@@ -302,6 +310,8 @@ export class JobRouter {
         return this.handleDailyBriefing(input);
       case 'claim_history':
         return this.handleClaimHistory(input);
+      case 'quick_protocol_facts':
+        return this.handleQuickProtocolFacts(input);
       default:
         return { error: 'unknown_offering', message: `Unknown offering: ${offeringId}` };
     }
@@ -1607,6 +1617,123 @@ export class JobRouter {
       },
       verifications,
       claims,
+    };
+  }
+
+  /**
+   * Movement 0 offering — `quick_protocol_facts`.
+   * Cache-only lookup against Grey's verification database. No pipeline
+   * invocation. On cache miss, returns a structured NOT_IN_DATABASE response
+   * with a note explaining how to add the project (verify_whitepaper /
+   * verify_full_tech) — the $0.30 price tier doesn't cover live-pipeline
+   * cost, so we deliberately don't fall through to live legitimacy_scan.
+   *
+   * Input: { projectQuery: string } — loose identifier (token address /
+   * project name / whitepaper URL). URLs fall through to the no-match
+   * response since no findByDocumentUrl repo path exists.
+   *
+   * Output (cache hit): { project, type, miCAStatus, headlineVerdict,
+   * lastVerified, sources[] } — chat-sized summary.
+   * Output (cache miss): same shape with verdict=NOT_IN_DATABASE, null
+   * fields, and a `note` field explaining next steps.
+   */
+  private async handleQuickProtocolFacts(input: Record<string, unknown>) {
+    const query = ((input.projectQuery as string | undefined) ?? '').trim();
+    if (!query) {
+      return {
+        project: { query: '' },
+        type: null,
+        miCAStatus: null,
+        headlineVerdict: 'NOT_IN_DATABASE' as const,
+        lastVerified: null,
+        sources: [],
+        note: 'projectQuery is required',
+      };
+    }
+
+    // Identifier-type detection — mirrors the pattern in claim_history.
+    const isUrl = /^https?:\/\//i.test(query);
+    const isHexAddress = /^0x[a-fA-F0-9]+$/.test(query);
+    const isBase58Address = !isHexAddress && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(query);
+    const isTokenAddress = isHexAddress || isBase58Address;
+
+    // Build the input shape findWhitepaper expects (token_address / project_name).
+    // URLs skip the lookup entirely since no repo path resolves them.
+    let wp: unknown | null = null;
+    if (!isUrl) {
+      const resolved: Record<string, unknown> = {};
+      if (isTokenAddress) {
+        resolved.token_address = query;
+        resolved._originalTokenAddress = query;
+      } else {
+        resolved.project_name = query;
+      }
+      wp = await this.findWhitepaper(resolved);
+    }
+
+    if (!wp) {
+      return {
+        project: { query },
+        type: null,
+        miCAStatus: null,
+        headlineVerdict: 'NOT_IN_DATABASE' as const,
+        lastVerified: null,
+        sources: [],
+        note: 'not yet verified — submit a verify_whitepaper or verify_full_tech job to add this project to the cache',
+      };
+    }
+
+    const wpRecord = wp as Record<string, unknown>;
+    const wpId = wpRecord.id as string;
+
+    const verification = await this.deps.verificationsRepo.findByWhitepaperId(wpId);
+
+    const documentUrl = (wpRecord.documentUrl as string | undefined) ?? null;
+    const sources: Array<{ kind: string; url: string }> = [];
+    if (documentUrl) sources.push({ kind: 'whitepaper', url: documentUrl });
+
+    if (!verification) {
+      // findWhitepaper returns whitepapers with claims > 0, so this means the
+      // verification row was deleted or never persisted — surface a partial-cache
+      // INSUFFICIENT_DATA rather than NOT_IN_DATABASE to distinguish from "no row".
+      return {
+        project: {
+          name: (wpRecord.projectName as string | undefined) ?? null,
+          tokenAddress: (wpRecord.tokenAddress as string | null | undefined) ?? null,
+          whitepaperUrl: documentUrl,
+        },
+        type: null,
+        miCAStatus: null,
+        headlineVerdict: 'INSUFFICIENT_DATA' as const,
+        lastVerified: null,
+        sources,
+        note: 'whitepaper ingested but no verification record',
+      };
+    }
+
+    // Extract MiCA compliance status from the structural analysis JSON.
+    // Shape mirrors what ResourceHandlers.getScamAlertFeed reads.
+    const analysisJson = verification.structuralAnalysisJson as Record<string, unknown> | null;
+    const mica = analysisJson?.mica as Record<string, unknown> | null;
+    const miCAStatus = (mica?.micaCompliant as string | undefined) ?? null;
+
+    const lastVerifiedIso = verification.verifiedAt instanceof Date
+      ? verification.verifiedAt.toISOString()
+      : (verification.verifiedAt as string | null);
+
+    return {
+      project: {
+        name: (wpRecord.projectName as string | undefined) ?? null,
+        tokenAddress: (wpRecord.tokenAddress as string | null | undefined) ?? null,
+        whitepaperUrl: documentUrl,
+      },
+      // type derivation from claim categories is a future enhancement; kept
+      // null in v1 to keep the response chat-sized.
+      type: null,
+      miCAStatus,
+      headlineVerdict: (verification.verdict as string) ?? 'INSUFFICIENT_DATA',
+      lastVerified: lastVerifiedIso,
+      sources,
     };
   }
 

@@ -154,6 +154,23 @@ const CLAIM_HISTORY_SPEC: DeliverableSpec = {
   required_fields: CLAIM_HISTORY_FIELDS,
 };
 
+const QUICK_PROTOCOL_FACTS_FIELDS: FieldSpec[] = [
+  { path: 'project', type: 'object', required: true },
+  { path: 'type', type: 'string', required: true, nullable: true },
+  { path: 'miCAStatus', type: 'string', required: true, nullable: true },
+  { path: 'headlineVerdict', type: 'string', enum_values: ['PASS', 'CONDITIONAL', 'FAIL', 'INSUFFICIENT_DATA', 'NOT_IN_DATABASE'], required: true },
+  { path: 'lastVerified', type: 'string', required: true, nullable: true },
+  { path: 'sources', type: 'array', required: true },
+  { path: 'note', type: 'string', required: false, nullable: true },
+];
+
+const QUICK_PROTOCOL_FACTS_SPEC: DeliverableSpec = {
+  offering_id: 'quick_protocol_facts',
+  // SLA: 1 minute. Cache-only lookup, no pipeline.
+  max_response_time_ms: 60000,
+  required_fields: QUICK_PROTOCOL_FACTS_FIELDS,
+};
+
 // Export specs for Test Evaluator
 export const DELIVERABLE_SPECS: Record<string, DeliverableSpec> = {
   legitimacy_scan: LEGITIMACY_SCAN_SPEC,
@@ -163,6 +180,7 @@ export const DELIVERABLE_SPECS: Record<string, DeliverableSpec> = {
   daily_greenlight_list: GREENLIGHT_SPEC,
   scam_alert_feed: SCAM_ALERT_SPEC,
   claim_history: CLAIM_HISTORY_SPEC,
+  quick_protocol_facts: QUICK_PROTOCOL_FACTS_SPEC,
 };
 
 // ── Offerings ─────────────────────────────────────────────
@@ -250,6 +268,20 @@ export const OFFERINGS: OfferingConfig[] = [
       required: ['projectIdentifier'],
     },
     deliverableSchema: CLAIM_HISTORY_SPEC,
+  },
+  {
+    id: 'quick_protocol_facts',
+    displayName: 'Quick Protocol Facts',
+    price: 0.30,
+    description: 'Concise summary of a project: MiCA status, headline verdict, last-verified timestamp, and source links. Cache-only lookup — no live pipeline run, so returns NOT_IN_DATABASE for projects Grey hasn\'t yet verified (the response includes a note explaining how to add the project to the cache). Accepts a token address, project name, or whitepaper URL via projectQuery. Designed for conversational agents needing a fast, chat-sized response.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectQuery: { type: 'string' },
+      },
+      required: ['projectQuery'],
+    },
+    deliverableSchema: QUICK_PROTOCOL_FACTS_SPEC,
   },
 ];
 
