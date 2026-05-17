@@ -63,19 +63,25 @@ These 4 are live and earning at the time of this orientation. After Movement 0 l
 
 All return structured JSON. Sub-2-minute response on cached verifications.
 
+**Resources on the agent card.** `AgentCardConfig.ts` defines 2 free resources (Daily Greenlight List, Scam Alert Feed) but the live ACP agent card currently shows `resources: 0` (confirmed via `acp browse` at `pre-expansion-baseline`). Pre-existing gap, not in Movement 0 scope to fix — but Round 1 outreach copy must not reference free resources until they're registered. Register-and-verify is a small piece of work to schedule before outreach launches.
+
 ### Infrastructure
 
-**Production VPS:** AWS Lightsail in us-west-2. IP `44.243.254.19`. Ubuntu 24.04 LTS. ElizaOS Grey runs as a systemd-managed service.
+**Production VPS:** AWS Lightsail in us-west-2. IP `44.243.254.19`. Ubuntu 24.04 LTS. ElizaOS Grey runs under **PM2** (process name `grey`, launched as `npx elizaos dev` from `/opt/grey/wpv-agent`). A daily cron restart fires at 05:00 UTC. Despite earlier doc references to systemd, there is no `grey-eliza.service` unit — PM2 is the canonical process supervisor for ElizaOS Grey. New Grey (`grey-core`) will use systemd per the Phase 2 deployment plan, on separate units from ElizaOS Grey.
 
 **Database:** Supabase Cloud, region Hillsboro Oregon (co-located with the VPS region for low latency). Pro tier. Postgres with pgvector for semantic search.
 
-**Tables (Grey's current schema):**
-- `wpv_whitepapers` — whitepapers ingested
-- `wpv_verifications` — verification records (one per ACP job)
-- `wpv_claims` — extracted claims tied to whitepapers
+**Schema:** All `wpv_*` tables live in the Postgres schema **`autognostic`** — qualified as `autognostic.wpv_whitepapers`, `autognostic.wpv_verifications`, `autognostic.wpv_claims`, etc. The schema name is a historical artifact of `plugin-autognostic` ancestry (SCIGENT Level 0); it predates the rebrand to Whitepaper Grey and was kept to avoid disturbing live production data. Any code reading these tables — including New Grey's `grey-core` — must qualify with the `autognostic.` prefix. The Drizzle source of truth is `src/db/wpvSchema.ts` (`pgSchema('autognostic')`).
+
+**Tables in `autognostic`:**
+- `autognostic.wpv_whitepapers` — whitepapers ingested
+- `autognostic.wpv_verifications` — verification records (one per ACP job)
+- `autognostic.wpv_claims` — extracted claims tied to whitepapers
 - (additional support tables for cache, scoring history, etc.)
 
-**New Grey will use a separate schema** named `grey_two` to keep its tables completely independent from `wpv_*`. The `wpv_*` tables are read-only from `grey_two`'s perspective and never written to by New Grey.
+**Baseline row counts** (captured 2026-05-17 at `pre-expansion-baseline`): `wpv_whitepapers` 13, `wpv_verifications` 13, `wpv_claims` 160. These are the diff anchor for Movement 0 — any unexpected change to these counts during Movement 0 is a stop-and-report signal.
+
+**New Grey will use a separate Postgres schema** named `grey_two`, in the same Supabase database as `autognostic`. The two schemas are independent: `grey-core` writes exclusively to `grey_two.*`, and reads `autognostic.wpv_*` strictly read-only — never written to by New Grey.
 
 ### Brand identifiers (canonical, for any copy you write)
 
