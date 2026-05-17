@@ -312,6 +312,8 @@ export class JobRouter {
         return this.handleClaimHistory(input);
       case 'quick_protocol_facts':
         return this.handleQuickProtocolFacts(input);
+      case 'claim_extraction':
+        return this.handleClaimExtraction(input, costTracker);
       default:
         return { error: 'unknown_offering', message: `Unknown offering: ${offeringId}` };
     }
@@ -1735,6 +1737,118 @@ export class JobRouter {
       lastVerified: lastVerifiedIso,
       sources,
     };
+  }
+
+  /**
+   * Movement 0 offering — `claim_extraction`.
+   * Runs L1 (structural analysis) + L2 (claim extraction) against a buyer-
+   * provided whitepaper URL via the existing runL1L2 helper, then stops
+   * before L3 evaluation. The buyer gets categorized claims with stated
+   * evidence references for their own downstream processing.
+   *
+   * Pipeline-bound (acquires the mutex via handleJob's default path; not in
+   * the bypass branch). runL1L2 performs the same dedupe-on-address logic
+   * verify_whitepaper uses, so repeated calls against a cached project reuse
+   * the existing row rather than creating duplicates.
+   *
+   * Input: { whitepaperUrl: string }. URL must use http/https/ipfs scheme,
+   * max 2048 chars. project_name and token_address are optional internal
+   * hints carried via _originalTokenAddress and project_name keys; v1 doesn't
+   * accept them in the public input schema but honors them if present.
+   *
+   * Output: { whitepaper, structuralAnalysis, claims[], tokenAddress }
+   * — full L1 + L2 results, no L3 evaluation.
+   */
+  private async handleClaimExtraction(input: Record<string, unknown>, costTracker: CostTracker) {
+    const whitepaperUrl = ((input.whitepaperUrl as string | undefined) ?? '').trim();
+    if (!whitepaperUrl) {
+      return { error: 'invalid_input', message: 'whitepaperUrl is required' };
+    }
+
+    // URL validation — matches handleVerifyWhitepaper's input gating.
+    try {
+      const parsed = new URL(whitepaperUrl);
+      if (!['http:', 'https:', 'ipfs:'].includes(parsed.protocol)) {
+        return { error: 'invalid_url', message: `Unsupported URL protocol: ${parsed.protocol}` };
+      }
+    } catch {
+      return { error: 'invalid_url', message: 'whitepaperUrl is not a valid URL' };
+    }
+    if (whitepaperUrl.length > 2048) {
+      return { error: 'invalid_url', message: 'whitepaperUrl exceeds maximum length (2048)' };
+    }
+
+    // Optional internal hints; honored if the validator stamped them.
+    const requestedTokenAddress = ((input.token_address as string | undefined) ?? '').trim() || null;
+    const originalTokenAddress = ((input._originalTokenAddress as string | undefined) ?? '').trim() || null;
+    let projectName = ((input.project_name as string | undefined) ?? '').trim();
+
+    if ((!projectName || projectName === 'Unknown') && (requestedTokenAddress || originalTokenAddress)) {
+      const resolvedName = await resolveTokenName((requestedTokenAddress || originalTokenAddress)!);
+      if (resolvedName) projectName = resolvedName;
+    }
+    if (!projectName) projectName = 'Unknown';
+
+    const requirementText = this.extractRequirementText(input);
+
+    try {
+      return await this.withTimeout(async (signal) => {
+        const { resolved, analysis, structuralScore, hypeTechRatio, claims, wp } = await this.runL1L2(
+          whitepaperUrl,
+          projectName,
+          requestedTokenAddress,
+          requirementText,
+          costTracker,
+          signal,
+        );
+
+        const wpRecord = wp as Record<string, unknown>;
+        const tokenAddress = originalTokenAddress
+          ?? (wpRecord.tokenAddress as string | null | undefined)
+          ?? null;
+
+        return {
+          whitepaper: {
+            id: wp.id,
+            projectName: wp.projectName,
+            tokenAddress: (wpRecord.tokenAddress as string | null | undefined) ?? null,
+            documentUrl: whitepaperUrl,
+            pageCount: resolved.pageCount ?? 0,
+          },
+          structuralAnalysis: {
+            structuralScore,
+            hypeTechRatio,
+            ...(analysis as unknown as Record<string, unknown>),
+          },
+          claims: claims.map((c) => ({
+            claimId: c.claimId,
+            category: c.category,
+            claimText: c.claimText,
+            statedEvidence: c.statedEvidence,
+            sourceSection: c.sourceSection,
+            mathematicalProofPresent: c.mathematicalProofPresent,
+            regulatoryRelevance: c.regulatoryRelevance,
+          })),
+          tokenAddress,
+        };
+      });
+    } catch (err) {
+      const errMsg = (err as Error).message;
+      if (errMsg === 'Pipeline timeout') {
+        log.warn('claim_extraction: pipeline timeout', { projectName, whitepaperUrl: whitepaperUrl.slice(0, 80) });
+        return {
+          error: 'timeout',
+          message: 'L1+L2 pipeline exceeded timeout',
+          tokenAddress: originalTokenAddress,
+        };
+      }
+      log.warn('claim_extraction failed', { projectName, error: errMsg });
+      return {
+        error: 'extraction_failed',
+        message: errMsg,
+        tokenAddress: originalTokenAddress,
+      };
+    }
   }
 
   /** Race a pipeline function against PIPELINE_TIMEOUT_MS. Clears the timer on both paths to prevent unhandled rejections. */

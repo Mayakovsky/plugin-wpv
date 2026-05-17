@@ -322,7 +322,8 @@ export type OfferingId =
   | 'verify_full_tech'
   | 'daily_tech_brief'
   | 'claim_history'
-  | 'quick_protocol_facts';
+  | 'quick_protocol_facts'
+  | 'claim_extraction';
 
 export type ResourceId =
   | 'daily_greenlight_list'

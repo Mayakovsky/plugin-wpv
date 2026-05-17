@@ -171,6 +171,21 @@ const QUICK_PROTOCOL_FACTS_SPEC: DeliverableSpec = {
   required_fields: QUICK_PROTOCOL_FACTS_FIELDS,
 };
 
+const CLAIM_EXTRACTION_FIELDS: FieldSpec[] = [
+  { path: 'whitepaper', type: 'object', required: true },
+  { path: 'structuralAnalysis', type: 'object', required: true },
+  { path: 'claims', type: 'array', required: true },
+  { path: 'tokenAddress', type: 'string', required: true, nullable: true },
+];
+
+const CLAIM_EXTRACTION_SPEC: DeliverableSpec = {
+  offering_id: 'claim_extraction',
+  // SLA: 10 minutes. Runs L1 + L2 (claim extraction with LLM) — early-exits
+  // before L3. Cheaper and faster than verify_whitepaper but still pipeline-bound.
+  max_response_time_ms: 600000,
+  required_fields: CLAIM_EXTRACTION_FIELDS,
+};
+
 // Export specs for Test Evaluator
 export const DELIVERABLE_SPECS: Record<string, DeliverableSpec> = {
   legitimacy_scan: LEGITIMACY_SCAN_SPEC,
@@ -181,6 +196,7 @@ export const DELIVERABLE_SPECS: Record<string, DeliverableSpec> = {
   scam_alert_feed: SCAM_ALERT_SPEC,
   claim_history: CLAIM_HISTORY_SPEC,
   quick_protocol_facts: QUICK_PROTOCOL_FACTS_SPEC,
+  claim_extraction: CLAIM_EXTRACTION_SPEC,
 };
 
 // ── Offerings ─────────────────────────────────────────────
@@ -282,6 +298,20 @@ export const OFFERINGS: OfferingConfig[] = [
       required: ['projectQuery'],
     },
     deliverableSchema: QUICK_PROTOCOL_FACTS_SPEC,
+  },
+  {
+    id: 'claim_extraction',
+    displayName: 'Claim Extraction',
+    price: 0.50,
+    description: 'Runs L1 (structural analysis) + L2 (claim extraction) against a buyer-provided whitepaper URL. Stops before L3 evaluation — returns extracted claims and structural metadata only. Cheaper and faster than full whitepaper verification when the buyer wants raw claim material for their own evaluation pipeline. Output: { whitepaper, structuralAnalysis, claims[] } with categorized claims and stated evidence references.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        whitepaperUrl: { type: 'string' },
+      },
+      required: ['whitepaperUrl'],
+    },
+    deliverableSchema: CLAIM_EXTRACTION_SPEC,
   },
 ];
 
